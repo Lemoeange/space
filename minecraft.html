@@ -64,7 +64,20 @@
   }
   #hud h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.5px; }
   #hud .hearts { font-size: 14px; letter-spacing: 1px; color: #ff5a5a; margin-top: 2px; }
+  #hud .hunger { font-size: 14px; letter-spacing: 1px; margin-top: 2px; }
   #hud .meta { font-size: 12px; opacity: 0.85; }
+
+  /* 物品名提示（切物品栏时短暂显示） */
+  #itemName {
+    position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%) translateY(6px);
+    z-index: 10; padding: 4px 14px; border-radius: 6px;
+    background: rgba(10, 14, 20, 0.72); color: #fff; font-size: 14px; letter-spacing: 1px;
+    text-shadow: 0 1px 2px #000; pointer-events: none; opacity: 0;
+    -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+    -webkit-transition: opacity .18s ease, transform .18s ease;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  #itemName.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
   #menu {
     position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
@@ -188,8 +201,11 @@
 <div id="hud">
   <h1>MINECRAFT · WEB 复刻</h1>
   <div class="hearts" id="hearts">❤❤❤❤❤❤❤❤❤❤</div>
+  <div class="hunger" id="hunger">🍗🍗🍗🍗🍗🍗🍗🍗🍗🍗</div>
   <div class="meta" id="hudMeta">载入中…</div>
 </div>
+
+<div id="itemName"></div>
 
 <div id="hotbar"></div>
 
@@ -209,7 +225,7 @@
       <span><b>0</b> 切换昼夜</span>
       <span><b>N</b> 跳到白天</span>
       <span><b>左键</b> 破坏方块</span>
-      <span><b>右键</b> 放置方块</span>
+      <span><b>右键</b> 放置 / 进食</span>
       <span><b>中键</b> 选取方块</span>
       <span><b>Esc</b> 暂停菜单</span>
     </div>
@@ -282,7 +298,8 @@ const B = {
   STONE_PICKAXE:51, STONE_AXE:52, STONE_SHOVEL:53, STONE_SWORD:54,
   IRON_PICKAXE:55, IRON_AXE:56, IRON_SHOVEL:57, IRON_SWORD:58,
   WOOD_SWORD:59,
-  IRON_INGOT:60, GOLD_INGOT:61, CHARCOAL:62
+  IRON_INGOT:60, GOLD_INGOT:61, CHARCOAL:62,
+  APPLE:63, WHEAT:64, BREAD:65, PUMPKIN_PIE:66
 };
 
 function mulberry32(a) {
@@ -803,8 +820,8 @@ function tileOf(id) {
   }
 }
 
-const opaqueMat = new THREE.MeshLambertMaterial({ map: atlas.tex, vertexColors: true });
-const cutoutMat = new THREE.MeshLambertMaterial({ map: atlas.tex, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide });
+const opaqueMat = new THREE.MeshStandardMaterial({ map: atlas.tex, vertexColors: true, roughness: 0.88, metalness: 0.02 });
+const cutoutMat = new THREE.MeshStandardMaterial({ map: atlas.tex, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.88, metalness: 0.02 });
 const torchMat = new THREE.MeshBasicMaterial({ map: atlas.tex, alphaTest: 0.45, side: THREE.DoubleSide });   // 无光照，自发光
 
 /* ============================ 水面 Shader ============================ */
@@ -1036,12 +1053,12 @@ function updateEnvironment(t) {
   const warm = Math.max(0, 1 - Math.abs(elev) * 2.5);  // 仅日出日落时暖色，白天通透
   const dim = 1 - precip * 0.35;   // 雨雪天气压暗光照
 
-  sun.intensity = lerp(0.02, 2.0, day) * dim;
+  sun.intensity = lerp(0.02, 2.2, day) * dim;
   sun.color.setRGB(1.0, lerp(0.45, 0.95, day), lerp(0.25, 0.85, day));
   moon.intensity = night * 0.6;                                    // 月光（略收敛）
-  hemi.intensity = lerp(0.28, 0.45, day) * dim;                    // 半球光（收敛，避免顶面过亮）
+  hemi.intensity = lerp(0.30, 0.52, day) * dim;                    // 半球光（PBR 天光氛围）
   hemi.color.setRGB(lerp(0.14, 0.75, day), lerp(0.18, 0.85, day), lerp(0.36, 1.0, day));
-  ambient.intensity = lerp(0.16, 0.35, day) * dim;                 // 均匀环境光：提亮侧面
+  ambient.intensity = lerp(0.16, 0.33, day) * dim;                 // 均匀环境光：提亮侧面
 
   // 天空：白天通透蓝天，日出日落暖橙，夜晚深蓝
   skyMat.uniforms.uZenith.value.setRGB(lerp(0.01, 0.12, day), lerp(0.02, 0.33, day), lerp(0.06, 0.82, day));
@@ -1232,11 +1249,12 @@ function saveWorld() {
   }
   try {
     if (saved.length > 0) localStorage.setItem('mc_world_v1', JSON.stringify(saved));
-    // 背包存档
+    // 背包存档（含工具耐久）
     const invData = {
-      hotbar: hotbar.map((s) => (s ? [s.id, s.count] : null)),
-      inv: inv.map((s) => (s ? [s.id, s.count] : null)),
+      hotbar: hotbar.map((s) => (s ? [s.id, s.count, s.dur || 0] : null)),
+      inv: inv.map((s) => (s ? [s.id, s.count, s.dur || 0] : null)),
       selected,
+      hunger: player.hunger,
     };
     localStorage.setItem('mc_inv_v1', JSON.stringify(invData));
   } catch (e) { console.warn('[save] 存档失败:', e && e.message); }
@@ -1258,9 +1276,11 @@ function loadWorld() {
     const invRaw = localStorage.getItem('mc_inv_v1');
     if (invRaw) {
       const d = JSON.parse(invRaw);
-      if (Array.isArray(d.hotbar)) d.hotbar.forEach((s, i) => { hotbar[i] = s ? { id: s[0], count: s[1] } : null; });
-      if (Array.isArray(d.inv)) d.inv.forEach((s, i) => { inv[i] = s ? { id: s[0], count: s[1] } : null; });
+      const restore = (s) => (s ? { id: s[0], count: s[1], dur: isTool(s[0]) ? (s[2] || TOOL_DURABILITY[s[0]]) : undefined } : null);
+      if (Array.isArray(d.hotbar)) d.hotbar.forEach((s, i) => { hotbar[i] = restore(s); });
+      if (Array.isArray(d.inv)) d.inv.forEach((s, i) => { inv[i] = restore(s); });
       if (typeof d.selected === 'number' && d.selected >= 0 && d.selected < HOTBAR_SIZE) selected = d.selected;
+      if (typeof d.hunger === 'number') player.hunger = Math.max(0, Math.min(20, d.hunger));
       restoredInv = true;
     }
   } catch (e) { console.warn('[load] 读取存档失败:', e && e.message); }
@@ -1274,6 +1294,7 @@ function giveStarter() {
   addItem(B.TORCH, 12);
   addItem(B.PLANKS, 16);
   addItem(B.DIRT, 16);
+  addItem(B.APPLE, 3);
 }
 setInterval(saveWorld, 30000);                 // 每 30 秒自动存档
 addEventListener('beforeunload', () => saveWorld());
@@ -1295,10 +1316,10 @@ function plantTrees(c) {
       if (ground !== B.GRASS && ground !== B.SNOW) continue;
       const bm = biomeOf(wx, wz);
       if (bm === 3) continue;   // 沙漠不种树
-      let log = B.LOG, leaf = B.LEAVES, prob = 0.025, spruce = false;
-      if (bm === 4) { log = B.SPRUCE_LOG; leaf = B.SPRUCE_LEAVES; prob = 0.04; spruce = true; }
+      let log = B.LOG, leaf = B.LEAVES, prob = 0.015, spruce = false;   // 降低树木密度
+      if (bm === 4) { log = B.SPRUCE_LOG; leaf = B.SPRUCE_LEAVES; prob = 0.024; spruce = true; }
       else if (bm === 2) {
-        prob = 0.05;
+        prob = 0.03;
         const r = rnd();
         if (r < 0.12) { log = B.JUNGLE_LOG; leaf = B.JUNGLE_LEAVES; }
         else if (r < 0.5) { log = B.BIRCH_LOG; leaf = B.BIRCH_LEAVES; }
@@ -1662,6 +1683,7 @@ function updateParticles(dt) {
 let weather = 'clear';          // clear | rain | snow
 let weatherTimer = 150;         // 秒
 let precip = 0;                 // 降水强度 0..1（平滑过渡）
+let rainSplashAcc = 0;
 const RAIN_COUNT = 420;
 
 function makePrecip(color, streakLen) {
@@ -1712,6 +1734,18 @@ function updateWeather(dt) {
       }
     }
     rain.geo.attributes.position.needsUpdate = true;
+    // 雨落地水花
+    rainSplashAcc += dt;
+    if (rainSplashAcc >= 0.12) {
+      rainSplashAcc = 0;
+      for (let n = 0; n < 3; n++) {
+        const x = Math.floor(player.pos.x + (Math.random() - 0.5) * 26);
+        const z = Math.floor(player.pos.z + (Math.random() - 0.5) * 26);
+        let gy = findGround(x, z);
+        while (gy < HEIGHT && world.getWater(x, gy, z) > 0) gy++;   // 水花落在水面
+        spawnParticles(x, gy - 1, z, 0xa8c6e8, 1);
+      }
+    }
   }
   if (snowing) {
     const arr = snow.positions;
@@ -1849,6 +1883,7 @@ const player = {
   onGround: false, fly: false, sprint: false,
   halfW: 0.3, height: 1.8, eye: 1.62,
   hp: 20,
+  hunger: 20,
 };
 let maxFallY = null;   // 摔落起点高度（用于计算摔落伤害）
 function findSpawn() {
@@ -1863,20 +1898,58 @@ function findSpawn() {
 }
 
 const heartsEl = document.getElementById('hearts');
+const hungerEl = document.getElementById('hunger');
 function updateHearts() {
   const full = Math.max(0, Math.ceil(player.hp / 2));
   heartsEl.textContent = '❤'.repeat(full) + '🖤'.repeat(10 - full);
+}
+function updateHungerBar() {
+  const full = Math.max(0, Math.ceil(player.hunger / 2));
+  hungerEl.textContent = '🍗'.repeat(full) + '🦴'.repeat(10 - full);
 }
 function damagePlayer(dmg) {
   player.hp -= dmg;
   if (player.hp <= 0) {
     player.hp = 20;                       // 重生
+    player.hunger = 20;
     const sp = findSpawn();
     player.pos.set(sp.x, sp.y, sp.z);
     player.vel.set(0, 0, 0);
     maxFallY = null;
   }
   updateHearts();
+}
+// —— 饥饿值：随时间消耗，满则回血，空则扣血 ——
+let hungerAcc = 0, regenAcc = 0, starveAcc = 0, eatCooldown = 0;
+function updateHunger(dt) {
+  let rate = 1 / 45;                          // 约 15 分钟耗尽
+  if (player.sprint) rate *= 2.2;
+  if (player.fly) rate *= 1.0;
+  hungerAcc += rate * dt;
+  if (hungerAcc >= 1) {
+    player.hunger = Math.max(0, player.hunger - Math.floor(hungerAcc));
+    hungerAcc -= Math.floor(hungerAcc);
+    updateHungerBar();
+  }
+  if (player.hunger >= 18 && player.hp < 20) {
+    regenAcc += dt;
+    if (regenAcc >= 4) { regenAcc = 0; player.hp = Math.min(20, player.hp + 1); updateHearts(); }
+  } else if (player.hunger <= 0) {
+    starveAcc += dt;
+    if (starveAcc >= 3) { starveAcc = 0; if (player.hp > 1) { player.hp--; updateHearts(); } }
+  } else { regenAcc = 0; starveAcc = 0; }
+  if (eatCooldown > 0) eatCooldown -= dt;
+}
+function eat(s) {
+  if (eatCooldown > 0) return;
+  if (player.hunger >= 20) return;           // 已饱
+  player.hunger = Math.min(20, player.hunger + FOOD[s.id]);
+  s.count--;
+  if (s.count <= 0) hotbar[selected] = null;
+  refreshHotbar();
+  updateHungerBar();
+  eatCooldown = 0.5;
+  playPop();
 }
 
 const keys = {};
@@ -2202,8 +2275,14 @@ const NAMES = {
   [B.IRON_PICKAXE]: '铁镐', [B.IRON_AXE]: '铁斧', [B.IRON_SHOVEL]: '铁锹', [B.IRON_SWORD]: '铁剑',
   [B.WOOD_SWORD]: '木剑',
   [B.IRON_INGOT]: '铁锭', [B.GOLD_INGOT]: '金锭', [B.CHARCOAL]: '木炭',
+  [B.APPLE]: '苹果', [B.WHEAT]: '小麦', [B.BREAD]: '面包', [B.PUMPKIN_PIE]: '南瓜派',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
+// —— 食物：恢复饥饿值 ——
+const FOOD = {
+  [B.APPLE]: 4, [B.BREAD]: 5, [B.PUMPKIN_PIE]: 8, [B.WHEAT]: 1,
+};
+function isFood(id) { return FOOD[id] !== undefined; }
 
 // —— 合成配方 ——
 const RECIPES = [
@@ -2227,6 +2306,8 @@ const RECIPES = [
   { out: B.IRON_SHOVEL, n: 1, need: [[B.IRON_INGOT, 1], [B.STICK, 2]] },
   { out: B.IRON_SWORD, n: 1, need: [[B.IRON_INGOT, 2], [B.STICK, 1]] },
   { out: B.FURNACE, n: 1, need: [[B.COBBLE, 8]] },
+  { out: B.BREAD, n: 1, need: [[B.WHEAT, 3]] },
+  { out: B.PUMPKIN_PIE, n: 1, need: [[B.PUMPKIN, 1], [B.WHEAT, 2]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -2382,12 +2463,41 @@ function makeItemIcon(id) {
     ctx.fillRect(7, 11, 4, 9); ctx.fillRect(21, 11, 4, 8);
     ctx.fillStyle = '#454545'; ctx.fillRect(11, 10, 4, 3);
     ctx.fillStyle = '#1a1a1a'; ctx.fillRect(12, 16, 7, 4);
+  } else if (id === B.APPLE) {
+    ctx.fillStyle = '#c23a2a'; ctx.fillRect(9, 9, 14, 14);    // 红苹果
+    ctx.fillRect(7, 11, 3, 10); ctx.fillRect(22, 11, 3, 10);
+    ctx.fillStyle = '#e8553a'; ctx.fillRect(11, 11, 3, 4);
+    ctx.fillStyle = '#5a3a22'; ctx.fillRect(15, 5, 2, 5);     // 果梗
+    ctx.fillStyle = '#4f8f3a'; ctx.fillRect(13, 4, 5, 3);     // 叶子
+  } else if (id === B.WHEAT) {
+    ctx.fillStyle = '#c9a13a';                                // 麦穗
+    for (let i = 0; i < 3; i++) {
+      const x = 7 + i * 6, y = 8 + i * 3;
+      ctx.fillRect(x, y, 3, 14 - i * 3);
+      ctx.fillRect(x - 2, y + 4, 3, 3); ctx.fillRect(x + 2, y + 6, 3, 3);
+    }
+    ctx.fillStyle = '#8a6a26'; ctx.fillRect(8, 6, 2, 20); ctx.fillRect(15, 9, 2, 20); ctx.fillRect(22, 12, 2, 20);
+  } else if (id === B.BREAD) {
+    ctx.fillStyle = '#c8913f'; ctx.fillRect(6, 12, 20, 10);   // 面包
+    ctx.fillRect(5, 13, 22, 8);
+    ctx.fillStyle = '#a9742e'; ctx.fillRect(6, 12, 20, 3);
+    ctx.fillStyle = '#e8b968'; ctx.fillRect(6, 13, 20, 2);
+  } else if (id === B.PUMPKIN_PIE) {
+    ctx.fillStyle = '#e8b968';                                // 南瓜派（扇形）
+    for (let y = 8; y < 24; y++) for (let x = 8; x < 24; x++) {
+      const dx = x - 15.5, dy = y - 15.5;
+      if (dx * dx + dy * dy <= 60) ctx.fillRect(x, y, 1, 1);
+    }
+    ctx.fillStyle = '#c8782a';
+    for (let y = 15; y < 24; y++) for (let x = 8; x < 16; x++) ctx.fillRect(x, y, 1, 1);
+    ctx.fillStyle = '#a9742e'; ctx.fillRect(8, 8, 16, 3);     // 饼边
   }
   return cv;
 }
 function makeIcon(id) {
   if (id === B.STICK || isTool(id)) return makeToolIcon(id);
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL) return makeItemIcon(id);
+  if (id === B.APPLE || id === B.WHEAT || id === B.BREAD || id === B.PUMPKIN_PIE) return makeItemIcon(id);
   return makeIconCanvas(id);
 }
 // 物品栏/背包槽位图标：工具叠加耐久条
@@ -2484,8 +2594,23 @@ function refreshHotbar() { buildHotbar(); }   // 重绘整个物品栏，保证�
 function select(i) {
   selected = ((i % HOTBAR_SIZE) + HOTBAR_SIZE) % HOTBAR_SIZE;
   refreshHotbar();
+  showItemName();
   const sn = document.getElementById('invSlotNum');
   if (sn) sn.textContent = selected + 1;
+}
+// 切换物品栏时短暂显示物品名
+let itemNameTimer = null;
+function showItemName() {
+  const el = document.getElementById('itemName');
+  const s = hotbar[selected];
+  if (s) {
+    el.textContent = itemName(s.id) + (s.count > 1 ? ' ×' + s.count : '');
+    el.classList.add('show');
+    clearTimeout(itemNameTimer);
+    itemNameTimer = setTimeout(() => el.classList.remove('show'), 1500);
+  } else {
+    el.classList.remove('show');
+  }
 }
 
 /* ============================ 输入 ============================ */
@@ -2723,7 +2848,8 @@ function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5
 function dropOf(id) {
   if (id === B.GRASS) return B.DIRT;         // 草方块掉泥土
   if (id === B.STONE) return B.COBBLE;       // 石头掉圆石
-  if (isLeaf(id)) return null;               // 树叶不掉落
+  if (id === B.GRASS_TALL) return B.WHEAT;   // 草丛掉小麦
+  if (isLeaf(id)) return null;               // 树叶不掉落（苹果单独判定）
   if (isTool(id) || id === B.STICK || id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL) return null;
   return id;
 }
@@ -2795,7 +2921,8 @@ function updateBreaking(dt) {
     stopBreaking();
     if (bid === B.TORCH) removeTorchLight(bx, by, bz);
     world.setBlock(bx, by, bz, B.AIR);
-    const drop = dropOf(bid);                       // 掉落物
+    let drop = dropOf(bid);                       // 掉落物
+    if (drop === null && isLeaf(bid) && Math.random() < 0.08) drop = B.APPLE;   // 树叶偶尔掉苹果
     if (drop !== null && drop !== undefined) dropItem(drop, bx, by, bz);
     spawnParticles(bx, by, bz, blockColor(bid), 14);
     enqueueAround(bx, by, bz);
@@ -2851,6 +2978,7 @@ function onMousedown(btn) {
   camera.getWorldDirection(dir);
   const sel = hotbar[selected];
   if (btn === 2) { // 放置 / 交互
+    if (sel && isFood(sel.id)) { eat(sel); return; }   // 右键进食
     const hit = raycast(origin, dir, 6);
     if (hit && hit.id === B.FURNACE) { openFurnace(); return; }   // 右键熔炉 → 打开冶炼界面
     if (!sel) return;
@@ -2963,6 +3091,7 @@ function animate() {
 
   if (locked) updatePlayer(dt);   // 暂停时不推进玩家物理，避免松开鼠标后人物继续漂移
   if (locked) updateBreaking(dt);
+  if (locked) updateHunger(dt);   // 饥饿值仅在游玩时消耗
   updateStreaming();
   updateWater(150);
   updateFurnace(dt);
@@ -3049,6 +3178,7 @@ try {
     buildHotbar();
     refreshHotbar();
     updateHearts();
+    updateHungerBar();
     camera.position.set(spawn.x, spawn.y + player.eye, spawn.z);
     camera.rotation.set(0, player.yaw, 0);
     animate();
