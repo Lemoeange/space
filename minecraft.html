@@ -1420,11 +1420,52 @@ function updateWeather(dt) {
 }
 
 /* ============================ 动物 ============================ */
+function pixelTexture(size, baseRGB, seed, paint) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(size, size);
+  const rnd = mulberry32(seed);
+  const clamp255 = v => Math.max(0, Math.min(255, v | 0));
+  for (let i = 0; i < size * size; i++) {
+    const j = (rnd() - 0.5) * 22;
+    img.data[i * 4] = clamp255(baseRGB[0] + j);
+    img.data[i * 4 + 1] = clamp255(baseRGB[1] + j);
+    img.data[i * 4 + 2] = clamp255(baseRGB[2] + j);
+    img.data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  if (paint) paint(ctx);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+function paintPig(ctx) {
+  ctx.fillStyle = '#1a1a1a'; ctx.fillRect(1, 2, 2, 2); ctx.fillRect(5, 2, 2, 2);   // 眼
+  ctx.fillStyle = '#e88aa0'; ctx.fillRect(2, 5, 4, 2);                              // 鼻口
+  ctx.fillStyle = '#7a3a4a'; ctx.fillRect(2, 5, 1, 1); ctx.fillRect(5, 5, 1, 1);   // 鼻孔
+}
+function paintSheep(ctx) {
+  ctx.fillStyle = '#1a1a1a'; ctx.fillRect(1, 2, 2, 2); ctx.fillRect(5, 2, 2, 2);
+  ctx.fillStyle = '#8a8a8a'; ctx.fillRect(3, 5, 2, 2);
+}
+function paintCow(ctx) {
+  ctx.fillStyle = '#1a1a1a'; ctx.fillRect(1, 2, 2, 2); ctx.fillRect(5, 2, 2, 2);
+  ctx.fillStyle = '#e8e2d8'; ctx.fillRect(2, 5, 4, 2);                              // 白口鼻
+  ctx.fillStyle = '#5a4a3a'; ctx.fillRect(3, 5, 1, 1); ctx.fillRect(4, 5, 1, 1);
+}
 const MOB_KINDS = [
-  { color: 0xf0a0b2, name: 'pig' },
-  { color: 0xf0f0ee, name: 'sheep' },
-  { color: 0x9a7a5a, name: 'cow' },
+  { name: 'pig', base: [240, 160, 178], paint: paintPig, seed: 1 },
+  { name: 'sheep', base: [240, 240, 238], paint: paintSheep, seed: 2 },
+  { name: 'cow', base: [154, 122, 90], paint: paintCow, seed: 3 },
 ];
+for (const k of MOB_KINDS) {
+  k.skinMat = new THREE.MeshLambertMaterial({ map: pixelTexture(8, k.base, k.seed * 100 + 1, null) });
+  k.faceMat = new THREE.MeshLambertMaterial({ map: pixelTexture(8, k.base, k.seed * 100 + 2, k.paint) });
+  k.headMats = [k.skinMat, k.skinMat, k.skinMat, k.skinMat, k.skinMat, k.faceMat];   // -z 面为脸
+}
 const MAX_ANIMALS = 16;
 const animals = [];
 const mobBodyGeo = new THREE.BoxGeometry(0.9, 0.55, 0.65);
@@ -1439,13 +1480,12 @@ function findGround(x, z) {
 }
 function spawnAnimal(x, z) {
   const kind = MOB_KINDS[(Math.random() * MOB_KINDS.length) | 0];
-  const mat = new THREE.MeshLambertMaterial({ color: kind.color });
   const g = new THREE.Group();
-  const body = new THREE.Mesh(mobBodyGeo, mat); body.position.y = 0.68; g.add(body);
-  const head = new THREE.Mesh(mobHeadGeo, mat); head.position.set(0, 0.82, -0.55); g.add(head);
+  const body = new THREE.Mesh(mobBodyGeo, kind.skinMat); body.position.y = 0.68; g.add(body);
+  const head = new THREE.Mesh(mobHeadGeo, kind.headMats); head.position.set(0, 0.82, -0.55); g.add(head);
   const legs = [];
   for (const [dx, dz] of [[0.28, 0.22], [0.28, -0.22], [-0.28, 0.22], [-0.28, -0.22]]) {
-    const leg = new THREE.Mesh(mobLegGeo, mat); leg.position.set(dx, 0.18, dz); g.add(leg); legs.push(leg);
+    const leg = new THREE.Mesh(mobLegGeo, kind.skinMat); leg.position.set(dx, 0.18, dz); g.add(leg); legs.push(leg);
   }
   g.position.set(x, findGround(Math.floor(x), Math.floor(z)), z);
   scene.add(g);
@@ -1477,7 +1517,8 @@ function updateAnimals(dt) {
     const nz = a.z + Math.cos(a.heading) * a.speed * dt;
     const ti = Math.floor(nx), tz = Math.floor(nz);
     const gy = findGround(Math.floor(a.x), Math.floor(a.z));
-    if (world.getWater(ti, gy, tz) > 0 || findGround(ti, tz) < gy - 2) {
+    // 前方是水 / 两格高墙 / 悬崖 → 转向（一格台阶可迈上）
+    if (world.getWater(ti, gy, tz) > 0 || !isSeeThrough(world.getBlock(ti, gy + 1, tz)) || findGround(ti, tz) < gy - 2) {
       a.heading = Math.random() * Math.PI * 2; a.timer = 1.5 + Math.random() * 2;
     } else {
       a.x = nx; a.z = nz;
