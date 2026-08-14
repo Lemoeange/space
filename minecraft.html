@@ -1417,11 +1417,18 @@ function collideAxis(axis, vel) {
 }
 
 function inWater() {
-  // 仅当头部（眼睛高度）没入水中才算水下，脚沾水不算
+  // 仅当头部（眼睛高度）没入水中才算水下，脚沾水不算（用于水下视觉/雾效）
   const ex = Math.floor(player.pos.x);
   const ey = Math.floor(player.pos.y + player.eye);
   const ez = Math.floor(player.pos.z);
   return world.getWater(ex, ey, ez) > 0;
+}
+function feetInWater() {
+  // 脚部是否在水中（用于游泳/浮力物理）
+  const fx = Math.floor(player.pos.x);
+  const fy = Math.floor(player.pos.y + 0.2);
+  const fz = Math.floor(player.pos.z);
+  return world.getWater(fx, fy, fz) > 0;
 }
 
 function updatePlayer(dt) {
@@ -1434,7 +1441,7 @@ function updatePlayer(dt) {
   if (keys['KeyA']) move.sub(right);
   if (move.lengthSq() > 0) move.normalize();
 
-  const water = inWater();
+  const water = feetInWater();   // 游泳物理按脚部是否在水中判断
   let speed = player.fly ? 16 : (player.sprint ? 7.5 : 4.5);
   if (keys['ShiftLeft'] || keys['ShiftRight']) speed = player.fly ? 10 : 2.2;
   if (water) speed *= 0.6;
@@ -1455,7 +1462,7 @@ function updatePlayer(dt) {
     player.vel.y = Math.max(player.vel.y, -50);
     if (keys['Space']) {
       if (player.onGround) { player.vel.y = 8.5; player.onGround = false; }
-      else if (water) player.vel.y = 3.2;
+      else if (water) player.vel.y = 6.0;   // 游泳上浮更强，可跃上一格岸
     }
     if (water) player.vel.y = Math.max(player.vel.y, -3.5);
 
@@ -1681,9 +1688,9 @@ function onMousedown(btn) {
   const hit = raycast(origin, dir, 6);
   if (btn === 0) { // 破坏
     if (!hit) return;
+    if (hit.id === B.WATER) return;   // 水不可破坏
     if (hit.id === B.TORCH) removeTorchLight(hit.x, hit.y, hit.z);
-    if (hit.id === B.WATER) world.setWater(hit.x, hit.y, hit.z, 0);
-    else world.setBlock(hit.x, hit.y, hit.z, B.AIR);
+    world.setBlock(hit.x, hit.y, hit.z, B.AIR);
     spawnParticles(hit.x, hit.y, hit.z, blockColor(hit.id), 14);
     enqueueAround(hit.x, hit.y, hit.z);
     playPop();
