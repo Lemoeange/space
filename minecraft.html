@@ -299,7 +299,7 @@ const B = {
   IRON_PICKAXE:55, IRON_AXE:56, IRON_SHOVEL:57, IRON_SWORD:58,
   WOOD_SWORD:59,
   IRON_INGOT:60, GOLD_INGOT:61, CHARCOAL:62,
-  APPLE:63, WHEAT:64, BREAD:65, PUMPKIN_PIE:66, ROTTEN_FLESH:67
+  APPLE:63, WHEAT:64, BREAD:65, PUMPKIN_PIE:66, ROTTEN_FLESH:67, RAW_MEAT:68
 };
 
 function mulberry32(a) {
@@ -2027,7 +2027,7 @@ function spawnAnimal(x, z) {
   }
   g.position.set(x, findGround(Math.floor(x), Math.floor(z)), z);
   scene.add(g);
-  animals.push({ g, legs, x, z, heading: Math.random() * Math.PI * 2, timer: 1 + Math.random() * 3, speed: 0.7 + Math.random() * 0.7, phase: Math.random() * 6 });
+  animals.push({ g, legs, x, z, heading: Math.random() * Math.PI * 2, timer: 1 + Math.random() * 3, speed: 0.7 + Math.random() * 0.7, phase: Math.random() * 6, hp: 10, hurtT: 0 });
 }
 function spawnAnimalsNear(cx, cz, count) {
   let spawned = 0;
@@ -2042,6 +2042,7 @@ function spawnAnimalsNear(cx, cz, count) {
 }
 function updateAnimals(dt) {
   for (const a of animals) {
+    a.hurtT -= dt;
     const dxp = a.x - player.pos.x, dzp = a.z - player.pos.z;
     if (dxp * dxp + dzp * dzp > 70 * 70) {
       a.x = player.pos.x + (Math.random() - 0.5) * 40;
@@ -2068,6 +2069,17 @@ function updateAnimals(dt) {
     const swing = Math.sin(a.phase) * 0.35;
     a.legs.forEach((leg, i) => { leg.rotation.x = swing * (i % 2 === 0 ? 1 : -1); });
   }
+}
+function killAnimal(i) {
+  const a = animals[i];
+  const bx = Math.floor(a.x), bz = Math.floor(a.z);
+  const by = findGround(bx, bz) - 1;
+  scene.remove(a.g);
+  spawnParticles(bx, by, bz, 0xc88a8a, 12);
+  const n = 1 + ((Math.random() * 2) | 0);
+  for (let k = 0; k < n; k++) dropItem(B.RAW_MEAT, bx, by, bz);
+  animals.splice(i, 1);
+  playPop();
 }
 
 /* ============================ 僵尸（怪物） ============================ */
@@ -2133,6 +2145,8 @@ function updateZombies(dt) {
     const dxp = player.pos.x - z.x, dzp = player.pos.z - z.z;
     const dist = Math.hypot(dxp, dzp);
     const zy = findGround(Math.floor(z.x), Math.floor(z.z));
+    const dy3 = player.pos.y - zy;   // 脚到脚的 3D 高度差
+    const dist3 = Math.hypot(dxp, dy3, dzp);       // 各方向攻击距离
     // 白天燃烧
     if (!night) {
       z.hp -= 2.5 * dt;
@@ -2146,7 +2160,7 @@ function updateZombies(dt) {
     }
     const playerTooHigh = player.pos.y - zy > 5;   // 玩家在上方 5 格以上（飞行）→ 不追击不攻击
     if (!playerTooHigh) {
-      if (dist > 1.5) {   // 追击
+      if (dist3 > 2) {   // 追击（各方向 2 格内才攻击）
         z.heading = Math.atan2(dxp, dzp);
         const speed = z.hurtT > 0 ? 0.3 : 1.1;
         const nx = z.x + Math.sin(z.heading) * speed * dt;
@@ -2187,24 +2201,35 @@ function meleeDamage() {
   return 1;   // 徒手/其他物品
 }
 // 挥剑攻击（视角锥内 3.6 格）
+// 命中检测 + 击退（不推进墙里，避免被 findGround 抬升到上一层）
+function meleeHitMob(m, dir) {
+  const dx = m.x - camera.position.x;
+  const dy = (m.g.position.y + 0.8) - camera.position.y;
+  const dz = m.z - camera.position.z;
+  const d = Math.hypot(dx, dy, dz);
+  if (d > 5.0) return false;   // 攻击距离 5 格
+  const ndx = dx / d, ndy = dy / d, ndz = dz / d;
+  if (ndx * dir.x + ndy * dir.y + ndz * dir.z < 0.55) return false;   // 约 57° 视角锥
+  const zgy = m.g.position.y;
+  const kx = Math.floor(m.x + ndx * 0.6), kz = Math.floor(m.z + ndz * 0.6);
+  if (!isSolid(world.getBlock(kx, zgy, kz)) && !isSolid(world.getBlock(kx, zgy + 1, kz))) {
+    m.x += ndx * 0.6; m.z += ndz * 0.6;
+  }
+  m.hurtT = 0.25;
+  return true;
+}
 function meleeAttack() {
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
+  const dmg = meleeDamage();
   let hitAny = false;
   for (let i = zombies.length - 1; i >= 0; i--) {
-    const z = zombies[i];
-    const dx = z.x - camera.position.x;
-    const dy = (z.g.position.y + 0.8) - camera.position.y;
-    const dz = z.z - camera.position.z;
-    const d = Math.hypot(dx, dy, dz);
-    if (d > 3.6) continue;
-    const ndx = dx / d, ndy = dy / d, ndz = dz / d;
-    if (ndx * dir.x + ndy * dir.y + ndz * dir.z < 0.55) continue;   // 约 57° 视角锥
-    z.hp -= meleeDamage();
-    z.hurtT = 0.25;
-    z.x += ndx * 0.6; z.z += ndz * 0.6;   // 击退
-    hitAny = true;
-    if (z.hp <= 0) killZombie(i);
+    const m = zombies[i];
+    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; if (m.hp <= 0) killZombie(i); }
+  }
+  for (let i = animals.length - 1; i >= 0; i--) {
+    const m = animals[i];
+    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; if (m.hp <= 0) killAnimal(i); }
   }
   if (hitAny) {
     playPop();
@@ -2250,6 +2275,7 @@ function updateHungerBar() {
   hungerEl.textContent = '🍗'.repeat(full) + '🦴'.repeat(10 - full);
 }
 function damagePlayer(dmg) {
+  if (player.fly) return;   // 飞行模式不受伤害
   player.hp -= dmg;
   if (player.hp <= 0) {
     player.hp = 20;                       // 重生
@@ -2618,12 +2644,12 @@ const NAMES = {
   [B.IRON_PICKAXE]: '铁镐', [B.IRON_AXE]: '铁斧', [B.IRON_SHOVEL]: '铁锹', [B.IRON_SWORD]: '铁剑',
   [B.WOOD_SWORD]: '木剑',
   [B.IRON_INGOT]: '铁锭', [B.GOLD_INGOT]: '金锭', [B.CHARCOAL]: '木炭',
-  [B.APPLE]: '苹果', [B.WHEAT]: '小麦', [B.BREAD]: '面包', [B.PUMPKIN_PIE]: '南瓜派', [B.ROTTEN_FLESH]: '腐肉',
+  [B.APPLE]: '苹果', [B.WHEAT]: '小麦', [B.BREAD]: '面包', [B.PUMPKIN_PIE]: '南瓜派', [B.ROTTEN_FLESH]: '腐肉', [B.RAW_MEAT]: '生肉',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 // —— 食物：恢复饥饿值 ——
 const FOOD = {
-  [B.APPLE]: 4, [B.BREAD]: 5, [B.PUMPKIN_PIE]: 8, [B.WHEAT]: 1, [B.ROTTEN_FLESH]: 2,
+  [B.APPLE]: 4, [B.BREAD]: 5, [B.PUMPKIN_PIE]: 8, [B.WHEAT]: 1, [B.ROTTEN_FLESH]: 2, [B.RAW_MEAT]: 3,
 };
 function isFood(id) { return FOOD[id] !== undefined; }
 
@@ -2840,6 +2866,11 @@ function makeItemIcon(id) {
     ctx.fillStyle = '#6a9a5a'; ctx.fillRect(10, 10, 4, 3);    // 发霉绿斑
     ctx.fillRect(18, 14, 3, 3);
     ctx.fillStyle = '#5a3a26'; ctx.fillRect(12, 16, 7, 4);
+  } else if (id === B.RAW_MEAT) {
+    ctx.fillStyle = '#d8847a'; ctx.fillRect(9, 9, 14, 13);    // 生肉：粉红肉块
+    ctx.fillRect(7, 11, 4, 9); ctx.fillRect(21, 11, 4, 8);
+    ctx.fillStyle = '#f0b8a8'; ctx.fillRect(11, 11, 4, 3);    // 脂肪纹理
+    ctx.fillStyle = '#a85850'; ctx.fillRect(12, 16, 7, 4);
   }
   return cv;
 }
