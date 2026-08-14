@@ -766,7 +766,8 @@ function makeAtlas() {
   const arrData = new Uint8Array(TILE * TILE * layers * 4);
   for (let t = 0; t < layers; t++) {
     for (let y = 0; y < TILE; y++) {
-      const src = (y * ATLAS_W + t * TILE) * 4;
+      // 反转行序：DataArrayTexture 无 flipY（flipY=false），使 GL v=0 对应图集底部，与旧 CanvasTexture 一致
+      const src = ((TILE - 1 - y) * ATLAS_W + t * TILE) * 4;
       const dst = ((t * TILE + y) * TILE) * 4;
       arrData.set(img.data.subarray(src, src + TILE * 4), dst);
     }
@@ -1513,15 +1514,16 @@ function pushGreedyFace(A, f, ox, oy, oz, W, D, tile, under, baseX, baseZ) {
 }
 // 不透明方块贪心网格（按 6 个方向分别合并）
 function buildOpaqueGreedy(c, A, baseX, baseZ, yMax, colTop, getB, solid) {
-  const mask = new Uint8Array(256);
-  const keys = new Int32Array(256);
+  const mask = new Uint8Array((yMax + 1) * 16);
+  const keys = new Int32Array((yMax + 1) * 16);
   const blk = [0, 0, 0];
   for (const f of FACES) {
     const nAxis = 3 - f.uAxis - f.vAxis;
     const nMax = (nAxis === 1) ? yMax : 15;
+    const vMax = (f.vAxis === 1) ? yMax : 15;   // 侧面含竖直 y 轴，范围须到 yMax
     for (let n = 0; n <= nMax; n++) {
       mask.fill(0);
-      for (let t2 = 0; t2 < 16; t2++) for (let t1 = 0; t1 < 16; t1++) {
+      for (let t2 = 0; t2 <= vMax; t2++) for (let t1 = 0; t1 < 16; t1++) {
         blk[0] = 0; blk[1] = 0; blk[2] = 0;
         blk[nAxis] = n; blk[f.uAxis] = t1; blk[f.vAxis] = t2;
         const lx = blk[0], ly = blk[1], lz = blk[2];
@@ -1538,13 +1540,13 @@ function buildOpaqueGreedy(c, A, baseX, baseZ, yMax, colTop, getB, solid) {
           pushFace(A, bx, ly, bz, f, tile, under, solid);
         }
       }
-      for (let t2 = 0; t2 < 16; t2++) for (let t1 = 0; t1 < 16; t1++) {
+      for (let t2 = 0; t2 <= vMax; t2++) for (let t1 = 0; t1 < 16; t1++) {
         if (!mask[t2 * 16 + t1]) continue;
         const key = keys[t2 * 16 + t1];
         let w = 1;
         while (t1 + w < 16 && mask[t2 * 16 + t1 + w] && keys[t2 * 16 + t1 + w] === key) w++;
         let d = 1;
-        outer: while (t2 + d < 16) {
+        outer: while (t2 + d <= vMax) {
           for (let k = 0; k < w; k++) {
             if (!mask[(t2 + d) * 16 + t1 + k] || keys[(t2 + d) * 16 + t1 + k] !== key) break outer;
           }
