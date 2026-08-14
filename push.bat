@@ -7,6 +7,5 @@ git add -A
 git commit -m "update" 2>nul
 git push -u origin main
 echo.
-echo 完成。若推送失败，请检查网络，或先把远程旧内容合并一次：
-echo    git pull origin main --allow-unrelated-histories
+echo 完成。若推送失败，请检查网络或先合并远程改动。
 pause
