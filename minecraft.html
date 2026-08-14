@@ -150,6 +150,32 @@
   .recipe .arrow { color: #9fc3d8; }
   .recipe .need { font-size: 11px; color: #9fc3d8; }
   #invHotbar { display: flex; gap: 6px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
+
+  /* ---- 熔炉 ---- */
+  #furnaceUI {
+    position: fixed; inset: 0; z-index: 23; display: none; align-items: center; justify-content: center;
+    background: rgba(8, 12, 18, 0.74); color: #e8f0f6; text-align: center;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  #furnaceUI .box { padding: 20px 24px; max-width: 660px; }
+  #furnaceUI h1 { font-size: 22px; letter-spacing: 1px; margin-bottom: 4px; }
+  #furnaceUI .sub { color: #9fc3d8; font-size: 12px; margin-bottom: 14px; }
+  #furnaceSlots { display: flex; gap: 16px; justify-content: center; align-items: flex-start; margin-bottom: 6px; }
+  .furn-slot {
+    width: 56px; height: 56px; border-radius: 8px; position: relative;
+    background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.14);
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .furn-slot.sel { border-color: var(--accent); box-shadow: 0 0 12px rgba(95,178,122,0.5); }
+  .furn-slot canvas { image-rendering: pixelated; width: 44px; height: 44px; }
+  .furn-slot .fnum { position: absolute; right: 3px; bottom: 2px; font-size: 12px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px #000; pointer-events: none; }
+  .furn-slot .flabel { position: absolute; left: 0; right: 0; top: -18px; font-size: 11px; color: #9fc3d8; }
+  .furn-col { display: flex; flex-direction: column; align-items: center; }
+  .furn-arrow { color: #ffd479; font-size: 20px; align-self: center; }
+  #furnaceBarWrap { width: 150px; height: 8px; margin: 10px auto 4px; background: rgba(255,255,255,0.12); border-radius: 4px; overflow: hidden; }
+  #furnaceBar { height: 100%; width: 0%; background: linear-gradient(90deg, #ff9d3c, #ffd479); transition: width .1s linear; }
+  #furnaceGrid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; justify-items: center; margin-top: 12px; }
+  #furnaceHotbar { display: flex; gap: 6px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -213,6 +239,29 @@
   </div>
 </div>
 
+<div id="furnaceUI">
+  <div class="box">
+    <h1>🔥 熔炉</h1>
+    <div class="sub">点击炉槽选中，再点背包物品放入 · 自动冶炼 · 按 Esc 关闭</div>
+    <div id="furnaceSlots">
+      <div class="furn-col">
+        <div class="furn-slot" id="furnInput"><span class="flabel">输入</span></div>
+      </div>
+      <span class="furn-arrow">→</span>
+      <div class="furn-col">
+        <div class="furn-slot" id="furnFuel"><span class="flabel">燃料</span></div>
+      </div>
+      <span class="furn-arrow">→</span>
+      <div class="furn-col">
+        <div class="furn-slot" id="furnOutput"><span class="flabel">输出</span></div>
+      </div>
+    </div>
+    <div id="furnaceBarWrap"><div id="furnaceBar"></div></div>
+    <div id="furnaceGrid"></div>
+    <div id="furnaceHotbar"></div>
+  </div>
+</div>
+
 <!-- ============ 纯噪声与地形生成（无 DOM / 无依赖） ============ -->
 <script>
 const HEIGHT = 96;      // 世界高度
@@ -228,7 +277,12 @@ const B = {
   SUGARCANE:36, MUSHROOM_RED:37, MUSHROOM_BROWN:38,
   STICK:39, WOOD_PICKAXE:40, WOOD_AXE:41, WOOD_SHOVEL:42,
   JUNGLE_LOG:43, JUNGLE_LEAVES:44, ACACIA_LOG:45, ACACIA_LEAVES:46,
-  PUMPKIN:47, FERN:48, LILY_PAD:49
+  PUMPKIN:47, FERN:48, LILY_PAD:49,
+  FURNACE:50,
+  STONE_PICKAXE:51, STONE_AXE:52, STONE_SHOVEL:53, STONE_SWORD:54,
+  IRON_PICKAXE:55, IRON_AXE:56, IRON_SHOVEL:57, IRON_SWORD:58,
+  WOOD_SWORD:59,
+  IRON_INGOT:60, GOLD_INGOT:61, CHARCOAL:62
 };
 
 function mulberry32(a) {
@@ -393,7 +447,7 @@ const { HEIGHT, SEA, B, mulberry32, surfaceHeight, isCave, oreFor, oreNoise, bio
 /* ============================ 常量 ============================ */
 const CHUNK = 16;
 const TILE = 16;
-const ATLAS_TILES = 47;
+const ATLAS_TILES = 48;
 const ATLAS_W = ATLAS_TILES * TILE;
 const AO_LEVELS = [0.55, 0.7, 0.85, 1.0];
 const GEN_R = 6;   // 生成半径（chunk）
@@ -419,7 +473,7 @@ function makeAtlas() {
   T.emeraldOre = i++; T.lapisOre = i++; T.redstoneOre = i++; T.copperOre = i++;
   T.sugarcane = i++; T.mushroomRed = i++; T.mushroomBrown = i++;
   T.jungleLogSide = i++; T.jungleLeaves = i++; T.acaciaLogSide = i++; T.acaciaLeaves = i++;
-  T.pumpkin = i++; T.fern = i++; T.lilyPad = i++;
+  T.pumpkin = i++; T.fern = i++; T.lilyPad = i++; T.furnace = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -673,6 +727,18 @@ function makeAtlas() {
     const x = 7 + s, y = 7 - s;
     if (x < TILE && y >= 0) { put(T.lilyPad, x, y, 46, 116, 42); put(T.lilyPad, x + 1, y, 52, 122, 46); }
   }
+  // —— 熔炉（石质 + 中央炉口 + 火焰）——
+  fill(T.furnace, [128, 128, 128], 12, 1);
+  for (let row = 0; row < 4; row++) {           // 石砖纹
+    const y0 = row * 4, off = (row % 2) * 4;
+    for (let x = 0; x < TILE; x++) put(T.furnace, x, y0, 96, 96, 96);
+    for (let y = y0 + 1; y < y0 + 4; y++) for (let x = off; x < TILE; x += 8) put(T.furnace, x, y, 96, 96, 96);
+  }
+  for (let y = 4; y < 12; y++) for (let x = 4; x < 12; x++) put(T.furnace, x, y, 30, 30, 32);   // 炉口
+  for (let y = 8; y < 12; y++) for (let x = 5; x < 11; x++) {
+    if ((x + y) % 2 === 0) put(T.furnace, x, y, 244, 150, 40);   // 火焰（橙黄闪烁）
+    else put(T.furnace, x, y, 250, 92, 36);
+  }
 
   ctx.putImageData(img, 0, 0);
   const tex = new THREE.CanvasTexture(cv);
@@ -732,6 +798,7 @@ function tileOf(id) {
     case B.PUMPKIN: return { top: atlas.T.pumpkin, side: atlas.T.pumpkin, bottom: atlas.T.pumpkin };
     case B.FERN: return { top: atlas.T.fern, side: atlas.T.fern, bottom: atlas.T.fern };
     case B.LILY_PAD: return { top: atlas.T.lilyPad, side: atlas.T.lilyPad, bottom: atlas.T.lilyPad };
+    case B.FURNACE: return { top: atlas.T.furnace, side: atlas.T.furnace, bottom: atlas.T.furnace };
     default: return { top: atlas.T.stone, side: atlas.T.stone, bottom: atlas.T.stone };
   }
 }
@@ -1550,6 +1617,7 @@ const BLOCK_COLORS = {
   [B.BIRCH_LOG]: 0xd6cab0, [B.SPRUCE_LOG]: 0x543c24, [B.CACTUS]: 0x488e36,
   [B.SUGARCANE]: 0x6eaa46, [B.MUSHROOM_RED]: 0xc83c3c, [B.MUSHROOM_BROWN]: 0x966e46,
   [B.JUNGLE_LOG]: 0x966e46, [B.ACACIA_LOG]: 0xaa7846, [B.PUMPKIN]: 0xdc8c32, [B.FERN]: 0x3c8434, [B.LILY_PAD]: 0x469632,
+  [B.FURNACE]: 0x808080,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 function spawnParticles(x, y, z, color, count) {
@@ -1822,7 +1890,26 @@ function isLog(id) { return id === B.LOG || id === B.BIRCH_LOG || id === B.SPRUC
 function isLeaf(id) { return id === B.LEAVES || id === B.BIRCH_LEAVES || id === B.SPRUCE_LEAVES || id === B.JUNGLE_LEAVES || id === B.ACACIA_LEAVES; }
 function isTorch(id) { return id === B.TORCH; }
 function isLilyPad(id) { return id === B.LILY_PAD; }
-function isTool(id) { return id === B.WOOD_PICKAXE || id === B.WOOD_AXE || id === B.WOOD_SHOVEL; }
+function isPickaxe(id) { return id === B.WOOD_PICKAXE || id === B.STONE_PICKAXE || id === B.IRON_PICKAXE; }
+function isAxe(id) { return id === B.WOOD_AXE || id === B.STONE_AXE || id === B.IRON_AXE; }
+function isShovel(id) { return id === B.WOOD_SHOVEL || id === B.STONE_SHOVEL || id === B.IRON_SHOVEL; }
+function isSword(id) { return id === B.WOOD_SWORD || id === B.STONE_SWORD || id === B.IRON_SWORD; }
+function isTool(id) { return isPickaxe(id) || isAxe(id) || isShovel(id) || isSword(id); }
+function isWoodTier(id) { return id === B.WOOD_PICKAXE || id === B.WOOD_AXE || id === B.WOOD_SHOVEL || id === B.WOOD_SWORD; }
+function isStoneTier(id) { return id === B.STONE_PICKAXE || id === B.STONE_AXE || id === B.STONE_SHOVEL || id === B.STONE_SWORD; }
+function isIronTier(id) { return id === B.IRON_PICKAXE || id === B.IRON_AXE || id === B.IRON_SHOVEL || id === B.IRON_SWORD; }
+// 工具耐久上限（木 60 / 石 130 / 铁 250）
+const TOOL_DURABILITY = {
+  [B.WOOD_PICKAXE]: 60, [B.WOOD_AXE]: 60, [B.WOOD_SHOVEL]: 60, [B.WOOD_SWORD]: 60,
+  [B.STONE_PICKAXE]: 130, [B.STONE_AXE]: 130, [B.STONE_SHOVEL]: 130, [B.STONE_SWORD]: 130,
+  [B.IRON_PICKAXE]: 250, [B.IRON_AXE]: 250, [B.IRON_SHOVEL]: 250, [B.IRON_SWORD]: 250,
+};
+// 工具能否作为方块放置（工具/木棍/锭/木炭不可放置）
+function isPlaceable(id) {
+  if (id === B.STICK || isTool(id)) return false;
+  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL) return false;
+  return true;
+}
 function isOre(id) { return id === B.COAL || id === B.IRON || id === B.GOLD || id === B.DIAMOND || id === B.EMERALD_ORE || id === B.LAPIS_ORE || id === B.REDSTONE_ORE || id === B.COPPER_ORE; }
 // 透明/可透视（用于面剔除与 AO）
 function isSeeThrough(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || isCrossPlant(id) || isTorch(id) || isLilyPad(id); }
@@ -2014,6 +2101,20 @@ function playPop() {
     o.start(t); o.stop(t + 0.1);
   } catch (e) { /* ignore */ }
 }
+function playBreak() {                       // 工具损坏：低沉碎裂声
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(160, t);
+    o.frequency.exponentialRampToValueAtTime(50, t + 0.18);
+    g.gain.setValueAtTime(0.14, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(t); o.stop(t + 0.22);
+  } catch (e) { /* ignore */ }
+}
 
 /* ============================ 热键栏 + 背包 + 物品 ============================ */
 const HOTBAR_SIZE = 9;
@@ -2027,6 +2128,18 @@ const hotbarEl = document.getElementById('hotbar');
 // —— 物品数量操作 ——
 function addItem(id, count) {
   if (!count || count <= 0) return;
+  if (isTool(id)) {                                   // 工具不堆叠，逐个放入空槽
+    for (const arr of [hotbar, inv]) {
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i] === null) {
+          arr[i] = { id, count: 1, dur: TOOL_DURABILITY[id] };
+          count--;
+          if (count === 0) return;
+        }
+      }
+    }
+    return;
+  }
   for (const arr of [hotbar, inv]) {                 // 先合并到已有堆叠
     for (let i = 0; i < arr.length; i++) {
       const s = arr[i];
@@ -2053,10 +2166,13 @@ function removeItem(id, count) {
     for (let i = 0; i < arr.length; i++) {
       const s = arr[i];
       if (s && s.id === id) {
-        const rem = Math.min(count, s.count);
-        s.count -= rem; count -= rem;
-        if (s.count <= 0) arr[i] = null;
-        if (count === 0) return;
+        if (isTool(id)) { arr[i] = null; count--; if (count === 0) return; }
+        else {
+          const rem = Math.min(count, s.count);
+          s.count -= rem; count -= rem;
+          if (s.count <= 0) arr[i] = null;
+          if (count === 0) return;
+        }
       }
     }
   }
@@ -2081,6 +2197,11 @@ const NAMES = {
   [B.STICK]: '木棍', [B.WOOD_PICKAXE]: '木镐', [B.WOOD_AXE]: '木斧', [B.WOOD_SHOVEL]: '木锹',
   [B.JUNGLE_LOG]: '丛林原木', [B.JUNGLE_LEAVES]: '丛林树叶', [B.ACACIA_LOG]: '金合欢原木', [B.ACACIA_LEAVES]: '金合欢树叶',
   [B.PUMPKIN]: '南瓜', [B.FERN]: '蕨', [B.LILY_PAD]: '睡莲',
+  [B.FURNACE]: '熔炉',
+  [B.STONE_PICKAXE]: '石镐', [B.STONE_AXE]: '石斧', [B.STONE_SHOVEL]: '石锹', [B.STONE_SWORD]: '石剑',
+  [B.IRON_PICKAXE]: '铁镐', [B.IRON_AXE]: '铁斧', [B.IRON_SHOVEL]: '铁锹', [B.IRON_SWORD]: '铁剑',
+  [B.WOOD_SWORD]: '木剑',
+  [B.IRON_INGOT]: '铁锭', [B.GOLD_INGOT]: '金锭', [B.CHARCOAL]: '木炭',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 
@@ -2096,6 +2217,16 @@ const RECIPES = [
   { out: B.WOOD_PICKAXE, n: 1, need: [[B.PLANKS, 3], [B.STICK, 2]] },
   { out: B.WOOD_AXE, n: 1, need: [[B.PLANKS, 3], [B.STICK, 2]] },
   { out: B.WOOD_SHOVEL, n: 1, need: [[B.PLANKS, 1], [B.STICK, 2]] },
+  { out: B.WOOD_SWORD, n: 1, need: [[B.PLANKS, 2], [B.STICK, 1]] },
+  { out: B.STONE_PICKAXE, n: 1, need: [[B.COBBLE, 3], [B.STICK, 2]] },
+  { out: B.STONE_AXE, n: 1, need: [[B.COBBLE, 3], [B.STICK, 2]] },
+  { out: B.STONE_SHOVEL, n: 1, need: [[B.COBBLE, 1], [B.STICK, 2]] },
+  { out: B.STONE_SWORD, n: 1, need: [[B.COBBLE, 2], [B.STICK, 1]] },
+  { out: B.IRON_PICKAXE, n: 1, need: [[B.IRON_INGOT, 3], [B.STICK, 2]] },
+  { out: B.IRON_AXE, n: 1, need: [[B.IRON_INGOT, 3], [B.STICK, 2]] },
+  { out: B.IRON_SHOVEL, n: 1, need: [[B.IRON_INGOT, 1], [B.STICK, 2]] },
+  { out: B.IRON_SWORD, n: 1, need: [[B.IRON_INGOT, 2], [B.STICK, 1]] },
+  { out: B.FURNACE, n: 1, need: [[B.COBBLE, 8]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -2103,6 +2234,51 @@ function craft(r) {
   for (const [id, n] of r.need) removeItem(id, n);
   addItem(r.out, r.n);
   return true;
+}
+
+// —— 熔炉冶炼 ——
+const SMELT_TIME = 2.0;                    // 每炉耗时（秒）
+const furnace = { input: null, fuel: null, output: null, progress: 0, burn: 0 };
+function smeltOut(id) {
+  if (id === B.IRON) return B.IRON_INGOT;
+  if (id === B.GOLD) return B.GOLD_INGOT;
+  if (isLog(id)) return B.CHARCOAL;
+  if (id === B.SAND) return B.GLASS;
+  if (id === B.COBBLE) return B.STONE;
+  return null;
+}
+function fuelVal(id) {
+  if (id === B.COAL || id === B.CHARCOAL) return 8;
+  if (isLog(id)) return 2;
+  if (id === B.PLANKS) return 1;
+  return 0;
+}
+function updateFurnace(dt) {
+  const f = furnace;
+  // 补充燃料
+  if (f.burn <= 0 && f.fuel) {
+    const v = fuelVal(f.fuel.id);
+    if (v > 0) {
+      f.fuel.count--;
+      if (f.fuel.count <= 0) f.fuel = null;
+      f.burn += v;
+    }
+  }
+  const out = f.input ? smeltOut(f.input.id) : null;
+  const canOut = out && (!f.output || (f.output.id === out && f.output.count < MAX_STACK));
+  if (out && canOut && f.burn > 0) {
+    f.progress += dt;
+    if (f.progress >= SMELT_TIME) {
+      f.progress = 0;
+      f.input.count--;
+      if (f.input.count <= 0) f.input = null;
+      if (f.output && f.output.id === out) f.output.count++;
+      else f.output = { id: out, count: 1 };
+      f.burn--;
+    }
+  } else {
+    f.progress = Math.max(0, f.progress - dt * 2);
+  }
 }
 
 function drawFace(ctx, tile, x0, y0, x1, y1, x2, y2, dark) {
@@ -2132,14 +2308,18 @@ function makeIconCanvas(id) {
   }
   return cv;
 }
-// 工具/木棍：像素画图标
+// 工具/剑/木棍：像素画图标（按材质等级配色）
 function makeToolIcon(id) {
   const S = 32;
   const cv = document.createElement('canvas');
   cv.width = cv.height = S;
   const ctx = cv.getContext('2d');
   ctx.imageSmoothingEnabled = false;
-  const handle = '#9a6b3a', handleLight = '#c8a273', head = '#c89a5e', headDark = '#96692f';
+  const handle = '#9a6b3a', handleLight = '#c8a273';
+  let head, headDark;
+  if (isWoodTier(id)) { head = '#c89a5e'; headDark = '#96692f'; }
+  else if (isStoneTier(id)) { head = '#9a9a9a'; headDark = '#6a6a6a'; }
+  else { head = '#d8dde4'; headDark = '#9aa2ac'; }
   function line(x0, y0, x1, y1, w, color) {
     ctx.fillStyle = color;
     const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
@@ -2149,20 +2329,33 @@ function makeToolIcon(id) {
       ctx.fillRect(x - (w >> 1), y - (w >> 1), w, w);
     }
   }
+  if (id === B.STICK) {
+    line(8, 24, 24, 8, 3, handle);
+    line(8, 24, 24, 8, 1, handleLight);
+    return cv;
+  }
   line(8, 24, 24, 8, 3, handle);             // 斜向手柄
   line(8, 24, 24, 8, 1, handleLight);
-  if (id === B.STICK) return cv;
-  if (id === B.WOOD_PICKAXE) {
+  if (isSword(id)) {
+    line(21, 11, 29, 3, 5, head);            // 剑刃（沿手柄方向延伸）
+    line(21, 11, 29, 3, 2, '#ffffff');
+    ctx.fillStyle = headDark;
+    ctx.fillRect(19, 13, 9, 4);              // 护手
+    ctx.fillStyle = handle;
+    ctx.fillRect(18, 12, 10, 3);
+    return cv;
+  }
+  if (isPickaxe(id)) {
     ctx.fillStyle = head;
     ctx.fillRect(16, 2, 12, 4); ctx.fillRect(19, 2, 4, 10);   // 直角镐头
     ctx.fillStyle = headDark;
     ctx.fillRect(16, 4, 12, 2); ctx.fillRect(21, 5, 2, 7);
-  } else if (id === B.WOOD_AXE) {
+  } else if (isAxe(id)) {
     ctx.fillStyle = head;
     ctx.fillRect(13, 2, 14, 7); ctx.fillRect(10, 3, 4, 5);    // 梯形斧刃
     ctx.fillStyle = headDark;
     ctx.fillRect(13, 6, 14, 3);
-  } else if (id === B.WOOD_SHOVEL) {
+  } else if (isShovel(id)) {
     ctx.fillStyle = head;
     ctx.fillRect(5, 19, 9, 9); ctx.fillRect(6, 16, 7, 4);     // 方形铲头
     ctx.fillStyle = headDark;
@@ -2170,9 +2363,45 @@ function makeToolIcon(id) {
   }
   return cv;
 }
+// 锭 / 木炭：物品图标
+function makeItemIcon(id) {
+  const S = 32;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  if (id === B.IRON_INGOT || id === B.GOLD_INGOT) {
+    const c = id === B.IRON_INGOT ? '#c8ccd4' : '#f2c14e';
+    const cd = id === B.IRON_INGOT ? '#8a909a' : '#c8982e';
+    ctx.fillStyle = cd; ctx.fillRect(6, 12, 20, 9);           // 斜置金属锭
+    ctx.fillStyle = c;  ctx.fillRect(7, 11, 18, 7);
+    ctx.fillStyle = '#fff'; ctx.fillRect(9, 12, 11, 2);
+    ctx.fillStyle = cd; ctx.fillRect(7, 16, 18, 2);
+  } else if (id === B.CHARCOAL) {
+    ctx.fillStyle = '#2a2a2a'; ctx.fillRect(9, 8, 13, 15);    // 黑色团块
+    ctx.fillRect(7, 11, 4, 9); ctx.fillRect(21, 11, 4, 8);
+    ctx.fillStyle = '#454545'; ctx.fillRect(11, 10, 4, 3);
+    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(12, 16, 7, 4);
+  }
+  return cv;
+}
 function makeIcon(id) {
   if (id === B.STICK || isTool(id)) return makeToolIcon(id);
+  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL) return makeItemIcon(id);
   return makeIconCanvas(id);
+}
+// 物品栏/背包槽位图标：工具叠加耐久条
+function makeSlotIcon(s) {
+  const cv = makeIcon(s.id);
+  if (isTool(s.id) && s.dur !== undefined) {
+    const ctx = cv.getContext('2d');
+    const ratio = Math.max(0, Math.min(1, s.dur / TOOL_DURABILITY[s.id]));
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(3, 28, 26, 3);
+    ctx.fillStyle = ratio > 0.5 ? '#5bd94a' : (ratio > 0.2 ? '#d9c94a' : '#d94a4a');
+    ctx.fillRect(3, 28, Math.round(26 * ratio), 3);
+  }
+  return cv;
 }
 
 // —— 掉落物实体（旋转贴图 + 吸附拾取）——
@@ -2240,7 +2469,7 @@ function buildHotbar() {
     slot.appendChild(num);
     const s = hotbar[i];
     if (s) {
-      slot.appendChild(makeIcon(s.id));
+      slot.appendChild(makeSlotIcon(s));
       if (s.count > 1) {
         const c = document.createElement('span');
         c.className = 'cnt';
@@ -2263,6 +2492,9 @@ function select(i) {
 let locked = false;
 let started = false;
 let inventoryOpen = false;
+let furnaceOpen = false;
+let furnaceSel = 0;                    // 0 输入 / 1 燃料 / 2 输出
+let furnaceRefreshT = 0;
 const menuEl = document.getElementById('menu');
 const pauseEl = document.getElementById('pause');
 const inventoryEl = document.getElementById('inventory');
@@ -2270,13 +2502,20 @@ const invGrid = document.getElementById('invGrid');
 const invSlotNum = document.getElementById('invSlotNum');
 const craftPanel = document.getElementById('craftPanel');
 const invHotbar = document.getElementById('invHotbar');
+const furnaceEl = document.getElementById('furnaceUI');
+const furnaceSlots = document.getElementById('furnaceSlots');
+const furnaceBar = document.getElementById('furnaceBar');
+const furnaceGrid = document.getElementById('furnaceGrid');
+const furnaceHotbar = document.getElementById('furnaceHotbar');
 const underwaterEl = document.getElementById('underwater');
 const hudMeta = document.getElementById('hudMeta');
 
 function refreshOverlays() {
-  menuEl.style.display = (!locked && !started && !inventoryOpen) ? 'flex' : 'none';
-  pauseEl.style.display = (!locked && started && !inventoryOpen) ? 'flex' : 'none';
+  const uiOpen = inventoryOpen || furnaceOpen;
+  menuEl.style.display = (!locked && !started && !uiOpen) ? 'flex' : 'none';
+  pauseEl.style.display = (!locked && started && !uiOpen) ? 'flex' : 'none';
   inventoryEl.style.display = inventoryOpen ? 'flex' : 'none';
+  furnaceEl.style.display = furnaceOpen ? 'flex' : 'none';
 }
 function buildInventory() {
   invGrid.innerHTML = '';
@@ -2285,7 +2524,7 @@ function buildInventory() {
     slot.className = 'inv-slot';
     const s = inv[i];
     if (s) {
-      slot.appendChild(makeIcon(s.id));
+      slot.appendChild(makeSlotIcon(s));
       if (s.count > 1) {
         const c = document.createElement('span');
         c.className = 'inv-count';
@@ -2339,7 +2578,7 @@ function buildInventory() {
     slot.className = 'slot' + (i === selected ? ' active' : '');
     const s = hotbar[i];
     if (s) {
-      slot.appendChild(makeIcon(s.id));
+      slot.appendChild(makeSlotIcon(s));
       if (s.count > 1) {
         const c = document.createElement('span');
         c.className = 'cnt';
@@ -2368,11 +2607,92 @@ function toggleInventory() {
   if (inventoryOpen) closeInventory();
   else if (locked) openInventory();
 }
+// —— 熔炉 UI ——
+function buildFurnaceUI() {
+  const f = furnace;
+  const KEYS = ['input', 'fuel', 'output'];
+  const slotEls = [document.getElementById('furnInput'), document.getElementById('furnFuel'), document.getElementById('furnOutput')];
+  slotEls.forEach((el, i) => {
+    el.className = 'furn-slot' + (furnaceSel === i ? ' sel' : '');
+    el.querySelectorAll('.fnum').forEach((n) => n.remove());
+    el.querySelectorAll('canvas').forEach((c) => c.remove());
+    const s = f[KEYS[i]];
+    if (s) {
+      el.appendChild(makeSlotIcon(s));
+      if (s.count > 1) {
+        const n = document.createElement('span');
+        n.className = 'fnum';
+        n.textContent = s.count;
+        el.appendChild(n);
+      }
+    }
+  });
+  // 背包网格
+  furnaceGrid.innerHTML = '';
+  for (let i = 0; i < INV_SIZE; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'inv-slot';
+    const s = inv[i];
+    if (s) {
+      slot.appendChild(makeSlotIcon(s));
+      if (s.count > 1) { const c = document.createElement('span'); c.className = 'inv-count'; c.textContent = s.count; slot.appendChild(c); }
+      slot.addEventListener('click', () => {
+        const k = KEYS[furnaceSel];
+        const tmp = f[k];
+        f[k] = inv[i];
+        inv[i] = tmp;
+        buildFurnaceUI();
+      });
+    }
+    furnaceGrid.appendChild(slot);
+  }
+  // 物品栏行
+  furnaceHotbar.innerHTML = '';
+  for (let i = 0; i < HOTBAR_SIZE; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'slot' + (i === selected ? ' active' : '');
+    const s = hotbar[i];
+    if (s) {
+      slot.appendChild(makeSlotIcon(s));
+      if (s.count > 1) { const c = document.createElement('span'); c.className = 'cnt'; c.textContent = s.count; slot.appendChild(c); }
+      slot.addEventListener('click', () => {
+        const k = KEYS[furnaceSel];
+        const tmp = f[k];
+        f[k] = hotbar[i];
+        hotbar[i] = tmp;
+        refreshHotbar();
+        buildFurnaceUI();
+      });
+    }
+    furnaceHotbar.appendChild(slot);
+  }
+  // 槽位点击切换选中
+  slotEls.forEach((el, i) => {
+    el.onclick = () => { furnaceSel = i; buildFurnaceUI(); };
+  });
+}
+function updateFurnaceBar() {
+  if (!furnaceOpen) return;
+  furnaceBar.style.width = Math.min(100, (furnace.progress / SMELT_TIME) * 100) + '%';
+}
+function openFurnace() {
+  if (!started) return;
+  furnaceOpen = true;
+  inventoryOpen = false;
+  buildFurnaceUI();
+  refreshOverlays();
+  document.exitPointerLock();
+}
+function closeFurnace() {
+  furnaceOpen = false;
+  refreshOverlays();
+  canvas.requestPointerLock();
+}
 function toggleDayNight() { timeOfDay = (timeOfDay < 0.5) ? 0.74 : 0.24; }   // 0 键快速切换昼夜
 
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === canvas;
-  if (locked) { started = true; inventoryOpen = false; }
+  if (locked) { started = true; inventoryOpen = false; furnaceOpen = false; }
   refreshOverlays();
 });
 menuEl.addEventListener('click', () => { canvas.requestPointerLock(); });
@@ -2396,6 +2716,7 @@ const HARDNESS = {
   [B.BEDROCK]: Infinity,
   [B.TORCH]: 0.1, [B.FLOWER_RED]: 0.1, [B.FLOWER_YELLOW]: 0.1, [B.GRASS_TALL]: 0.1,
   [B.MUSHROOM_RED]: 0.1, [B.MUSHROOM_BROWN]: 0.1, [B.FERN]: 0.1, [B.PUMPKIN]: 0.6, [B.LILY_PAD]: 0.05,
+  [B.FURNACE]: 2.0,
 };
 function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
 // 破坏掉落物
@@ -2403,24 +2724,35 @@ function dropOf(id) {
   if (id === B.GRASS) return B.DIRT;         // 草方块掉泥土
   if (id === B.STONE) return B.COBBLE;       // 石头掉圆石
   if (isLeaf(id)) return null;               // 树叶不掉落
-  if (isTool(id) || id === B.STICK) return null;
+  if (isTool(id) || id === B.STICK || id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL) return null;
   return id;
+}
+// 工具等级挖掘倍率
+function tierOf(t) {
+  if (isWoodTier(t)) return 2.5;
+  if (isStoneTier(t)) return 5;
+  if (isIronTier(t)) return 8;
+  return 1;
 }
 // 当前手持工具对目标方块的挖掘倍率
 function effSpeed(id) {
   const s = hotbar[selected];
   if (!s) return 1;
   const t = s.id;
-  if (t === B.WOOD_PICKAXE) {
-    if (id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK || id === B.SANDSTONE || id === B.QUARTZ || isOre(id)) return 3.2;
+  if (isPickaxe(t)) {
+    if (id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK || id === B.SANDSTONE || id === B.QUARTZ || isOre(id) || id === B.FURNACE) return tierOf(t);
     return 1.15;
   }
-  if (t === B.WOOD_AXE) {
-    if (isLog(id) || id === B.PLANKS) return 3.6;
+  if (isAxe(t)) {
+    if (isLog(id) || id === B.PLANKS) return tierOf(t);
     return 1.15;
   }
-  if (t === B.WOOD_SHOVEL) {
-    if (id === B.DIRT || id === B.GRASS || id === B.SAND || id === B.GRAVEL || id === B.SNOW) return 3.6;
+  if (isShovel(t)) {
+    if (id === B.DIRT || id === B.GRASS || id === B.SAND || id === B.GRAVEL || id === B.SNOW) return tierOf(t);
+    return 1.15;
+  }
+  if (isSword(t)) {
+    if (isLeaf(id) || isCrossPlant(id) || isLilyPad(id) || id === B.SUGARCANE) return tierOf(t);   // 剑可快速清理树叶/花草
     return 1.15;
   }
   return 1;
@@ -2468,6 +2800,13 @@ function updateBreaking(dt) {
     spawnParticles(bx, by, bz, blockColor(bid), 14);
     enqueueAround(bx, by, bz);
     playPop();
+    // 工具耐久消耗
+    const tool = hotbar[selected];
+    if (tool && isTool(tool.id) && tool.dur !== undefined) {
+      tool.dur--;
+      if (tool.dur <= 0) { hotbar[selected] = null; playBreak(); }
+      refreshHotbar();
+    }
   }
 }
 
@@ -2487,7 +2826,10 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') { player.fly = !player.fly; player.vel.y = 0; }
   if (e.code === 'KeyN') { timeOfDay = 0.24; }                 // 跳到白天
   if (e.code === 'KeyE') { toggleInventory(); }                 // 背包
-  if (e.code === 'Escape' && inventoryOpen) { closeInventory(); return; }
+  if (e.code === 'Escape') {
+    if (inventoryOpen) { closeInventory(); return; }
+    if (furnaceOpen) { closeFurnace(); return; }
+  }
   if (e.code === 'ControlLeft' || e.code === 'ControlRight') player.sprint = true;
   const n = parseInt(e.key, 10);
   if (n >= 1 && n <= 9) select(n - 1);
@@ -2508,7 +2850,9 @@ function onMousedown(btn) {
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
   const sel = hotbar[selected];
-  if (btn === 2) { // 放置
+  if (btn === 2) { // 放置 / 交互
+    const hit = raycast(origin, dir, 6);
+    if (hit && hit.id === B.FURNACE) { openFurnace(); return; }   // 右键熔炉 → 打开冶炼界面
     if (!sel) return;
     const sid = sel.id;
     // 睡莲：放置在水面格
@@ -2525,8 +2869,7 @@ function onMousedown(btn) {
       playPop();
       return;
     }
-    if (isTool(sid) || sid === B.STICK) return;   // 工具/木棍不可放置
-    const hit = raycast(origin, dir, 6);
+    if (!isPlaceable(sid)) return;   // 工具/木棍/锭/木炭不可放置
     if (!hit) return;
     const px = hit.x + hit.n[0], py = hit.y + hit.n[1], pz = hit.z + hit.n[2];
     if (py < 0 || py >= HEIGHT) return;
@@ -2622,10 +2965,16 @@ function animate() {
   if (locked) updateBreaking(dt);
   updateStreaming();
   updateWater(150);
+  updateFurnace(dt);
   updateParticles(dt);
   updateItems(dt);
   updateWeather(dt);
   updateAnimals(dt);
+  if (furnaceOpen) {
+    furnaceRefreshT += dt;
+    if (furnaceRefreshT >= 0.25) { buildFurnaceUI(); furnaceRefreshT = 0; }
+    updateFurnaceBar();
+  }
 
   // 昼夜推进
   timeOfDay = (timeOfDay + dt / DAY_LENGTH) % 1;
