@@ -854,13 +854,14 @@ function updateEnvironment(t) {
   const night = 1 - day;
   const lerp = THREE.MathUtils.lerp;
   const warm = THREE.MathUtils.smoothstep(elev, 0.0, 0.28);  // 低空暖色
+  const dim = 1 - precip * 0.35;   // 雨雪天气压暗光照
 
-  sun.intensity = lerp(0.02, 2.0, day);
+  sun.intensity = lerp(0.02, 2.0, day) * dim;
   sun.color.setRGB(1.0, lerp(0.45, 0.95, day), lerp(0.25, 0.85, day));
   moon.intensity = night * 0.6;                                    // 月光（略收敛）
-  hemi.intensity = lerp(0.28, 0.45, day);                          // 半球光（收敛，避免顶面过亮）
+  hemi.intensity = lerp(0.28, 0.45, day) * dim;                    // 半球光（收敛，避免顶面过亮）
   hemi.color.setRGB(lerp(0.14, 0.75, day), lerp(0.18, 0.85, day), lerp(0.36, 1.0, day));
-  ambient.intensity = lerp(0.16, 0.35, day);                       // 均匀环境光：提亮侧面
+  ambient.intensity = lerp(0.16, 0.35, day) * dim;                 // 均匀环境光：提亮侧面
 
   skyMat.uniforms.uZenith.value.setRGB(lerp(0.01, 0.18, day), lerp(0.02, 0.42, day), lerp(0.06, 0.78, day));
   skyMat.uniforms.uHorizon.value.setRGB(
@@ -1348,6 +1349,147 @@ function updateParticles(dt) {
   }
 }
 
+/* ============================ 天气（雨 / 雪） ============================ */
+let weather = 'clear';          // clear | rain | snow
+let weatherTimer = 150;         // 秒
+let precip = 0;                 // 降水强度 0..1（平滑过渡）
+const RAIN_COUNT = 420;
+
+function makePrecip(color, streakLen) {
+  const positions = new Float32Array(RAIN_COUNT * 6);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.45 });
+  const lines = new THREE.LineSegments(geo, mat);
+  lines.frustumCulled = false;
+  lines.visible = false;
+  scene.add(lines);
+  for (let i = 0; i < RAIN_COUNT; i++) {
+    const px = (Math.random() - 0.5) * 48;
+    const py = Math.random() * 38 - 8;
+    const pz = (Math.random() - 0.5) * 48;
+    positions[i * 6] = px; positions[i * 6 + 1] = py; positions[i * 6 + 2] = pz;
+    positions[i * 6 + 3] = px; positions[i * 6 + 4] = py - streakLen; positions[i * 6 + 5] = pz;
+  }
+  return { lines, geo, positions, streakLen };
+}
+const rain = makePrecip(0x9fb8d8, 0.7);
+const snow = makePrecip(0xf4f8fc, 0.35);
+
+function updateWeather(dt) {
+  weatherTimer -= dt;
+  if (weatherTimer <= 0) {
+    const snowy = biomeOf(Math.floor(player.pos.x), Math.floor(player.pos.z)) === 4;
+    weather = (Math.random() < 0.45) ? (snowy ? 'snow' : 'rain') : 'clear';
+    weatherTimer = (weather === 'clear') ? 100 + Math.random() * 160 : 60 + Math.random() * 100;
+  }
+  const raining = weather === 'rain';
+  const snowing = weather === 'snow';
+  rain.lines.visible = raining;
+  snow.lines.visible = snowing;
+  precip += ((raining || snowing ? 1 : 0) - precip) * Math.min(1, dt * 2);
+
+  rain.lines.position.copy(player.pos);
+  snow.lines.position.copy(player.pos);
+  if (raining) {
+    const arr = rain.positions;
+    for (let i = 0; i < RAIN_COUNT; i++) {
+      const idx = i * 6;
+      arr[idx + 1] -= 24 * dt; arr[idx + 4] -= 24 * dt;
+      if (arr[idx + 4] < -8) {
+        const px = (Math.random() - 0.5) * 48, pz = (Math.random() - 0.5) * 48, py = 24 + Math.random() * 10;
+        arr[idx] = px; arr[idx + 1] = py; arr[idx + 2] = pz;
+        arr[idx + 3] = px; arr[idx + 4] = py - 0.7; arr[idx + 5] = pz;
+      }
+    }
+    rain.geo.attributes.position.needsUpdate = true;
+  }
+  if (snowing) {
+    const arr = snow.positions;
+    for (let i = 0; i < RAIN_COUNT; i++) {
+      const idx = i * 6;
+      arr[idx + 1] -= 2.5 * dt; arr[idx + 4] -= 2.5 * dt;
+      if (arr[idx + 4] < -8) {
+        const px = (Math.random() - 0.5) * 48, pz = (Math.random() - 0.5) * 48, py = 24 + Math.random() * 10;
+        arr[idx] = px; arr[idx + 1] = py; arr[idx + 2] = pz;
+        arr[idx + 3] = px; arr[idx + 4] = py - 0.35; arr[idx + 5] = pz;
+      }
+    }
+    snow.geo.attributes.position.needsUpdate = true;
+  }
+}
+
+/* ============================ 动物 ============================ */
+const MOB_KINDS = [
+  { color: 0xf0a0b2, name: 'pig' },
+  { color: 0xf0f0ee, name: 'sheep' },
+  { color: 0x9a7a5a, name: 'cow' },
+];
+const MAX_ANIMALS = 16;
+const animals = [];
+const mobBodyGeo = new THREE.BoxGeometry(0.9, 0.55, 0.65);
+const mobHeadGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+const mobLegGeo = new THREE.BoxGeometry(0.18, 0.35, 0.18);
+
+function findGround(x, z) {
+  for (let y = HEIGHT - 1; y >= 0; y--) {
+    if (!isSeeThrough(world.getBlock(x, y, z))) return y + 1;
+  }
+  return 1;
+}
+function spawnAnimal(x, z) {
+  const kind = MOB_KINDS[(Math.random() * MOB_KINDS.length) | 0];
+  const mat = new THREE.MeshLambertMaterial({ color: kind.color });
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(mobBodyGeo, mat); body.position.y = 0.68; g.add(body);
+  const head = new THREE.Mesh(mobHeadGeo, mat); head.position.set(0, 0.82, -0.55); g.add(head);
+  const legs = [];
+  for (const [dx, dz] of [[0.28, 0.22], [0.28, -0.22], [-0.28, 0.22], [-0.28, -0.22]]) {
+    const leg = new THREE.Mesh(mobLegGeo, mat); leg.position.set(dx, 0.18, dz); g.add(leg); legs.push(leg);
+  }
+  g.position.set(x, findGround(Math.floor(x), Math.floor(z)), z);
+  scene.add(g);
+  animals.push({ g, legs, x, z, heading: Math.random() * Math.PI * 2, timer: 1 + Math.random() * 3, speed: 0.7 + Math.random() * 0.7, phase: Math.random() * 6 });
+}
+function spawnAnimalsNear(cx, cz, count) {
+  let spawned = 0;
+  for (let attempt = 0; attempt < 500 && spawned < count; attempt++) {
+    const x = cx + (Math.random() - 0.5) * 60, z = cz + (Math.random() - 0.5) * 60;
+    const gx = Math.floor(x), gz = Math.floor(z);
+    const gy = findGround(gx, gz);
+    if (world.getBlock(gx, gy - 1, gz) === B.GRASS && world.getWater(gx, gy, gz) === 0) {
+      spawnAnimal(gx + 0.5, gz + 0.5); spawned++;
+    }
+  }
+}
+function updateAnimals(dt) {
+  for (const a of animals) {
+    const dxp = a.x - player.pos.x, dzp = a.z - player.pos.z;
+    if (dxp * dxp + dzp * dzp > 70 * 70) {
+      a.x = player.pos.x + (Math.random() - 0.5) * 40;
+      a.z = player.pos.z + (Math.random() - 0.5) * 40;
+      a.g.position.set(a.x, findGround(Math.floor(a.x), Math.floor(a.z)), a.z);
+      continue;
+    }
+    a.timer -= dt;
+    if (a.timer <= 0) { a.heading = Math.random() * Math.PI * 2; a.timer = 2 + Math.random() * 3; }
+    const nx = a.x + Math.sin(a.heading) * a.speed * dt;
+    const nz = a.z + Math.cos(a.heading) * a.speed * dt;
+    const ti = Math.floor(nx), tz = Math.floor(nz);
+    const gy = findGround(Math.floor(a.x), Math.floor(a.z));
+    if (world.getWater(ti, gy, tz) > 0 || findGround(ti, tz) < gy - 2) {
+      a.heading = Math.random() * Math.PI * 2; a.timer = 1.5 + Math.random() * 2;
+    } else {
+      a.x = nx; a.z = nz;
+    }
+    a.g.position.set(a.x, findGround(Math.floor(a.x), Math.floor(a.z)), a.z);
+    a.g.rotation.y = a.heading + Math.PI;
+    a.phase += dt * a.speed * 4;
+    const swing = Math.sin(a.phase) * 0.35;
+    a.legs.forEach((leg, i) => { leg.rotation.x = swing * (i % 2 === 0 ? 1 : -1); });
+  }
+}
+
 /* ============================ 玩家 ============================ */
 const player = {
   pos: new THREE.Vector3(8.5, 60, 8.5),
@@ -1462,7 +1604,7 @@ function updatePlayer(dt) {
     player.vel.y = Math.max(player.vel.y, -50);
     if (keys['Space']) {
       if (player.onGround) { player.vel.y = 8.5; player.onGround = false; }
-      else if (water) player.vel.y = 6.0;   // 游泳上浮更强，可跃上一格岸
+      else if (water) player.vel.y = 4.2;   // 游泳上浮，可跃上岸但不至于水面连跳
     }
     if (water) player.vel.y = Math.max(player.vel.y, -3.5);
 
@@ -1500,10 +1642,9 @@ function raycast(origin, dir, maxDist) {
   let t = 0;
   while (t <= maxDist) {
     const id = world.getBlock(x, y, z);
-    const w = world.getWater(x, y, z);
-    if (id !== B.AIR || w > 0) {
-      const hitId = (id === B.AIR && w > 0) ? B.WATER : id;
-      return { x, y, z, id: hitId, n: [face[0], face[1], face[2]] };
+    // 水视为透明：射线穿过水，命中水下的实体方块（水本身不可破坏）
+    if (id !== B.AIR) {
+      return { x, y, z, id, n: [face[0], face[1], face[2]] };
     }
     if (tmx < tmy && tmx < tmz) { x += stepX; t = tmx; tmx += tdx; face = [-stepX, 0, 0]; }
     else if (tmy < tmz) { y += stepY; t = tmy; tmy += tdy; face = [0, -stepY, 0]; }
@@ -1784,6 +1925,8 @@ function animate() {
   updateStreaming();
   updateWater(150);
   updateParticles(dt);
+  updateWeather(dt);
+  updateAnimals(dt);
 
   // 昼夜推进
   timeOfDay = (timeOfDay + dt / DAY_LENGTH) % 1;
@@ -1852,6 +1995,7 @@ try {
     // 同步生成出生点附近（7x7，随后逐帧流式扩展）
     const scx = Math.floor(spawn.x / 16), scz = Math.floor(spawn.z / 16);
     for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) world.ensureChunk(scx + dx, scz + dz);
+    spawnAnimalsNear(spawn.x, spawn.z, MAX_ANIMALS);
     buildHotbar();
     refreshHotbar();
     camera.position.set(spawn.x, spawn.y + player.eye, spawn.z);
