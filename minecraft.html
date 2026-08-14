@@ -1094,7 +1094,7 @@ class World {
   chunkLoaded(cx, cz) { return this.chunks.has(key(cx, cz)); }
   ensureChunk(cx, cz) {
     if (this.chunks.has(key(cx, cz))) return;
-    const c = { cx, cz, blocks: new Uint8Array(CHUNK * CHUNK * HEIGHT), water: new Uint8Array(CHUNK * CHUNK * HEIGHT), treesPlanted: false, dirty: true, group: null, edited: false };
+    const c = { cx, cz, blocks: new Uint8Array(CHUNK * CHUNK * HEIGHT), water: new Uint8Array(CHUNK * CHUNK * HEIGHT), treesPlanted: false, dirty: true, group: null, edited: false, topY: 0 };
     this.chunks.set(key(cx, cz), c);
     this._fill(c);
   }
@@ -1177,6 +1177,17 @@ class World {
         }
       }
     }
+    // 缓存区块最高方块/水面高度（用于网格构建时跳过上方空气层）
+    let topY = 0;
+    for (let i = 0; i < 256; i++) {
+      for (let y = HEIGHT - 1; y >= 0; y--) {
+        if (c.blocks[y * 256 + i] !== B.AIR) { if (y > topY) topY = y; break; }
+      }
+      for (let y = HEIGHT - 1; y >= 0; y--) {
+        if (c.water[y * 256 + i] > 0) { if (y > topY) topY = y; break; }
+      }
+    }
+    c.topY = topY;
   }
   getBlock(x, y, z) {
     if (y < 0) return B.BEDROCK;
@@ -1199,6 +1210,7 @@ class World {
     this.ensureChunk(cx, cz);
     const c = this.chunks.get(key(cx, cz));
     c.blocks[y * 256 + (z - cz * 16) * 16 + (x - cx * 16)] = id;
+    if (id !== B.AIR && y > c.topY) c.topY = y;
     c.edited = true;
     markDirtyBlock(x, y, z);
   }
@@ -1208,6 +1220,7 @@ class World {
     this.ensureChunk(cx, cz);
     const c = this.chunks.get(key(cx, cz));
     c.water[y * 256 + (z - cz * 16) * 16 + (x - cx * 16)] = l;
+    if (l > 0 && y > c.topY) c.topY = y;
     c.edited = true;
     markDirtyBlock(x, y, z);
   }
@@ -1216,6 +1229,7 @@ class World {
     const c = this.chunks.get(key(cx, cz));
     if (!c || y < 0 || y >= HEIGHT) return;
     c.blocks[y * 256 + (z - cz * 16) * 16 + (x - cx * 16)] = id;
+    if (id !== B.AIR && y > c.topY) c.topY = y;
     markDirtyBlock(x, y, z);
   }
 }
@@ -1273,6 +1287,7 @@ function loadWorld() {
         if (!c) continue;
         c.blocks.set(base64ToUint8(s.b));
         c.water.set(base64ToUint8(s.w));
+        c.topY = HEIGHT - 1;   // 读档后保守处理，保证不裁剪掉存档中的高处方块
         c.dirty = true;
       }
     }
@@ -1435,6 +1450,15 @@ function pushWaterFace(A, bx, by, bz, f, hgt) {
   A.idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
 }
 
+// 合并后的满水面大四边形（水面为程序化着色，无需 UV）
+function pushWaterQuad(A, bx, by, bz, w, d) {
+  const vi = A.pos.length / 3;
+  const h = 1.0;
+  A.pos.push(bx, by + h, bz,  bx + w, by + h, bz,  bx + w, by + h, bz + d,  bx, by + h, bz + d);
+  A.nor.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0);
+  A.idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+}
+
 // 花草等十字面植物（两个交叉四边形，走 cutout 材质）
 const CROSS_QUADS = [
   [[0, 0, 0], [1, 0, 1], [1, 1, 1], [0, 1, 0]],
@@ -1483,20 +1507,23 @@ function makeGeo(A) {
 
 function buildChunkGeometry(c) {
   const baseX = c.cx * 16, baseZ = c.cz * 16;
+  const yMax = Math.min(HEIGHT - 1, c.topY || 0);   // 跳过地表/水面以上的空气层
   const colTop = new Int16Array(256);
   for (let i = 0; i < 256; i++) colTop[i] = -1;
   for (let lz = 0; lz < 16; lz++) for (let lx = 0; lx < 16; lx++) {
     const i = lz * 16 + lx;
-    for (let y = HEIGHT - 1; y >= 0; y--) {
+    for (let y = yMax; y >= 0; y--) {
       const id = c.blocks[y * 256 + i];
       if (!isSeeThrough(id)) { colTop[i] = y; break; }
     }
   }
   // 预取 3x3 邻居区块数据，避免网格构建时逐格 Map 查找 + 字符串 key
   const nbBlocks = new Array(9).fill(null);
+  const nbWaters = new Array(9).fill(null);
   for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
     const nc = world.chunks.get(key(c.cx + dx, c.cz + dz));
     nbBlocks[(dz + 1) * 3 + (dx + 1)] = nc ? nc.blocks : null;
+    nbWaters[(dz + 1) * 3 + (dx + 1)] = nc ? nc.water : null;
   }
   const getB = (x, y, z) => {
     if (y < 0) return B.BEDROCK;
@@ -1506,13 +1533,20 @@ function buildChunkGeometry(c) {
     if (!arr) return B.AIR;
     return arr[y * 256 + (z - ccz * 16) * 16 + (x - ccx * 16)];
   };
+  const getW = (x, y, z) => {
+    if (y < 0 || y >= HEIGHT) return 0;
+    const ccx = Math.floor(x / 16), ccz = Math.floor(z / 16);
+    const arr = nbWaters[(ccz - c.cz + 1) * 3 + (ccx - c.cx + 1)];
+    if (!arr) return 0;
+    return arr[y * 256 + (z - ccz * 16) * 16 + (x - ccx * 16)];
+  };
   const A = { pos: [], nor: [], uv: [], col: [], idx: [] };
   const C = { pos: [], nor: [], uv: [], col: [], idx: [] };
   const W = { pos: [], nor: [], idx: [] };
   const T = { pos: [], nor: [], uv: [], col: [], idx: [] };   // 火把（自发光）
   const solid = (x, y, z) => !isSeeThrough(getB(x, y, z));
 
-  for (let y = 0; y < HEIGHT; y++) {
+  for (let y = 0; y <= yMax; y++) {
     for (let lz = 0; lz < 16; lz++) {
       for (let lx = 0; lx < 16; lx++) {
         const i = y * 256 + lz * 16 + lx;
@@ -1523,19 +1557,16 @@ function buildChunkGeometry(c) {
         // 水单独存放在 c.water，必须先于实体方块判断
         const L = c.water[i];
         if (L > 0) {
-          if (L >= 8) {
-            // 满水（海洋/湖泊）：只渲染顶面 → 连续平滑水面
-            const nb = getB(wx, y + 1, wz);
-            if (isSeeThrough(nb) && nb !== B.WATER) pushWaterFace(W, wx, y, wz, FACES[2], 1.0);
-          } else {
+          if (L < 8) {
             // 流动水：渲染所有暴露面（瀑布/水流需要侧面）
             const hgt = L / 8;
             for (const f of FACES) {
               const nb = getB(wx + f.dir[0], y + f.dir[1], wz + f.dir[2]);
-              if (nb === B.WATER || !isSeeThrough(nb)) continue;
+              if (getW(wx + f.dir[0], y + f.dir[1], wz + f.dir[2]) > 0 || !isSeeThrough(nb)) continue;
               pushWaterFace(W, wx, y, wz, f, hgt);
             }
           }
+          // 满水顶面：交由下方贪心合并，避免水下重复水面
           continue;
         }
         if (id === B.AIR) continue;
@@ -1552,6 +1583,28 @@ function buildChunkGeometry(c) {
           pushFace(target, wx, y, wz, f, t[f.face], under, solid);
         }
       }
+    }
+  }
+  // 满水面贪心合并：仅在「上方无水且无实体方块」的格渲染顶面，并合并成矩形
+  for (let y = 0; y <= yMax; y++) {
+    const mask = new Uint8Array(256);
+    for (let lz = 0; lz < 16; lz++) for (let lx = 0; lx < 16; lx++) {
+      const i = y * 256 + lz * 16 + lx;
+      if (c.water[i] === 8 && getW(baseX + lx, y + 1, baseZ + lz) === 0 && isSeeThrough(getB(baseX + lx, y + 1, baseZ + lz))) {
+        mask[lz * 16 + lx] = 1;
+      }
+    }
+    for (let lz = 0; lz < 16; lz++) for (let lx = 0; lx < 16; lx++) {
+      if (!mask[lz * 16 + lx]) continue;
+      let w = 1;
+      while (lx + w < 16 && mask[lz * 16 + lx + w]) w++;
+      let d = 1;
+      outer: while (lz + d < 16) {
+        for (let k = 0; k < w; k++) if (!mask[(lz + d) * 16 + lx + k]) break outer;
+        d++;
+      }
+      pushWaterQuad(W, baseX + lx, y, baseZ + lz, w, d);
+      for (let dz = 0; dz < d; dz++) for (let dx = 0; dx < w; dx++) mask[(lz + dz) * 16 + lx + dx] = 0;
     }
   }
   return { opaque: makeGeo(A), cutout: makeGeo(C), water: makeGeo(W), torch: makeGeo(T) };
