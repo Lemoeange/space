@@ -762,9 +762,9 @@ const skyMat = new THREE.ShaderMaterial({
       if (h > 0.0) {
         col = mix(uHorizon, uZenith, pow(clamp(h, 0.0, 1.0), 0.55));
         float s = max(dot(d, normalize(uSunDir)), 0.0);
-        col += vec3(1.0, 0.72, 0.38) * pow(s, 600.0) * 3.0;   // 太阳圆盘
-        col += vec3(1.0, 0.55, 0.25) * pow(s, 60.0) * 0.35;    // 光晕
-        col += vec3(1.0, 0.80, 0.60) * pow(s, 8.0) * 0.12;     // 霞光
+        col += vec3(1.0, 0.9, 0.65) * pow(s, 350.0) * 5.0;   // 太阳圆盘（更大更亮）
+        col += vec3(1.0, 0.65, 0.35) * pow(s, 35.0) * 0.4;    // 光晕
+        col += vec3(1.0, 0.85, 0.7) * pow(s, 8.0) * 0.04;     // 极淡霞光（不再雾蒙蒙）
         // 星空与月亮（夜晚）
         col += vec3(0.9, 0.95, 1.0) * starField(d) * uNight * 0.9;
         float m = max(dot(d, normalize(uMoonDir)), 0.0);
@@ -855,7 +855,7 @@ function updateEnvironment(t) {
   const day = THREE.MathUtils.smoothstep(elev, -0.12, 0.32); // 0..1
   const night = 1 - day;
   const lerp = THREE.MathUtils.lerp;
-  const warm = THREE.MathUtils.smoothstep(elev, 0.0, 0.28);  // 低空暖色
+  const warm = Math.max(0, 1 - Math.abs(elev) * 2.5);  // 仅日出日落时暖色，白天通透
   const dim = 1 - precip * 0.35;   // 雨雪天气压暗光照
 
   sun.intensity = lerp(0.02, 2.0, day) * dim;
@@ -865,21 +865,23 @@ function updateEnvironment(t) {
   hemi.color.setRGB(lerp(0.14, 0.75, day), lerp(0.18, 0.85, day), lerp(0.36, 1.0, day));
   ambient.intensity = lerp(0.16, 0.35, day) * dim;                 // 均匀环境光：提亮侧面
 
-  skyMat.uniforms.uZenith.value.setRGB(lerp(0.01, 0.18, day), lerp(0.02, 0.42, day), lerp(0.06, 0.78, day));
+  // 天空：白天通透蓝天，日出日落暖橙，夜晚深蓝
+  skyMat.uniforms.uZenith.value.setRGB(lerp(0.01, 0.12, day), lerp(0.02, 0.33, day), lerp(0.06, 0.82, day));
   skyMat.uniforms.uHorizon.value.setRGB(
-    Math.min(1, lerp(0.05, 0.86, day) + warm * 0.14),
-    Math.min(1, lerp(0.07, 0.78, day) + warm * 0.05),
-    lerp(0.12, 0.62, day)
+    Math.min(1, lerp(0.05, 0.62, day) + warm * 0.38),
+    Math.min(1, lerp(0.07, 0.73, day) + warm * 0.22),
+    Math.max(0, lerp(0.12, 0.90, day) - warm * 0.25)
   );
   skyMat.uniforms.uNight.value = night;
 
-  FOG_COLOR.setRGB(lerp(0.05, 0.85, day), lerp(0.08, 0.80, day), lerp(0.13, 0.66, day));
+  // 雾：白天淡蓝（通透），夜晚深蓝
+  FOG_COLOR.setRGB(lerp(0.03, 0.62, day), lerp(0.05, 0.74, day), lerp(0.10, 0.90, day));
 
-  waterMat.uniforms.uSkyTop.value.setRGB(lerp(0.01, 0.17, day), lerp(0.02, 0.42, day), lerp(0.05, 0.73, day));
+  waterMat.uniforms.uSkyTop.value.setRGB(lerp(0.01, 0.11, day), lerp(0.02, 0.32, day), lerp(0.05, 0.78, day));
   waterMat.uniforms.uSkyBottom.value.setRGB(
-    Math.min(1, lerp(0.05, 0.86, day) + warm * 0.14),
-    Math.min(1, lerp(0.07, 0.78, day) + warm * 0.05),
-    lerp(0.12, 0.62, day)
+    Math.min(1, lerp(0.05, 0.62, day) + warm * 0.38),
+    Math.min(1, lerp(0.07, 0.73, day) + warm * 0.22),
+    Math.max(0, lerp(0.12, 0.90, day) - warm * 0.25)
   );
 
   cloudMat.color.setRGB(lerp(0.12, 1.0, day), lerp(0.12, 1.0, day), lerp(0.14, 1.0, day));
@@ -894,7 +896,7 @@ class World {
   chunkLoaded(cx, cz) { return this.chunks.has(key(cx, cz)); }
   ensureChunk(cx, cz) {
     if (this.chunks.has(key(cx, cz))) return;
-    const c = { cx, cz, blocks: new Uint8Array(CHUNK * CHUNK * HEIGHT), water: new Uint8Array(CHUNK * CHUNK * HEIGHT), treesPlanted: false, dirty: true, group: null };
+    const c = { cx, cz, blocks: new Uint8Array(CHUNK * CHUNK * HEIGHT), water: new Uint8Array(CHUNK * CHUNK * HEIGHT), treesPlanted: false, dirty: true, group: null, edited: false };
     this.chunks.set(key(cx, cz), c);
     this._fill(c);
   }
@@ -967,6 +969,7 @@ class World {
     this.ensureChunk(cx, cz);
     const c = this.chunks.get(key(cx, cz));
     c.blocks[y * 256 + (z - cz * 16) * 16 + (x - cx * 16)] = id;
+    c.edited = true;
     markDirtyBlock(x, y, z);
   }
   setWater(x, y, z, l) {
@@ -975,6 +978,7 @@ class World {
     this.ensureChunk(cx, cz);
     const c = this.chunks.get(key(cx, cz));
     c.water[y * 256 + (z - cz * 16) * 16 + (x - cx * 16)] = l;
+    c.edited = true;
     markDirtyBlock(x, y, z);
   }
   setRaw(x, y, z, id) { // 用于种树（不触发生成）
@@ -997,6 +1001,45 @@ function markDirtyBlock(x, y, z) {
   if (lz === 0) markChunk(cx, cz - 1);
   if (lz === 15) markChunk(cx, cz + 1);
 }
+
+/* ============================ 存档（localStorage） ============================ */
+function uint8ToBase64(arr) {
+  let bin = '';
+  const step = 0x8000;
+  for (let i = 0; i < arr.length; i += step) bin += String.fromCharCode.apply(null, arr.subarray(i, i + step));
+  return btoa(bin);
+}
+function base64ToUint8(str) {
+  const bin = atob(str);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+function saveWorld() {
+  const saved = [];
+  for (const c of world.chunks.values()) {
+    if (c.edited) saved.push({ cx: c.cx, cz: c.cz, b: uint8ToBase64(c.blocks), w: uint8ToBase64(c.water) });
+  }
+  if (saved.length === 0) return;
+  try { localStorage.setItem('mc_world_v1', JSON.stringify(saved)); }
+  catch (e) { console.warn('[save] 存档失败:', e && e.message); }
+}
+function loadWorld() {
+  try {
+    const raw = localStorage.getItem('mc_world_v1');
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    for (const s of saved) {
+      const c = world.chunks.get(key(s.cx, s.cz));
+      if (!c) continue;
+      c.blocks.set(base64ToUint8(s.b));
+      c.water.set(base64ToUint8(s.w));
+      c.dirty = true;
+    }
+  } catch (e) { console.warn('[load] 读取存档失败:', e && e.message); }
+}
+setInterval(saveWorld, 30000);                 // 每 30 秒自动存档
+addEventListener('beforeunload', () => saveWorld());
 
 /* ============================ 植树 ============================ */
 function plantTrees(c) {
@@ -2070,6 +2113,7 @@ try {
     // 同步生成出生点附近（7x7，随后逐帧流式扩展）
     const scx = Math.floor(spawn.x / 16), scz = Math.floor(spawn.z / 16);
     for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) world.ensureChunk(scx + dx, scz + dz);
+    loadWorld();
     spawnAnimalsNear(spawn.x, spawn.z, MAX_ANIMALS);
     buildHotbar();
     refreshHotbar();
