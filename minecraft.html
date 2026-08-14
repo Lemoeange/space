@@ -988,7 +988,7 @@ const ambient = new THREE.AmbientLight(0xfff2e0, 0.35);   // 均匀环境光：�
 scene.add(ambient);
 const sun = new THREE.DirectionalLight(0xffe9c8, 2.0);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(1024, 1024);   // 阴影图减半（PCFSoft 下几乎无感），省 4 倍阴影填充
 const sc = sun.shadow.camera;
 sc.left = -85; sc.right = 85; sc.top = 85; sc.bottom = -85; sc.near = 5; sc.far = 400;
 sc.updateProjectionMatrix();
@@ -1386,17 +1386,18 @@ function uvFor(tile, k) {
   return [u0 + (u1 - u0) * c[0], v0 + (v1 - v0) * c[1]];
 }
 
+// 复用临时数组，避免网格构建时大量分配
+const _ao_n1 = [0, 0, 0], _ao_n2 = [0, 0, 0], _ao_n3 = [0, 0, 0];
 function aoAt(bx, by, bz, f, w, solid) {
-  const p = [bx, by, bz];
   const a = AXIS[f.a], b = AXIS[f.b];
-  const s1 = (w[a] === p[a]) ? 1 : -1;
-  const s2 = (w[b] === p[b]) ? 1 : -1;
-  const n1 = [w[0], w[1], w[2]]; n1[a] += s1;
-  const n2 = [w[0], w[1], w[2]]; n2[b] += s2;
-  const n3 = [w[0], w[1], w[2]]; n3[a] += s1; n3[b] += s2;
-  const a1 = solid(n1[0], n1[1], n1[2]) ? 1 : 0;
-  const a2 = solid(n2[0], n2[1], n2[2]) ? 1 : 0;
-  const a3 = solid(n3[0], n3[1], n3[2]) ? 1 : 0;
+  const s1 = (w[a] === (a === 0 ? bx : a === 1 ? by : bz)) ? 1 : -1;
+  const s2 = (w[b] === (b === 0 ? bx : b === 1 ? by : bz)) ? 1 : -1;
+  _ao_n1[0] = w[0]; _ao_n1[1] = w[1]; _ao_n1[2] = w[2]; _ao_n1[a] += s1;
+  _ao_n2[0] = w[0]; _ao_n2[1] = w[1]; _ao_n2[2] = w[2]; _ao_n2[b] += s2;
+  _ao_n3[0] = w[0]; _ao_n3[1] = w[1]; _ao_n3[2] = w[2]; _ao_n3[a] += s1; _ao_n3[b] += s2;
+  const a1 = solid(_ao_n1[0], _ao_n1[1], _ao_n1[2]) ? 1 : 0;
+  const a2 = solid(_ao_n2[0], _ao_n2[1], _ao_n2[2]) ? 1 : 0;
+  const a3 = solid(_ao_n3[0], _ao_n3[1], _ao_n3[2]) ? 1 : 0;
   let occ;
   if (a1 && a2) occ = 0; else occ = 3 - (a1 + a2 + a3);
   return AO_LEVELS[occ];
@@ -1435,12 +1436,12 @@ function pushWaterFace(A, bx, by, bz, f, hgt) {
 }
 
 // 花草等十字面植物（两个交叉四边形，走 cutout 材质）
+const CROSS_QUADS = [
+  [[0, 0, 0], [1, 0, 1], [1, 1, 1], [0, 1, 0]],
+  [[1, 0, 0], [0, 0, 1], [0, 1, 1], [1, 1, 0]]
+];
 function pushCrossPlant(A, bx, by, bz, tile) {
-  const quads = [
-    [[0, 0, 0], [1, 0, 1], [1, 1, 1], [0, 1, 0]],
-    [[1, 0, 0], [0, 0, 1], [0, 1, 1], [1, 1, 0]]
-  ];
-  for (const q of quads) {
+  for (const q of CROSS_QUADS) {
     const vi = A.pos.length / 3;
     for (let k = 0; k < 4; k++) {
       A.pos.push(bx + q[k][0], by + q[k][1], bz + q[k][2]);
@@ -1491,11 +1492,25 @@ function buildChunkGeometry(c) {
       if (!isSeeThrough(id)) { colTop[i] = y; break; }
     }
   }
+  // 预取 3x3 邻居区块数据，避免网格构建时逐格 Map 查找 + 字符串 key
+  const nbBlocks = new Array(9).fill(null);
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    const nc = world.chunks.get(key(c.cx + dx, c.cz + dz));
+    nbBlocks[(dz + 1) * 3 + (dx + 1)] = nc ? nc.blocks : null;
+  }
+  const getB = (x, y, z) => {
+    if (y < 0) return B.BEDROCK;
+    if (y >= HEIGHT) return B.AIR;
+    const ccx = Math.floor(x / 16), ccz = Math.floor(z / 16);
+    const arr = nbBlocks[(ccz - c.cz + 1) * 3 + (ccx - c.cx + 1)];
+    if (!arr) return B.AIR;
+    return arr[y * 256 + (z - ccz * 16) * 16 + (x - ccx * 16)];
+  };
   const A = { pos: [], nor: [], uv: [], col: [], idx: [] };
   const C = { pos: [], nor: [], uv: [], col: [], idx: [] };
   const W = { pos: [], nor: [], idx: [] };
   const T = { pos: [], nor: [], uv: [], col: [], idx: [] };   // 火把（自发光）
-  const solid = (x, y, z) => !isSeeThrough(world.getBlock(x, y, z));
+  const solid = (x, y, z) => !isSeeThrough(getB(x, y, z));
 
   for (let y = 0; y < HEIGHT; y++) {
     for (let lz = 0; lz < 16; lz++) {
@@ -1510,13 +1525,13 @@ function buildChunkGeometry(c) {
         if (L > 0) {
           if (L >= 8) {
             // 满水（海洋/湖泊）：只渲染顶面 → 连续平滑水面
-            const nb = world.getBlock(wx, y + 1, wz);
+            const nb = getB(wx, y + 1, wz);
             if (isSeeThrough(nb) && nb !== B.WATER) pushWaterFace(W, wx, y, wz, FACES[2], 1.0);
           } else {
             // 流动水：渲染所有暴露面（瀑布/水流需要侧面）
             const hgt = L / 8;
             for (const f of FACES) {
-              const nb = world.getBlock(wx + f.dir[0], y + f.dir[1], wz + f.dir[2]);
+              const nb = getB(wx + f.dir[0], y + f.dir[1], wz + f.dir[2]);
               if (nb === B.WATER || !isSeeThrough(nb)) continue;
               pushWaterFace(W, wx, y, wz, f, hgt);
             }
@@ -1531,7 +1546,7 @@ function buildChunkGeometry(c) {
         const under = undergroundFactor(colTop, lx, lz, y);
         const target = cutout ? C : A;
         for (const f of FACES) {
-          const nb = world.getBlock(wx + f.dir[0], y + f.dir[1], wz + f.dir[2]);
+          const nb = getB(wx + f.dir[0], y + f.dir[1], wz + f.dir[2]);
           const vis = cutout ? (isSeeThrough(nb) && nb !== B.GLASS) : isSeeThrough(nb);
           if (!vis) continue;
           pushFace(target, wx, y, wz, f, t[f.face], under, solid);
