@@ -197,7 +197,9 @@ const B = {
   COAL:13, IRON:14, GOLD:15, DIAMOND:16, GLASS:17,
   STONE_BRICK:18, MOSSY:19, BRICK:20, SANDSTONE:21, QUARTZ:22,
   FLOWER_RED:23, FLOWER_YELLOW:24, GRASS_TALL:25, TORCH:26,
-  BIRCH_LOG:27, BIRCH_LEAVES:28, SPRUCE_LOG:29, SPRUCE_LEAVES:30, CACTUS:31
+  BIRCH_LOG:27, BIRCH_LEAVES:28, SPRUCE_LOG:29, SPRUCE_LEAVES:30, CACTUS:31,
+  EMERALD_ORE:32, LAPIS_ORE:33, REDSTONE_ORE:34, COPPER_ORE:35,
+  SUGARCANE:36, MUSHROOM_RED:37, MUSHROOM_BROWN:38
 };
 
 function mulberry32(a) {
@@ -305,10 +307,14 @@ function isCave(x, y, z) {
 // 矿脉噪声
 function oreNoise(x, y, z) { return P.ore.fbm3(x * 0.13 + 700, y * 0.13 + 700, z * 0.13 + 700, 2); }
 function oreFor(y, v) {
-  if (y < 16 && v > 0.74) return B.DIAMOND;
-  if (y < 28 && v > 0.66) return B.GOLD;
-  if (y < 44 && v > 0.58) return B.IRON;
-  if (y < 64 && v > 0.52) return B.COAL;
+  if (y < 16 && v > 0.76) return B.DIAMOND;
+  if (y < 20 && v > 0.70) return B.REDSTONE_ORE;
+  if (y < 32 && v > 0.64) return B.LAPIS_ORE;
+  if (y < 32 && v > 0.60) return B.EMERALD_ORE;
+  if (y < 28 && v > 0.56) return B.GOLD;
+  if (y < 44 && v > 0.52) return B.IRON;
+  if (y < 64 && v > 0.48) return B.COPPER_ORE;
+  if (y < 72 && v > 0.44) return B.COAL;
   return B.STONE;
 }
 
@@ -358,7 +364,7 @@ const { HEIGHT, SEA, B, mulberry32, surfaceHeight, isCave, oreFor, oreNoise, bio
 /* ============================ 常量 ============================ */
 const CHUNK = 16;
 const TILE = 16;
-const ATLAS_TILES = 33;
+const ATLAS_TILES = 40;
 const ATLAS_W = ATLAS_TILES * TILE;
 const AO_LEVELS = [0.55, 0.7, 0.85, 1.0];
 const GEN_R = 6;   // 生成半径（chunk）
@@ -381,6 +387,8 @@ function makeAtlas() {
   T.stoneBrick = i++; T.mossy = i++; T.brick = i++; T.sandstone = i++; T.quartz = i++;
   T.flowerRed = i++; T.flowerYellow = i++; T.tallGrass = i++; T.torch = i++;
   T.birchLogSide = i++; T.birchLeaves = i++; T.spruceLogSide = i++; T.spruceLeaves = i++; T.cactus = i++;
+  T.emeraldOre = i++; T.lapisOre = i++; T.redstoneOre = i++; T.copperOre = i++;
+  T.sugarcane = i++; T.mushroomRed = i++; T.mushroomBrown = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -576,6 +584,26 @@ function makeAtlas() {
   fill(T.cactus, [72, 142, 54], 12, 1);
   for (let x = 3; x < TILE; x += 5) for (let y = 0; y < TILE; y++) put(T.cactus, x, y, 48, 110, 38);
   for (let y = 0; y < TILE; y++) { put(T.cactus, 0, y, 52, 118, 42); put(T.cactus, 15, y, 52, 118, 42); }
+  // —— 绿宝石矿 ——
+  fill(T.emeraldOre, [126, 126, 126], 16, 1); speck(T.emeraldOre, [70, 200, 110], 12, 2);
+  // —— 青金石矿 ——
+  fill(T.lapisOre, [126, 126, 126], 16, 1); speck(T.lapisOre, [50, 90, 200], 14, 2);
+  // —— 红石矿 ——
+  fill(T.redstoneOre, [126, 126, 126], 16, 1); speck(T.redstoneOre, [210, 60, 50], 14, 2);
+  // —— 铜矿 ——
+  fill(T.copperOre, [126, 126, 126], 16, 1); speck(T.copperOre, [200, 130, 80], 12, 2);
+  // —— 甘蔗 ——
+  fill(T.sugarcane, [110, 170, 70], 14, 1);
+  for (let x = 0; x < TILE; x += 4) for (let y = 0; y < TILE; y++) put(T.sugarcane, x, y, 80, 140, 52);
+  // —— 红蘑菇 ——
+  plantClear(T.mushroomRed);
+  for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) put(T.mushroomRed, 6 + dx, 5 + dy, 200, 60, 60);
+  for (let dy = 0; dy < 2; dy++) put(T.mushroomRed, 7, 5 + dy, 245, 245, 235);
+  for (let y = 8; y < TILE; y++) put(T.mushroomRed, 8, y, 225, 215, 195);
+  // —— 棕蘑菇 ——
+  plantClear(T.mushroomBrown);
+  for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) put(T.mushroomBrown, 6 + dx, 5 + dy, 150, 110, 70);
+  for (let y = 8; y < TILE; y++) put(T.mushroomBrown, 8, y, 205, 185, 155);
 
   ctx.putImageData(img, 0, 0);
   const tex = new THREE.CanvasTexture(cv);
@@ -621,6 +649,13 @@ function tileOf(id) {
     case B.SPRUCE_LOG: return { top: atlas.T.logTop, side: atlas.T.spruceLogSide, bottom: atlas.T.logTop };
     case B.SPRUCE_LEAVES: return { top: atlas.T.spruceLeaves, side: atlas.T.spruceLeaves, bottom: atlas.T.spruceLeaves };
     case B.CACTUS: return { top: atlas.T.cactus, side: atlas.T.cactus, bottom: atlas.T.cactus };
+    case B.EMERALD_ORE: return { top: atlas.T.emeraldOre, side: atlas.T.emeraldOre, bottom: atlas.T.emeraldOre };
+    case B.LAPIS_ORE: return { top: atlas.T.lapisOre, side: atlas.T.lapisOre, bottom: atlas.T.lapisOre };
+    case B.REDSTONE_ORE: return { top: atlas.T.redstoneOre, side: atlas.T.redstoneOre, bottom: atlas.T.redstoneOre };
+    case B.COPPER_ORE: return { top: atlas.T.copperOre, side: atlas.T.copperOre, bottom: atlas.T.copperOre };
+    case B.SUGARCANE: return { top: atlas.T.sugarcane, side: atlas.T.sugarcane, bottom: atlas.T.sugarcane };
+    case B.MUSHROOM_RED: return { top: atlas.T.mushroomRed, side: atlas.T.mushroomRed, bottom: atlas.T.mushroomRed };
+    case B.MUSHROOM_BROWN: return { top: atlas.T.mushroomBrown, side: atlas.T.mushroomBrown, bottom: atlas.T.mushroomBrown };
     default: return { top: atlas.T.stone, side: atlas.T.stone, bottom: atlas.T.stone };
   }
 }
@@ -937,9 +972,35 @@ class World {
             c.blocks[(surf + 1) * 256 + lz * 16 + lx] = kind;
           }
         }
+        // 甘蔗（沙/土/草 + 邻水，近海平面）
+        if (surf > SEA && surf <= SEA + 2 && surf + 1 < HEIGHT) {
+          const sid = c.blocks[surf * 256 + lz * 16 + lx];
+          if (sid === B.SAND || sid === B.DIRT || sid === B.GRASS) {
+            let nearWater = false;
+            for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+              if (surfaceHeight(wx + ox, wz + oz) < SEA) { nearWater = true; break; }
+            }
+            if (nearWater) {
+              const pr = plantHash(wx * 7 + 3, wz * 13 + 5);
+              if (pr < 0.04) {
+                const h = 2 + ((plantHash(wx + 3, wz) * 3) | 0);
+                for (let k = 1; k <= h && surf + k < HEIGHT; k++)
+                  c.blocks[(surf + k) * 256 + lz * 16 + lx] = B.SUGARCANE;
+              }
+            }
+          }
+        }
         if (surf > SEA) {
           for (let y = 5; y < surf - 2; y++) {
-            if (isCave(wx, y, wz)) c.blocks[y * 256 + lz * 16 + lx] = B.AIR;
+            if (isCave(wx, y, wz)) {
+              c.blocks[y * 256 + lz * 16 + lx] = B.AIR;
+              // 洞穴地板放蘑菇
+              const below = c.blocks[(y - 1) * 256 + lz * 16 + lx];
+              if (below !== B.AIR && below !== B.WATER) {
+                const pr = plantHash(wx * 11 + y, wz * 17);
+                if (pr < 0.018) c.blocks[y * 256 + lz * 16 + lx] = (pr < 0.009 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
+              }
+            }
           }
         }
         if (surf < SEA) {
@@ -1621,7 +1682,7 @@ const mouse = { dx: 0, dy: 0, down: [false, false, false] };
 function playerAABB(pos) {
   return { minX: pos.x - player.halfW, maxX: pos.x + player.halfW, minY: pos.y, maxY: pos.y + player.height, minZ: pos.z - player.halfW, maxZ: pos.z + player.halfW };
 }
-function isCrossPlant(id) { return id === B.FLOWER_RED || id === B.FLOWER_YELLOW || id === B.GRASS_TALL; }
+function isCrossPlant(id) { return id === B.FLOWER_RED || id === B.FLOWER_YELLOW || id === B.GRASS_TALL || id === B.MUSHROOM_RED || id === B.MUSHROOM_BROWN; }
 function isTorch(id) { return id === B.TORCH; }
 // 透明/可透视（用于面剔除与 AO）
 function isSeeThrough(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || isCrossPlant(id) || isTorch(id); }
@@ -1912,12 +1973,74 @@ document.addEventListener('mousemove', (e) => {
   if (!locked) return;
   mouse.dx += e.movementX; mouse.dy += e.movementY;
 });
+/* ============================ 挖掘（按住破坏 + 硬度） ============================ */
+const HARDNESS = {
+  [B.GRASS]: 0.4, [B.DIRT]: 0.4, [B.SAND]: 0.4, [B.GRAVEL]: 0.5,
+  [B.STONE]: 1.5, [B.COBBLE]: 2.0, [B.STONE_BRICK]: 2.0, [B.MOSSY]: 2.0,
+  [B.LOG]: 1.0, [B.BIRCH_LOG]: 1.0, [B.SPRUCE_LOG]: 1.0,
+  [B.LEAVES]: 0.2, [B.BIRCH_LEAVES]: 0.2, [B.SPRUCE_LEAVES]: 0.2,
+  [B.PLANKS]: 1.0, [B.BRICK]: 1.5, [B.SANDSTONE]: 1.2, [B.QUARTZ]: 1.5,
+  [B.SNOW]: 0.3, [B.GLASS]: 0.3, [B.CACTUS]: 0.5, [B.SUGARCANE]: 0.2,
+  [B.COAL]: 1.5, [B.IRON]: 1.5, [B.GOLD]: 1.5, [B.DIAMOND]: 1.5,
+  [B.EMERALD_ORE]: 1.5, [B.LAPIS_ORE]: 1.5, [B.REDSTONE_ORE]: 1.5, [B.COPPER_ORE]: 1.5,
+  [B.BEDROCK]: Infinity,
+  [B.TORCH]: 0.1, [B.FLOWER_RED]: 0.1, [B.FLOWER_YELLOW]: 0.1, [B.GRASS_TALL]: 0.1,
+  [B.MUSHROOM_RED]: 0.1, [B.MUSHROOM_BROWN]: 0.1,
+};
+function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
+
+let breaking = null;   // { x, y, z, id, progress }
+const breakingMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(1.002, 1.002, 1.002),
+  new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false })
+);
+breakingMesh.visible = false;
+scene.add(breakingMesh);
+
+function startBreaking() {
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const hit = raycast(camera.position, dir, 6);
+  if (!hit || hit.id === B.AIR || hit.id === B.WATER) { stopBreaking(); return; }
+  breaking = { x: hit.x, y: hit.y, z: hit.z, id: hit.id, progress: 0 };
+  breakingMesh.position.set(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5);
+  breakingMesh.visible = true;
+}
+function stopBreaking() {
+  breaking = null;
+  breakingMesh.visible = false;
+  breakingMesh.material.opacity = 0;
+}
+function updateBreaking(dt) {
+  if (!mouse.down[0] || !breaking) return;
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const hit = raycast(camera.position, dir, 6);
+  if (!hit || hit.x !== breaking.x || hit.y !== breaking.y || hit.z !== breaking.z) { stopBreaking(); return; }
+  const h = hardnessOf(breaking.id);
+  breaking.progress += dt;
+  breakingMesh.material.opacity = isFinite(h) ? Math.min(0.7, (breaking.progress / h) * 0.7) : 0;
+  if (breaking.progress >= h) {
+    const bx = breaking.x, by = breaking.y, bz = breaking.z, bid = breaking.id;
+    stopBreaking();
+    if (bid === B.TORCH) removeTorchLight(bx, by, bz);
+    world.setBlock(bx, by, bz, B.AIR);
+    spawnParticles(bx, by, bz, blockColor(bid), 14);
+    enqueueAround(bx, by, bz);
+    playPop();
+  }
+}
+
 document.addEventListener('mousedown', (e) => {
   if (!locked) return;
-  if (e.button === 0 || e.button === 2) { mouse.down[e.button] = true; onMousedown(e.button); }
+  if (e.button === 0) { mouse.down[0] = true; startBreaking(); }
+  else if (e.button === 2) { mouse.down[2] = true; onMousedown(2); }
   else if (e.button === 1) onMousedown(1);
 });
-document.addEventListener('mouseup', (e) => { mouse.down[e.button] = false; });
+document.addEventListener('mouseup', (e) => {
+  mouse.down[e.button] = false;
+  if (e.button === 0) stopBreaking();
+});
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('keydown', (e) => {
   keys[e.code] = true;
@@ -1945,15 +2068,7 @@ function onMousedown(btn) {
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
   const hit = raycast(origin, dir, 6);
-  if (btn === 0) { // 破坏
-    if (!hit) return;
-    if (hit.id === B.WATER) return;   // 水不可破坏
-    if (hit.id === B.TORCH) removeTorchLight(hit.x, hit.y, hit.z);
-    world.setBlock(hit.x, hit.y, hit.z, B.AIR);
-    spawnParticles(hit.x, hit.y, hit.z, blockColor(hit.id), 14);
-    enqueueAround(hit.x, hit.y, hit.z);
-    playPop();
-  } else if (btn === 2) { // 放置
+  if (btn === 2) { // 放置
     if (!hit) return;
     const px = hit.x + hit.n[0], py = hit.y + hit.n[1], pz = hit.z + hit.n[2];
     if (py < 0 || py >= HEIGHT) return;
@@ -2040,6 +2155,7 @@ function animate() {
   mouse.dx = 0; mouse.dy = 0;
 
   if (locked) updatePlayer(dt);   // 暂停时不推进玩家物理，避免松开鼠标后人物继续漂移
+  if (locked) updateBreaking(dt);
   updateStreaming();
   updateWater(150);
   updateParticles(dt);
