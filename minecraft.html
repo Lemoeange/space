@@ -467,9 +467,12 @@ const TILE = 16;
 const ATLAS_TILES = 48;
 const ATLAS_W = ATLAS_TILES * TILE;
 const AO_LEVELS = [0.55, 0.7, 0.85, 1.0];
-const GEN_R = 6;   // 生成半径（chunk）
-const MESH_R = 5;  // 网格半径
-const MAXGEN = 6, MAXMESH = 2, MAXTREE = 3;
+const VIEW_R = 10;        // 视距（chunk 半径，每格 16 块）
+const GEN_R = VIEW_R + 1; // 生成半径（比视距多 1 格缓冲，保证边缘网格完整）
+const MESH_R = VIEW_R;    // 网格半径
+const FOG_NEAR = 42;      // 雾起始距离
+const FOG_FAR = Math.round(VIEW_R * 16 * 0.9);   // 雾结束距离（视距边缘淡出，隐藏区块接缝）
+const MAXGEN = 10, MAXMESH = 3, MAXTREE = 3;
 
 /* ============================ 材质纹理 ============================ */
 function makeAtlas() {
@@ -920,7 +923,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 const FOG_COLOR = new THREE.Color(0xd9c9a6);
 const FOG_UNDERWATER = new THREE.Color(0x0a3550);
-scene.fog = new THREE.Fog(FOG_COLOR, 28, 80);
+scene.fog = new THREE.Fog(FOG_COLOR, FOG_NEAR, FOG_FAR);
 
 const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1200);
 camera.rotation.order = 'YXZ';
@@ -3113,7 +3116,7 @@ function animate() {
   const submerged = inWater();
   underwaterEl.style.opacity = submerged ? '1' : '0';
   scene.fog.color.copy(submerged ? FOG_UNDERWATER : FOG_COLOR);
-  scene.fog.far = submerged ? 34 : 80;
+  scene.fog.far = submerged ? 34 : FOG_FAR;
   waterMat.uniforms.uTime.value = clock.elapsedTime;
 
   // 太阳 / 月亮跟随玩家（阴影）
