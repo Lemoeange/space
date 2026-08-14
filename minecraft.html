@@ -194,7 +194,8 @@ const B = {
   LOG:7, LEAVES:8, PLANKS:9, BEDROCK:10, WATER:11, SNOW:12,
   COAL:13, IRON:14, GOLD:15, DIAMOND:16, GLASS:17,
   STONE_BRICK:18, MOSSY:19, BRICK:20, SANDSTONE:21, QUARTZ:22,
-  FLOWER_RED:23, FLOWER_YELLOW:24, GRASS_TALL:25, TORCH:26
+  FLOWER_RED:23, FLOWER_YELLOW:24, GRASS_TALL:25, TORCH:26,
+  BIRCH_LOG:27, BIRCH_LEAVES:28, SPRUCE_LOG:29, SPRUCE_LEAVES:30, CACTUS:31
 };
 
 function mulberry32(a) {
@@ -309,7 +310,17 @@ function oreFor(y, v) {
   return B.STONE;
 }
 
-const NOISE = { HEIGHT, SEA, B, mulberry32, Perlin, surfaceHeight, isCave, oreFor, oreNoise };
+// 生物群系：1=平原 2=森林 3=沙漠 4=雪地（基于温度/湿度噪声）
+function biomeOf(x, z) {
+  const temp = P.terrain.fbm2(x * 0.0016 + 500, z * 0.0016 + 500, 3);
+  const moist = P.terrain.fbm2(x * 0.0016 + 900, z * 0.0016 + 900, 3);
+  if (temp > 0.2) return 3;    // 沙漠（热）
+  if (temp < -0.18) return 4;  // 雪地（冷）
+  if (moist > -0.03) return 2; // 森林（湿）
+  return 1;                     // 平原
+}
+
+const NOISE = { HEIGHT, SEA, B, mulberry32, Perlin, surfaceHeight, isCave, oreFor, oreNoise, biomeOf };
 if (typeof window !== 'undefined') window.NOISE = NOISE;
 if (typeof globalThis !== 'undefined') globalThis.NOISE = NOISE;
 </script>
@@ -340,12 +351,12 @@ if (!THREE) {
 }
 setLoading('正在生成地形…');
 
-const { HEIGHT, SEA, B, mulberry32, surfaceHeight, isCave, oreFor, oreNoise } = globalThis.NOISE;
+const { HEIGHT, SEA, B, mulberry32, surfaceHeight, isCave, oreFor, oreNoise, biomeOf } = globalThis.NOISE;
 
 /* ============================ 常量 ============================ */
 const CHUNK = 16;
 const TILE = 16;
-const ATLAS_TILES = 28;
+const ATLAS_TILES = 33;
 const ATLAS_W = ATLAS_TILES * TILE;
 const AO_LEVELS = [0.55, 0.7, 0.85, 1.0];
 const GEN_R = 6;   // 生成半径（chunk）
@@ -367,6 +378,7 @@ function makeAtlas() {
   T.iron = i++; T.gold = i++; T.diamond = i++; T.glass = i++;
   T.stoneBrick = i++; T.mossy = i++; T.brick = i++; T.sandstone = i++; T.quartz = i++;
   T.flowerRed = i++; T.flowerYellow = i++; T.tallGrass = i++; T.torch = i++;
+  T.birchLogSide = i++; T.birchLeaves = i++; T.spruceLogSide = i++; T.spruceLeaves = i++; T.cactus = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -544,6 +556,24 @@ function makeAtlas() {
       put(T.torch, fx, fy, 250 - dy * 18, 175 - dy * 24, 60);
   }
   put(T.torch, 8, 5, 255, 224, 120);
+  // —— 白桦木侧（白树皮）——
+  fill(T.birchLogSide, [214, 202, 176], 10, 1);
+  for (let y = 0; y < TILE; y += 3) for (let x = 0; x < TILE; x++) put(T.birchLogSide, x, y, 176, 160, 132);
+  // —— 白桦树叶（浅绿）——
+  fill(T.birchLeaves, [120, 168, 74], 26, 1);
+  speck(T.birchLeaves, [92, 140, 56], 26, 2);
+  speck(T.birchLeaves, [150, 196, 96], 16, 3);
+  // —— 云杉木侧（深棕）——
+  fill(T.spruceLogSide, [84, 60, 36], 12, 1);
+  for (let x = 0; x < TILE; x += 2) for (let y = 0; y < TILE; y++) put(T.spruceLogSide, x, y, 60, 42, 24);
+  // —— 云杉树叶（深绿）——
+  fill(T.spruceLeaves, [40, 92, 42], 26, 1);
+  speck(T.spruceLeaves, [26, 66, 30], 26, 2);
+  speck(T.spruceLeaves, [60, 116, 56], 14, 3);
+  // —— 仙人掌 ——
+  fill(T.cactus, [72, 142, 54], 12, 1);
+  for (let x = 3; x < TILE; x += 5) for (let y = 0; y < TILE; y++) put(T.cactus, x, y, 48, 110, 38);
+  for (let y = 0; y < TILE; y++) { put(T.cactus, 0, y, 52, 118, 42); put(T.cactus, 15, y, 52, 118, 42); }
 
   ctx.putImageData(img, 0, 0);
   const tex = new THREE.CanvasTexture(cv);
@@ -584,6 +614,11 @@ function tileOf(id) {
     case B.FLOWER_YELLOW: return { top: atlas.T.flowerYellow, side: atlas.T.flowerYellow, bottom: atlas.T.flowerYellow };
     case B.GRASS_TALL: return { top: atlas.T.tallGrass, side: atlas.T.tallGrass, bottom: atlas.T.tallGrass };
     case B.TORCH: return { top: atlas.T.torch, side: atlas.T.torch, bottom: atlas.T.torch };
+    case B.BIRCH_LOG: return { top: atlas.T.logTop, side: atlas.T.birchLogSide, bottom: atlas.T.logTop };
+    case B.BIRCH_LEAVES: return { top: atlas.T.birchLeaves, side: atlas.T.birchLeaves, bottom: atlas.T.birchLeaves };
+    case B.SPRUCE_LOG: return { top: atlas.T.logTop, side: atlas.T.spruceLogSide, bottom: atlas.T.logTop };
+    case B.SPRUCE_LEAVES: return { top: atlas.T.spruceLeaves, side: atlas.T.spruceLeaves, bottom: atlas.T.spruceLeaves };
+    case B.CACTUS: return { top: atlas.T.cactus, side: atlas.T.cactus, bottom: atlas.T.cactus };
     default: return { top: atlas.T.stone, side: atlas.T.stone, bottom: atlas.T.stone };
   }
 }
@@ -868,14 +903,26 @@ class World {
         const wx = baseX + lx;
         const surf = Math.floor(surfaceHeight(wx, wz));
         const beach = surf <= SEA + 2;
+        const bm = biomeOf(wx, wz);
+        const desert = bm === 3 && !beach;   // 沙漠（海滩仍为沙）
+        const snowy = bm === 4 && !beach;    // 雪地
         for (let y = 0; y <= surf; y++) {
           let id;
           if (y <= 2) id = B.BEDROCK;
           else if (y < surf - 3) id = B.STONE;
-          else if (y < surf) id = (beach ? B.SAND : B.DIRT);
-          else id = (surf > 72 ? B.SNOW : (beach ? B.SAND : B.GRASS));
+          else if (y < surf) id = (beach || desert ? B.SAND : B.DIRT);
+          else id = (beach || desert ? B.SAND : (snowy || surf > 72 ? B.SNOW : B.GRASS));
           if (id === B.STONE) id = oreFor(y, oreNoise(wx, y, wz));
           c.blocks[y * 256 + lz * 16 + lx] = id;
+        }
+        // 沙漠仙人掌
+        if (desert && surf > SEA && surf + 1 < HEIGHT) {
+          const pr = plantHash(wx, wz);
+          if (pr < 0.012) {
+            const h = 1 + ((plantHash(wx + 7, wz) * 3) | 0);
+            for (let k = 1; k <= h && surf + k < HEIGHT; k++)
+              c.blocks[(surf + k) * 256 + lz * 16 + lx] = B.CACTUS;
+          }
         }
         // 地表花草（仅草地）
         if (surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
@@ -963,18 +1010,44 @@ function plantTrees(c) {
       if (surf <= SEA) continue;
       const ground = world.getBlock(wx, surf, wz);
       if (ground !== B.GRASS && ground !== B.SNOW) continue;
-      if (rnd() > 0.025) continue;
-      const h = 4 + ((rnd() * 3) | 0);
-      for (let y = surf + 1; y <= surf + h; y++) {
-        const here = world.getBlock(wx, y, wz);
-        if (here === B.AIR || isCrossPlant(here)) world.setRaw(wx, y, wz, B.LOG);
-      }
-      const top = surf + h;
-      for (let ly = top - 2; ly <= top + 1; ly++) {
-        const r = (ly >= top) ? 1 : 2;
-        for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
-          if (dx * dx + dz * dz > r * r + 1) continue;
-          if (world.getBlock(wx + dx, ly, wz + dz) === B.AIR) world.setRaw(wx + dx, ly, wz + dz, B.LEAVES);
+      const bm = biomeOf(wx, wz);
+      if (bm === 3) continue;   // 沙漠不种树
+      let log = B.LOG, leaf = B.LEAVES, prob = 0.025, spruce = false;
+      if (bm === 4) { log = B.SPRUCE_LOG; leaf = B.SPRUCE_LEAVES; prob = 0.04; spruce = true; }
+      else if (bm === 2) { prob = 0.05; if (rnd() < 0.4) { log = B.BIRCH_LOG; leaf = B.BIRCH_LEAVES; } }
+      if (rnd() > prob) continue;
+
+      if (spruce) {
+        // 云杉：高树干 + 锥形树冠
+        const h = 6 + ((rnd() * 3) | 0);
+        for (let y = surf + 1; y <= surf + h; y++) {
+          const here = world.getBlock(wx, y, wz);
+          if (here === B.AIR || isCrossPlant(here)) world.setRaw(wx, y, wz, log);
+        }
+        const top = surf + h;
+        for (let ly = top - 4; ly <= top + 1; ly++) {
+          const r = Math.max(0, Math.floor((top - ly) * 0.5 + 1));
+          for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
+            if (dx * dx + dz * dz > r * r + 1) continue;
+            const here = world.getBlock(wx + dx, ly, wz + dz);
+            if (here === B.AIR || isCrossPlant(here)) world.setRaw(wx + dx, ly, wz + dz, leaf);
+          }
+        }
+      } else {
+        // 橡树 / 白桦：球形树冠
+        const h = 4 + ((rnd() * 3) | 0);
+        for (let y = surf + 1; y <= surf + h; y++) {
+          const here = world.getBlock(wx, y, wz);
+          if (here === B.AIR || isCrossPlant(here)) world.setRaw(wx, y, wz, log);
+        }
+        const top = surf + h;
+        for (let ly = top - 2; ly <= top + 1; ly++) {
+          const r = (ly >= top) ? 1 : 2;
+          for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
+            if (dx * dx + dz * dz > r * r + 1) continue;
+            const here = world.getBlock(wx + dx, ly, wz + dz);
+            if (here === B.AIR || isCrossPlant(here)) world.setRaw(wx + dx, ly, wz + dz, leaf);
+          }
         }
       }
     }
