@@ -5,9 +5,8 @@ where git >nul 2>nul || (echo [错误] 未检测到 Git，请安装 Git 或用 G
 
 git add -A
 git commit -m "update" 2>nul
-git push
+git push -u origin main
 echo.
-echo 完成。若提示“远程仓库不存在”，请先执行一次：
-echo    git remote add origin https://github.com/你的用户名/仓库名.git
-echo 然后再双击本脚本。
+echo 完成。若推送失败，请检查网络，或先把远程旧内容合并一次：
+echo    git pull origin main --allow-unrelated-histories
 pause
