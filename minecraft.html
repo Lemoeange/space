@@ -1,0 +1,1779 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minecraft Web 复刻 · 电影感光影</title>
+<style>
+  :root { --accent: #5fb27a; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0d12; }
+  body { font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; }
+
+  canvas#game { display: block; width: 100%; height: 100%; }
+
+  /* ---- overlays ---- */
+  #vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 5;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.38) 100%);
+    mix-blend-mode: multiply;
+  }
+  #underwater {
+    position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0;
+    background: linear-gradient(180deg, rgba(20,80,140,0.28), rgba(6,40,90,0.5));
+    transition: opacity 0.35s ease;
+  }
+
+  #crosshair {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 22px; height: 22px; z-index: 8; pointer-events: none; opacity: 0.9;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ""; position: absolute; background: rgba(255,255,255,0.92);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+  }
+  #crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
+  #crosshair::after  { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%); }
+
+  #hotbar {
+    position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+    display: flex; flex-wrap: wrap; justify-content: center; max-width: 94vw;
+    gap: 4px; z-index: 9; padding: 5px;
+    background: rgba(16,18,22,0.55); border-radius: 10px; backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .slot {
+    width: 44px; height: 44px; border-radius: 6px; position: relative;
+    background: rgba(255,255,255,0.04); border: 2px solid transparent;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .slot canvas { image-rendering: pixelated; width: 36px; height: 36px; }
+  .slot.active { border-color: var(--accent); background: rgba(95,178,122,0.16); box-shadow: 0 0 12px rgba(95,178,122,0.45); }
+  .slot .num {
+    position: absolute; left: 3px; top: 2px; font-size: 10px; color: rgba(255,255,255,0.7);
+    text-shadow: 0 1px 2px #000; pointer-events: none;
+  }
+
+  #hud {
+    position: fixed; left: 14px; top: 12px; z-index: 9; color: #eaf2f8;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6); pointer-events: none; line-height: 1.5;
+  }
+  #hud h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.5px; }
+  #hud .meta { font-size: 12px; opacity: 0.85; }
+
+  #menu {
+    position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, rgba(12,20,30,0.82), rgba(5,8,12,0.94));
+    color: #e8f0f6; text-align: center; cursor: pointer;
+  }
+  #menu .box { max-width: 560px; padding: 24px; }
+  #menu h1 { font-size: 34px; letter-spacing: 1px; margin-bottom: 8px; }
+  #menu .sub { color: #9fc3d8; margin-bottom: 20px; font-size: 14px; }
+  #menu .tag { color: var(--accent); }
+  #menu .keys { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 22px; text-align: left;
+    font-size: 13px; margin: 0 auto 18px; width: max-content; }
+  #menu .keys b { color: #ffd479; font-weight: 600; }
+  #menu .play { display: inline-block; padding: 10px 26px; border-radius: 8px;
+    background: var(--accent); color: #06220f; font-weight: 700; letter-spacing: 1px; }
+  #menu .loading { margin-top: 14px; font-size: 12px; color: #8fb0c4; }
+  #menu .pbar { width: 260px; height: 6px; margin: 10px auto 0; background: rgba(255,255,255,0.12);
+    border-radius: 3px; overflow: hidden; }
+  #menu .pfill { height: 100%; width: 0%; background: linear-gradient(90deg, #5fb27a, #9fd98a);
+    transition: width 0.15s ease; }
+
+  /* ---- 暂停菜单 ---- */
+  #pause {
+    position: fixed; inset: 0; z-index: 21; display: none; align-items: center; justify-content: center;
+    background: rgba(8, 12, 18, 0.72); color: #e8f0f6; text-align: center;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  #pause .box { padding: 26px 30px; }
+  #pause h1 { font-size: 28px; letter-spacing: 1px; margin-bottom: 8px; }
+  #pause .sub { color: #9fc3d8; font-size: 13px; margin-bottom: 22px; }
+  #pause .pbtn {
+    display: inline-block; padding: 11px 26px; margin: 0 8px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.12);
+    color: #e8f0f6; font-size: 15px; font-weight: 700; cursor: pointer;
+    letter-spacing: 1px; font-family: inherit;
+    -webkit-transition: transform .12s ease, background .12s ease;
+    transition: transform .12s ease, background .12s ease;
+  }
+  #pause .pbtn:hover { background: rgba(255,255,255,0.2); }
+  #pause .pbtn:active { -webkit-transform: scale(.96); transform: scale(.96); }
+  #pause .pbtn.primary { background: var(--accent); border-color: var(--accent); color: #06220f; }
+  #pause .pbtn.primary:hover { background: #79c98f; }
+
+  /* ---- 背包 ---- */
+  #inventory {
+    position: fixed; inset: 0; z-index: 22; display: none; align-items: center; justify-content: center;
+    background: rgba(8, 12, 18, 0.74); color: #e8f0f6; text-align: center;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  #inventory .box { padding: 20px 24px; max-width: 640px; }
+  #inventory h1 { font-size: 22px; letter-spacing: 1px; margin-bottom: 4px; }
+  #inventory .sub { color: #9fc3d8; font-size: 12px; margin-bottom: 16px; }
+  #invGrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; justify-items: center; }
+  .inv-slot {
+    width: 52px; height: 52px; border-radius: 8px; position: relative;
+    background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.14);
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    -webkit-transition: transform .1s ease, border-color .1s ease;
+    transition: transform .1s ease, border-color .1s ease;
+  }
+  .inv-slot:hover { border-color: var(--accent); -webkit-transform: scale(1.06); transform: scale(1.06); }
+  .inv-slot canvas { image-rendering: pixelated; width: 44px; height: 44px; }
+  .inv-slot.in-hotbar::after {
+    content: "✓"; position: absolute; right: 3px; bottom: 2px; font-size: 12px; color: var(--accent);
+    text-shadow: 0 1px 2px #000;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="vignette"></div>
+<div id="underwater"></div>
+<div id="crosshair"></div>
+
+<div id="hud">
+  <h1>MINECRAFT · WEB 复刻</h1>
+  <div class="meta" id="hudMeta">载入中…</div>
+</div>
+
+<div id="hotbar"></div>
+
+<div id="menu">
+  <div class="box">
+    <h1>⛏️ 我的世界 <span class="tag">Web 复刻</span></h1>
+    <div class="sub">电影感光影 · 精致材质 · 精致水面 · 原版洞穴 · 流动水</div>
+    <div class="keys">
+      <span><b>W A S D</b> 移动</span>
+      <span><b>鼠标</b> 视角</span>
+      <span><b>空格</b> 跳跃 / 上浮</span>
+      <span><b>Shift</b> 潜行 / 下降</span>
+      <span><b>F</b> 飞行模式</span>
+      <span><b>Ctrl</b> 疾跑</span>
+      <span><b>E</b> 背包</span>
+      <span><b>1-9</b> 选择物品栏</span>
+      <span><b>0</b> 切换昼夜</span>
+      <span><b>N</b> 跳到白天</span>
+      <span><b>左键</b> 破坏方块</span>
+      <span><b>右键</b> 放置方块</span>
+      <span><b>中键</b> 选取方块</span>
+      <span><b>Esc</b> 暂停菜单</span>
+    </div>
+    <div class="play">点击进入世界</div>
+    <div class="loading" id="loading">正在加载引擎…</div>
+    <div class="pbar"><div class="pfill" id="pfill"></div></div>
+  </div>
+</div>
+
+<div id="pause">
+  <div class="box">
+    <h1>⏸ 已暂停</h1>
+    <div class="sub">按 Esc 或点击下方按钮继续</div>
+    <button class="pbtn primary" id="resumeBtn">▶ 回到游戏</button>
+    <button class="pbtn" id="homeBtn">🏠 回到主页</button>
+  </div>
+</div>
+
+<div id="inventory">
+  <div class="box">
+    <h1>🎒 背包</h1>
+    <div class="sub">点击物品放入物品栏第 <span id="invSlotNum">1</span> 格 · 按 E 或 Esc 关闭</div>
+    <div id="invGrid"></div>
+  </div>
+</div>
+
+<!-- ============ 纯噪声与地形生成（无 DOM / 无依赖） ============ -->
+<script>
+const HEIGHT = 96;      // 世界高度
+const SEA = 34;         // 海平面
+const B = {
+  AIR:0, GRASS:1, DIRT:2, STONE:3, COBBLE:4, SAND:5, GRAVEL:6,
+  LOG:7, LEAVES:8, PLANKS:9, BEDROCK:10, WATER:11, SNOW:12,
+  COAL:13, IRON:14, GOLD:15, DIAMOND:16, GLASS:17,
+  STONE_BRICK:18, MOSSY:19, BRICK:20, SANDSTONE:21, QUARTZ:22,
+  FLOWER_RED:23, FLOWER_YELLOW:24, GRASS_TALL:25, TORCH:26
+};
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+class Perlin {
+  constructor(seed) {
+    const perm = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) perm[i] = i;
+    const rnd = mulberry32(seed);
+    for (let i = 255; i > 0; i--) {
+      const j = Math.floor(rnd() * (i + 1));
+      const t = perm[i]; perm[i] = perm[j]; perm[j] = t;
+    }
+    this.perm = new Uint8Array(512);
+    for (let i = 0; i < 512; i++) this.perm[i] = perm[i & 255];
+  }
+  noise2(x, y) {
+    const p = this.perm;
+    let X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
+    x -= Math.floor(x); y -= Math.floor(y);
+    const u = fade(x), v = fade(y);
+    const A = p[X] + Y, Bn = p[X + 1] + Y;
+    return lerp(v,
+      lerp(u, grad2(p[A], x, y), grad2(p[Bn], x - 1, y)),
+      lerp(u, grad2(p[A + 1], x, y - 1), grad2(p[Bn + 1], x - 1, y - 1)));
+  }
+  noise3(x, y, z) {
+    const p = this.perm;
+    let X = Math.floor(x) & 255, Y = Math.floor(y) & 255, Z = Math.floor(z) & 255;
+    x -= Math.floor(x); y -= Math.floor(y); z -= Math.floor(z);
+    const u = fade(x), v = fade(y), w = fade(z);
+    const A = p[X] + Y, AA = p[A] + Z, AB = p[A + 1] + Z;
+    const Bn = p[X + 1] + Y, BA = p[Bn] + Z, BB = p[Bn + 1] + Z;
+    return lerp(w,
+      lerp(v,
+        lerp(u, grad3(p[AA], x, y, z), grad3(p[BA], x - 1, y, z)),
+        lerp(u, grad3(p[AB], x, y - 1, z), grad3(p[BB], x - 1, y - 1, z))),
+      lerp(v,
+        lerp(u, grad3(p[AA + 1], x, y, z - 1), grad3(p[BA + 1], x - 1, y, z - 1)),
+        lerp(u, grad3(p[AB + 1], x, y - 1, z - 1), grad3(p[BB + 1], x - 1, y - 1, z - 1))));
+  }
+  fbm2(x, y, oct) {
+    let amp = 0.5, f = 1, sum = 0, norm = 0;
+    for (let i = 0; i < oct; i++) { sum += amp * this.noise2(x * f, y * f); norm += amp; amp *= 0.5; f *= 2; }
+    return sum / norm;
+  }
+  fbm3(x, y, z, oct) {
+    let amp = 0.5, f = 1, sum = 0, norm = 0;
+    for (let i = 0; i < oct; i++) { sum += amp * this.noise3(x * f, y * f, z * f); norm += amp; amp *= 0.5; f *= 2; }
+    return sum / norm;
+  }
+}
+function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+function lerp(t, a, b) { return a + t * (b - a); }
+function grad2(h, x, y) {
+  switch (h & 7) {
+    case 0: return x + y; case 1: return -x + y; case 2: return x - y; case 3: return -x - y;
+    case 4: return x; case 5: return -x; case 6: return y; default: return -y;
+  }
+}
+function grad3(h, x, y, z) {
+  const u = (h < 8) ? x : y;
+  const v = (h < 4) ? y : ((h === 12 || h === 14) ? x : z);
+  return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+}
+
+const P = {
+  terrain: new Perlin(1337),
+  cave: new Perlin(424242),
+  ore: new Perlin(777777)
+};
+
+// 地表高度（平原 / 丘陵 / 山脉 / 海洋）
+function surfaceHeight(x, z) {
+  const hills = P.terrain.fbm2(x * 0.012, z * 0.012, 4);            // ~80 块起伏
+  const mtn = P.terrain.fbm2(x * 0.004 + 60, z * 0.004 + 60, 3);    // ~250 块山体
+  const cont = P.terrain.fbm2(x * 0.0022 + 120, z * 0.0022 + 120, 3); // 大陆/海洋
+  if (cont < -0.03) {
+    return Math.max(2, SEA - 4 + cont * 18);                        // 海洋（近岸浅、远岸深）
+  }
+  const u = Math.max(0, mtn - 0.05);                                // 山体抬升
+  const h = SEA + 2 + hills * 18 + Math.max(0, cont) * 10 + u * 50 + u * u * 40;
+  return Math.max(2, Math.min(HEIGHT - 6, h));
+}
+
+// 原版式 3D 洞穴系统（蠕虫状隧道 + 稀疏空洞）
+function isCave(x, y, z) {
+  if (y < 5) return false;
+  const c1 = P.cave.fbm3(x * 0.05, y * 0.075, z * 0.05, 4);
+  const c2 = P.cave.fbm3(x * 0.09 + 100, y * 0.09 + 100, z * 0.09 + 100, 3);
+  const bias = Math.max(0.5, Math.min(1.4, 1.4 - y * 0.018)); // 越深越多
+  const thresh = (0.03 + 0.02 * c2) * bias;
+  if (Math.abs(c1) < thresh) return true;      // 隧道
+  if (c2 > 0.62 && c1 > -0.02) return true;    // 大空洞
+  return false;
+}
+
+// 矿脉噪声
+function oreNoise(x, y, z) { return P.ore.fbm3(x * 0.13 + 700, y * 0.13 + 700, z * 0.13 + 700, 2); }
+function oreFor(y, v) {
+  if (y < 16 && v > 0.74) return B.DIAMOND;
+  if (y < 28 && v > 0.66) return B.GOLD;
+  if (y < 44 && v > 0.58) return B.IRON;
+  if (y < 64 && v > 0.52) return B.COAL;
+  return B.STONE;
+}
+
+const NOISE = { HEIGHT, SEA, B, mulberry32, Perlin, surfaceHeight, isCave, oreFor, oreNoise };
+if (typeof window !== 'undefined') window.NOISE = NOISE;
+if (typeof globalThis !== 'undefined') globalThis.NOISE = NOISE;
+</script>
+
+<!-- ============ 渲染主模块 ============ -->
+<script type="module">
+// —— 加载 three.js（多 CDN 回退，避免单点失败）——
+const loadingEl = document.getElementById('loading');
+const pfillEl = document.getElementById('pfill');
+function setLoading(msg, err) {
+  loadingEl.textContent = msg;
+  loadingEl.style.color = err ? '#ff9d9d' : '#8fb0c4';
+}
+let THREE = null;
+const CDNS = [
+  './three.module.js',   // 本地文件：丢到同目录 + 用 start.bat（本地服务器）时优先使用
+  'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js',
+  'https://unpkg.com/three@0.160.0/build/three.module.js',
+  'https://esm.sh/three@0.160.0',
+];
+for (const url of CDNS) {
+  try { THREE = await import(url); break; }
+  catch (e) { console.warn('[boot] three.js 加载失败:', url, e && e.message); }
+}
+if (!THREE) {
+  setLoading('❌ 引擎加载失败：请联网刷新，或将 three.module.js 放入本目录后双击 start.bat', true);
+  throw new Error('three.js unavailable');
+}
+setLoading('正在生成地形…');
+
+const { HEIGHT, SEA, B, mulberry32, surfaceHeight, isCave, oreFor, oreNoise } = globalThis.NOISE;
+
+/* ============================ 常量 ============================ */
+const CHUNK = 16;
+const TILE = 16;
+const ATLAS_TILES = 28;
+const ATLAS_W = ATLAS_TILES * TILE;
+const AO_LEVELS = [0.55, 0.7, 0.85, 1.0];
+const GEN_R = 6;   // 生成半径（chunk）
+const MESH_R = 5;  // 网格半径
+const MAXGEN = 6, MAXMESH = 2, MAXTREE = 3;
+
+/* ============================ 材质纹理 ============================ */
+function makeAtlas() {
+  const cv = document.createElement('canvas');
+  cv.width = ATLAS_W; cv.height = TILE;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(ATLAS_W, TILE);
+  const d = img.data;
+  const T = {};
+  let i = 0;
+  T.grassTop = i++; T.grassSide = i++; T.dirt = i++; T.stone = i++; T.cobble = i++;
+  T.sand = i++; T.gravel = i++; T.logSide = i++; T.logTop = i++; T.leaves = i++;
+  T.planks = i++; T.bedrock = i++; T.water = i++; T.snow = i++; T.coal = i++;
+  T.iron = i++; T.gold = i++; T.diamond = i++; T.glass = i++;
+  T.stoneBrick = i++; T.mossy = i++; T.brick = i++; T.sandstone = i++; T.quartz = i++;
+  T.flowerRed = i++; T.flowerYellow = i++; T.tallGrass = i++; T.torch = i++;
+
+  function put(tile, x, y, r, g, b, a) {
+    const px = (y * ATLAS_W + tile * TILE + x) * 4;
+    d[px] = r; d[px + 1] = g; d[px + 2] = b; d[px + 3] = (a === undefined ? 255 : a);
+  }
+  function rng(tile, off) { return mulberry32(1000 + tile * 7 + off); }
+  const clamp = v => Math.max(0, Math.min(255, v | 0));
+
+  // 基础填色 + 抖动
+  function fill(tile, base, jitter, off) {
+    const r = rng(tile, off);
+    for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+      const j = (r() - 0.5) * jitter;
+      put(tile, x, y, clamp(base[0] + j), clamp(base[1] + j), clamp(base[2] + j));
+    }
+  }
+  // 随机斑点
+  function speck(tile, color, count, off, alpha) {
+    const r = rng(tile, off + 99);
+    for (let n = 0; n < count; n++) {
+      const x = (r() * TILE) | 0, y = (r() * TILE) | 0;
+      put(tile, x, y, color[0], color[1], color[2], alpha);
+      put(tile, (x + 1) % TILE, y, color[0], color[1], color[2], alpha);
+    }
+  }
+
+  // —— 草顶 ——
+  fill(T.grassTop, [104, 160, 58], 26, 1);
+  speck(T.grassTop, [70, 128, 40], 26, 2);
+  speck(T.grassTop, [136, 190, 74], 16, 3);
+  // —— 草侧（泥土 + 草皮悬垂）——
+  fill(T.grassSide, [128, 92, 58], 24, 1);
+  {
+    const r = rng(T.grassSide, 5);
+    for (let x = 0; x < TILE; x++) {
+      let depth = 2 + ((r() * 3) | 0);
+      for (let y = 0; y < depth; y++) {
+        const g = 104 + ((r() - 0.5) * 30);
+        put(T.grassSide, x, y, clamp(g), clamp(150 + (r() - 0.5) * 30), clamp(50));
+      }
+    }
+  }
+  // —— 泥土 ——
+  fill(T.dirt, [128, 92, 58], 26, 1);
+  speck(T.dirt, [104, 72, 44], 20, 2);
+  speck(T.dirt, [150, 112, 74], 12, 3);
+  // —— 石头 ——
+  fill(T.stone, [126, 126, 126], 16, 1);
+  speck(T.stone, [104, 104, 104], 24, 2);
+  speck(T.stone, [142, 142, 142], 14, 3);
+  // —— 圆石 ——
+  fill(T.cobble, [118, 118, 118], 12, 1);
+  {
+    const r = rng(T.cobble, 2);
+    for (let n = 0; n < 22; n++) {
+      const cx = (r() * TILE) | 0, cy = (r() * TILE) | 0, s = 70 + ((r() - 0.5) * 60);
+      put(T.cobble, cx, cy, clamp(s), clamp(s), clamp(s));
+    }
+    for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++)
+      if (((x + y) & 3) === 0) put(T.cobble, x, y, 86, 86, 86);
+  }
+  // —— 沙 ——
+  fill(T.sand, [214, 196, 150], 18, 1);
+  speck(T.sand, [196, 176, 128], 22, 2);
+  // —— 沙砾 ——
+  fill(T.gravel, [116, 104, 96], 26, 1);
+  speck(T.gravel, [86, 76, 70], 26, 2);
+  speck(T.gravel, [140, 128, 120], 14, 3);
+  // —— 原木侧 ——
+  fill(T.logSide, [102, 74, 44], 14, 1);
+  for (let x = 0; x < TILE; x += 2) for (let y = 0; y < TILE; y++) put(T.logSide, x, y, 78, 56, 32);
+  // —— 原木顶（年轮）——
+  fill(T.logTop, [110, 82, 50], 12, 1);
+  for (let r2 = 7; r2 >= 1; r2 -= 2) {
+    for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+      const dx = x - 7.5, dy = y - 7.5;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (Math.abs(dist - r2) < 0.7) put(T.logTop, x, y, 78, 56, 32);
+    }
+  }
+  // —— 树叶 ——
+  fill(T.leaves, [62, 130, 46], 30, 1);
+  speck(T.leaves, [40, 96, 30], 30, 2);
+  speck(T.leaves, [92, 168, 66], 18, 3);
+  // —— 木板 ——
+  fill(T.planks, [168, 128, 74], 16, 1);
+  for (let y = 0; y < TILE; y += 4) for (let x = 0; x < TILE; x++) put(T.planks, x, y, 132, 98, 56);
+  for (let y = 0; y < TILE; y++) for (let x = 4; x < TILE; x += 8) put(T.planks, x, y, 120, 88, 50);
+  // —— 基岩 ——
+  fill(T.bedrock, [56, 56, 56], 30, 1);
+  speck(T.bedrock, [30, 30, 30], 40, 2);
+  speck(T.bedrock, [80, 80, 80], 20, 3);
+  // —— 雪 ——
+  fill(T.snow, [240, 246, 252], 10, 1);
+  speck(T.snow, [214, 226, 240], 16, 2);
+  // —— 矿石 ——
+  fill(T.coal, [126, 126, 126], 16, 1); speck(T.coal, [40, 40, 40], 14, 2);
+  fill(T.iron, [126, 126, 126], 16, 1); speck(T.iron, [216, 160, 118], 12, 2);
+  fill(T.gold, [126, 126, 126], 16, 1); speck(T.gold, [248, 206, 72], 12, 2);
+  fill(T.diamond, [126, 126, 126], 16, 1); speck(T.diamond, [110, 232, 220], 12, 2);
+  // —— 玻璃（透明 + 边框）——
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) put(T.glass, x, y, 220, 235, 245, 0);
+  for (let x = 0; x < TILE; x++) { put(T.glass, x, 0, 210, 230, 245, 255); put(T.glass, x, 15, 210, 230, 245, 255); }
+  for (let y = 0; y < TILE; y++) { put(T.glass, 0, y, 210, 230, 245, 255); put(T.glass, 15, y, 210, 230, 245, 255); }
+  for (let d2 = -6; d2 <= 20; d2 += 4) {
+    const x = d2, y = d2;
+    if (x >= 0 && x < TILE && y >= 0 && y < TILE) put(T.glass, x, y, 235, 245, 252, 190);
+  }
+  // —— 水（热键图标用）——
+  fill(T.water, [38, 118, 158], 16, 1);
+  for (let y = 0; y < TILE; y += 3) for (let x = 0; x < TILE; x++) put(T.water, (x + y) % TILE, y, 120, 200, 232);
+
+  // —— 石砖 ——
+  fill(T.stoneBrick, [128, 128, 128], 12, 1);
+  for (let row = 0; row < 4; row++) {
+    const y0 = row * 4, off = (row % 2) * 4;
+    for (let x = 0; x < TILE; x++) put(T.stoneBrick, x, y0, 96, 96, 96);
+    for (let y = y0 + 1; y < y0 + 4; y++) for (let x = off; x < TILE; x += 8) put(T.stoneBrick, x, y, 96, 96, 96);
+  }
+  // —— 苔石 ——
+  fill(T.mossy, [112, 114, 100], 14, 1);
+  speck(T.mossy, [86, 86, 86], 18, 2);
+  {
+    const rm = rng(T.mossy, 7);
+    for (let n = 0; n < 12; n++) {
+      const cx = (rm() * TILE) | 0, cy = (rm() * TILE) | 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++)
+        if (rm() < 0.55) put(T.mossy, (cx + dx + TILE) % TILE, (cy + dy + TILE) % TILE, 92, 136, 62);
+    }
+  }
+  // —— 红砖 ——
+  fill(T.brick, [142, 72, 56], 14, 1);
+  for (let row = 0; row < 4; row++) {
+    const y0 = row * 4, off = (row % 2) * 4;
+    for (let x = 0; x < TILE; x++) put(T.brick, x, y0, 208, 182, 162);
+    for (let y = y0 + 1; y < y0 + 4; y++) for (let x = off; x < TILE; x += 8) put(T.brick, x, y, 208, 182, 162);
+  }
+  // —— 砂岩 ——
+  fill(T.sandstone, [218, 200, 152], 10, 1);
+  for (let y = 0; y < TILE; y += 4) for (let x = 0; x < TILE; x++) put(T.sandstone, x, y, 186, 168, 122);
+  speck(T.sandstone, [198, 180, 134], 10, 2);
+  // —— 石英 ——
+  fill(T.quartz, [238, 234, 230], 6, 1);
+  for (let y = 0; y < TILE; y += 4) for (let x = 0; x < TILE; x++) put(T.quartz, x, y, 212, 208, 204);
+
+  // —— 花草（透明底 + 十字贴图）——
+  function plantClear(tile) { for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) put(tile, x, y, 0, 0, 0, 0); }
+  plantClear(T.flowerRed);
+  for (let y = 7; y < TILE; y++) put(T.flowerRed, 8, y, 64, 132, 44);         // 茎
+  for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) {
+    if (dx === 1 && dy === 1) { put(T.flowerRed, 8, 4, 250, 210, 70); continue; }
+    put(T.flowerRed, 7 + dx, 3 + dy, 206, 58, 58);
+  }
+  plantClear(T.flowerYellow);
+  for (let y = 7; y < TILE; y++) put(T.flowerYellow, 8, y, 64, 132, 44);
+  for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) {
+    if (dx === 1 && dy === 1) { put(T.flowerYellow, 8, 4, 240, 150, 40); continue; }
+    put(T.flowerYellow, 7 + dx, 3 + dy, 236, 204, 60);
+  }
+  plantClear(T.tallGrass);
+  {
+    const rg = rng(T.tallGrass, 3);
+    for (let x = 3; x <= 12; x += 3) {
+      const h = 8 + ((rg() * 6) | 0);
+      for (let y = 16 - h; y < TILE; y++) put(T.tallGrass, x, y, 70 + ((rg() * 30) | 0), 150 + ((rg() * 40) | 0), 50);
+      put(T.tallGrass, x + 1, 16 - h + 2, 60, 140, 46);
+    }
+  }
+  // —— 火把 ——
+  plantClear(T.torch);
+  for (let y = 6; y < TILE; y++) put(T.torch, 8, y, 120, 82, 46);
+  for (let dy = 0; dy < 4; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const fx = 8 + dx, fy = 2 + dy;
+    if (fx >= 0 && fx < TILE && fy >= 0 && fy < TILE)
+      put(T.torch, fx, fy, 250 - dy * 18, 175 - dy * 24, 60);
+  }
+  put(T.torch, 8, 5, 255, 224, 120);
+
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return { cv, tex, T };
+}
+const atlas = makeAtlas();
+
+// 方块 → 面贴图
+function tileOf(id) {
+  switch (id) {
+    case B.GRASS: return { top: atlas.T.grassTop, side: atlas.T.grassSide, bottom: atlas.T.dirt };
+    case B.DIRT: return { top: atlas.T.dirt, side: atlas.T.dirt, bottom: atlas.T.dirt };
+    case B.STONE: return { top: atlas.T.stone, side: atlas.T.stone, bottom: atlas.T.stone };
+    case B.COBBLE: return { top: atlas.T.cobble, side: atlas.T.cobble, bottom: atlas.T.cobble };
+    case B.SAND: return { top: atlas.T.sand, side: atlas.T.sand, bottom: atlas.T.sand };
+    case B.GRAVEL: return { top: atlas.T.gravel, side: atlas.T.gravel, bottom: atlas.T.gravel };
+    case B.LOG: return { top: atlas.T.logTop, side: atlas.T.logSide, bottom: atlas.T.logTop };
+    case B.LEAVES: return { top: atlas.T.leaves, side: atlas.T.leaves, bottom: atlas.T.leaves };
+    case B.PLANKS: return { top: atlas.T.planks, side: atlas.T.planks, bottom: atlas.T.planks };
+    case B.BEDROCK: return { top: atlas.T.bedrock, side: atlas.T.bedrock, bottom: atlas.T.bedrock };
+    case B.SNOW: return { top: atlas.T.snow, side: atlas.T.snow, bottom: atlas.T.snow };
+    case B.COAL: return { top: atlas.T.coal, side: atlas.T.coal, bottom: atlas.T.coal };
+    case B.IRON: return { top: atlas.T.iron, side: atlas.T.iron, bottom: atlas.T.iron };
+    case B.GOLD: return { top: atlas.T.gold, side: atlas.T.gold, bottom: atlas.T.gold };
+    case B.DIAMOND: return { top: atlas.T.diamond, side: atlas.T.diamond, bottom: atlas.T.diamond };
+    case B.GLASS: return { top: atlas.T.glass, side: atlas.T.glass, bottom: atlas.T.glass };
+    case B.WATER: return { top: atlas.T.water, side: atlas.T.water, bottom: atlas.T.water };
+    case B.STONE_BRICK: return { top: atlas.T.stoneBrick, side: atlas.T.stoneBrick, bottom: atlas.T.stoneBrick };
+    case B.MOSSY: return { top: atlas.T.mossy, side: atlas.T.mossy, bottom: atlas.T.mossy };
+    case B.BRICK: return { top: atlas.T.brick, side: atlas.T.brick, bottom: atlas.T.brick };
+    case B.SANDSTONE: return { top: atlas.T.sandstone, side: atlas.T.sandstone, bottom: atlas.T.sandstone };
+    case B.QUARTZ: return { top: atlas.T.quartz, side: atlas.T.quartz, bottom: atlas.T.quartz };
+    case B.FLOWER_RED: return { top: atlas.T.flowerRed, side: atlas.T.flowerRed, bottom: atlas.T.flowerRed };
+    case B.FLOWER_YELLOW: return { top: atlas.T.flowerYellow, side: atlas.T.flowerYellow, bottom: atlas.T.flowerYellow };
+    case B.GRASS_TALL: return { top: atlas.T.tallGrass, side: atlas.T.tallGrass, bottom: atlas.T.tallGrass };
+    case B.TORCH: return { top: atlas.T.torch, side: atlas.T.torch, bottom: atlas.T.torch };
+    default: return { top: atlas.T.stone, side: atlas.T.stone, bottom: atlas.T.stone };
+  }
+}
+
+const opaqueMat = new THREE.MeshLambertMaterial({ map: atlas.tex, vertexColors: true });
+const cutoutMat = new THREE.MeshLambertMaterial({ map: atlas.tex, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide });
+const torchMat = new THREE.MeshBasicMaterial({ map: atlas.tex, alphaTest: 0.45, side: THREE.DoubleSide });   // 无光照，自发光
+
+/* ============================ 水面 Shader ============================ */
+const waterVertex = /* glsl */`
+varying vec3 vWorld;
+varying vec3 vNormal;
+void main() {
+  vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+  vNormal = normalize(mat3(modelMatrix) * normal);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+
+const waterFragment = /* glsl */`
+uniform float uTime;
+uniform vec3 uSunDir;
+uniform vec3 uWaterDeep;
+uniform vec3 uWaterShallow;
+uniform vec3 uSkyTop;
+uniform vec3 uSkyBottom;
+varying vec3 vWorld;
+varying vec3 vNormal;
+
+float waveH(vec2 p, float t) {
+  return sin(p.x * 0.55 + t * 1.25) * 0.35
+       + sin(p.y * 0.75 + t * 0.95) * 0.35
+       + sin((p.x + p.y) * 0.4 + t * 0.7) * 0.4
+       + sin((p.x - p.y) * 0.33 + t * 0.55) * 0.25;
+}
+
+vec3 ACESFilm(vec3 c) {
+  return clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);
+}
+
+void main() {
+  vec2 p = vWorld.xz;
+  float t = uTime;
+  float e = 0.35;
+  float h  = waveH(p, t);
+  float hx = waveH(p + vec2(e, 0.0), t);
+  float hz = waveH(p + vec2(0.0, e), t);
+  vec3 n = normalize(vec3(vNormal.x + (h - hx) * 1.6, vNormal.y + 0.6, vNormal.z + (h - hz) * 1.6));
+
+  vec3 V = normalize(cameraPosition - vWorld);
+  float fres = pow(1.0 - max(dot(V, n), 0.0), 2.2);
+
+  vec3 R = reflect(-V, n);
+  float skyT = clamp(R.y * 0.5 + 0.5, 0.0, 1.0);
+  vec3 sky = mix(uSkyBottom, uSkyTop, skyT);
+  sky += vec3(1.0, 0.9, 0.7) * pow(max(dot(R, normalize(uSunDir)), 0.0), 220.0) * 0.9;
+
+  float depth = clamp(vWorld.y / 42.0, 0.0, 1.0);
+  vec3 base = mix(uWaterShallow, uWaterDeep, depth);
+  // 波峰微光
+  base += vec3(0.06, 0.10, 0.12) * clamp(h, 0.0, 1.0);
+
+  vec3 col = mix(base, sky, fres * 0.85 + 0.12);
+  col = ACESFilm(col);
+  col = pow(col, vec3(1.0 / 2.2));
+  float alpha = 0.84 + fres * 0.16;
+  gl_FragColor = vec4(col, alpha);
+}`;
+
+// —— 时间与日月方向（昼夜循环）——
+let timeOfDay = 0.30;          // 0..1（0=日出，0.25=正午，0.5=日落，0.75=午夜）
+const DAY_LENGTH = 1440;       // 一昼夜秒数（白天 12 分钟 + 夜晚 12 分钟；现实 1 秒 = 游戏 1 分钟）
+const sunDir = new THREE.Vector3();
+const moonDir = new THREE.Vector3();
+
+const waterMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+    uSunDir: { value: sunDir },
+    uWaterDeep: { value: new THREE.Color(0x07343f) },
+    uWaterShallow: { value: new THREE.Color(0x1a7f92) },
+    uSkyTop: { value: new THREE.Color(0x2c6fbb) },
+    uSkyBottom: { value: new THREE.Color(0xe6cfa6) },
+  },
+  vertexShader: waterVertex,
+  fragmentShader: waterFragment,
+  transparent: true,
+  depthWrite: true,   // 写入深度，消除相邻区块水面间的分界缝
+  side: THREE.DoubleSide,
+});
+
+/* ============================ 场景 ============================ */
+const canvas = document.getElementById('game');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+const FOG_COLOR = new THREE.Color(0xd9c9a6);
+const FOG_UNDERWATER = new THREE.Color(0x0a3550);
+scene.fog = new THREE.Fog(FOG_COLOR, 28, 80);
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1200);
+camera.rotation.order = 'YXZ';
+
+// 天空（自定义渐变 + 太阳/月亮光晕 + 星空，无外部插件）
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  depthWrite: false,
+  uniforms: {
+    uSunDir: { value: sunDir },
+    uMoonDir: { value: moonDir },
+    uNight: { value: 0.0 },
+    uZenith: { value: new THREE.Color(0x2f6fae) },
+    uHorizon: { value: new THREE.Color(0xe8cfa4) },
+    uGround: { value: new THREE.Color(0x3a4048) },
+  },
+  vertexShader: `varying vec3 vDir;
+    void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `varying vec3 vDir;
+    uniform vec3 uSunDir; uniform vec3 uMoonDir; uniform float uNight;
+    uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uGround;
+    vec3 ACESFilm(vec3 c){
+      return clamp((c*(2.51*c+0.03))/(c*(2.43*c+0.59)+0.14), 0.0, 1.0);
+    }
+    float starField(vec3 d){
+      vec3 p = floor(d * 250.0);
+      float hsh = fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+      return step(0.9982, hsh);
+    }
+    void main(){
+      vec3 d = normalize(vDir);
+      float h = d.y;
+      vec3 col;
+      if (h > 0.0) {
+        col = mix(uHorizon, uZenith, pow(clamp(h, 0.0, 1.0), 0.55));
+        float s = max(dot(d, normalize(uSunDir)), 0.0);
+        col += vec3(1.0, 0.72, 0.38) * pow(s, 600.0) * 3.0;   // 太阳圆盘
+        col += vec3(1.0, 0.55, 0.25) * pow(s, 60.0) * 0.35;    // 光晕
+        col += vec3(1.0, 0.80, 0.60) * pow(s, 8.0) * 0.12;     // 霞光
+        // 星空与月亮（夜晚）
+        col += vec3(0.9, 0.95, 1.0) * starField(d) * uNight * 0.9;
+        float m = max(dot(d, normalize(uMoonDir)), 0.0);
+        col += vec3(0.85, 0.9, 1.0) * pow(m, 800.0) * uNight * 1.4;  // 月盘
+        col += vec3(0.7, 0.78, 1.0) * pow(m, 60.0) * uNight * 0.25;  // 月晕
+      } else {
+        col = mix(uHorizon, uGround, pow(clamp(-h, 0.0, 1.0), 0.6));
+      }
+      col = ACESFilm(col);
+      col = pow(col, vec3(1.0 / 2.2));
+      gl_FragColor = vec4(col, 1.0);
+    }`
+});
+const sky = new THREE.Mesh(new THREE.SphereGeometry(600, 32, 16), skyMat);
+sky.frustumCulled = false;
+sky.renderOrder = -1;
+scene.add(sky);
+
+// 光照（电影感：暖色日光 + 冷色月光 + 天光半球 + 柔和阴影）
+const hemi = new THREE.HemisphereLight(0xbfd8ff, 0x8a7a5a, 0.7);
+scene.add(hemi);
+const ambient = new THREE.AmbientLight(0xfff2e0, 0.35);   // 均匀环境光：提亮侧面、缩小顶面与侧面的亮度差
+scene.add(ambient);
+const sun = new THREE.DirectionalLight(0xffe9c8, 2.0);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+const sc = sun.shadow.camera;
+sc.left = -85; sc.right = 85; sc.top = 85; sc.bottom = -85; sc.near = 5; sc.far = 400;
+sc.updateProjectionMatrix();
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.7;
+scene.add(sun);
+scene.add(sun.target);
+const moon = new THREE.DirectionalLight(0x93a7c4, 0.0);
+scene.add(moon);
+scene.add(moon.target);
+
+// —— 云层 ——
+function makeCloudTexture() {
+  const s = 256;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = s;
+  const ctx = cv.getContext('2d');
+  const rnd = mulberry32(20240613);
+  ctx.clearRect(0, 0, s, s);
+  for (let i = 0; i < 45; i++) {
+    const x = rnd() * s, y = rnd() * s, r = 20 + rnd() * 55;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, 'rgba(255,255,255,0.9)');
+    g.addColorStop(0.55, 'rgba(255,255,255,0.4)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(5, 3);
+  return tex;
+}
+const cloudTex = makeCloudTexture();
+const cloudMat = new THREE.MeshBasicMaterial({ map: cloudTex, transparent: true, depthWrite: false, opacity: 0.9, side: THREE.DoubleSide });
+function makeCloud(scale, y) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(scale, scale * 0.6), cloudMat);
+  m.rotation.x = -Math.PI / 2;
+  m.position.y = y;
+  m.frustumCulled = false;
+  scene.add(m);
+  return m;
+}
+const clouds = [makeCloud(900, 150), makeCloud(1100, 165), makeCloud(1300, 145)];
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* ============================ 昼夜环境 ============================ */
+function updateEnvironment(t) {
+  const ang = t * Math.PI * 2;
+  const elev = Math.sin(ang);                 // -1..1，>0 白天
+  const azim = Math.PI * 0.22;
+  const cosE = Math.sqrt(Math.max(0, 1 - elev * elev));
+  sunDir.set(Math.cos(azim) * cosE, elev, Math.sin(azim) * cosE);
+  moonDir.set(-Math.cos(azim) * cosE, -elev, -Math.sin(azim) * cosE);
+
+  const day = THREE.MathUtils.smoothstep(elev, -0.12, 0.32); // 0..1
+  const night = 1 - day;
+  const lerp = THREE.MathUtils.lerp;
+  const warm = THREE.MathUtils.smoothstep(elev, 0.0, 0.28);  // 低空暖色
+
+  sun.intensity = lerp(0.02, 2.0, day);
+  sun.color.setRGB(1.0, lerp(0.45, 0.95, day), lerp(0.25, 0.85, day));
+  moon.intensity = night * 0.6;                                    // 月光（略收敛）
+  hemi.intensity = lerp(0.28, 0.45, day);                          // 半球光（收敛，避免顶面过亮）
+  hemi.color.setRGB(lerp(0.14, 0.75, day), lerp(0.18, 0.85, day), lerp(0.36, 1.0, day));
+  ambient.intensity = lerp(0.16, 0.35, day);                       // 均匀环境光：提亮侧面
+
+  skyMat.uniforms.uZenith.value.setRGB(lerp(0.01, 0.18, day), lerp(0.02, 0.42, day), lerp(0.06, 0.78, day));
+  skyMat.uniforms.uHorizon.value.setRGB(
+    Math.min(1, lerp(0.05, 0.86, day) + warm * 0.14),
+    Math.min(1, lerp(0.07, 0.78, day) + warm * 0.05),
+    lerp(0.12, 0.62, day)
+  );
+  skyMat.uniforms.uNight.value = night;
+
+  FOG_COLOR.setRGB(lerp(0.05, 0.85, day), lerp(0.08, 0.80, day), lerp(0.13, 0.66, day));
+
+  waterMat.uniforms.uSkyTop.value.setRGB(lerp(0.01, 0.17, day), lerp(0.02, 0.42, day), lerp(0.05, 0.73, day));
+  waterMat.uniforms.uSkyBottom.value.setRGB(
+    Math.min(1, lerp(0.05, 0.86, day) + warm * 0.14),
+    Math.min(1, lerp(0.07, 0.78, day) + warm * 0.05),
+    lerp(0.12, 0.62, day)
+  );
+
+  cloudMat.color.setRGB(lerp(0.12, 1.0, day), lerp(0.12, 1.0, day), lerp(0.14, 1.0, day));
+  cloudMat.opacity = lerp(0.25, 0.9, day);
+}
+
+/* ============================ 世界 ============================ */
+const key = (cx, cz) => cx + ',' + cz;
+
+class World {
+  constructor() { this.chunks = new Map(); }
+  chunkLoaded(cx, cz) { return this.chunks.has(key(cx, cz)); }
+  ensureChunk(cx, cz) {
+    if (this.chunks.has(key(cx, cz))) return;
+    const c = { cx, cz, blocks: new Uint8Array(CHUNK * CHUNK * HEIGHT), water: new Uint8Array(CHUNK * CHUNK * HEIGHT), treesPlanted: false, dirty: true, group: null };
+    this.chunks.set(key(cx, cz), c);
+    this._fill(c);
+  }
+  _fill(c) {
+    const baseX = c.cx * CHUNK, baseZ = c.cz * CHUNK;
+    for (let lz = 0; lz < CHUNK; lz++) {
+      const wz = baseZ + lz;
+      for (let lx = 0; lx < CHUNK; lx++) {
+        const wx = baseX + lx;
+        const surf = Math.floor(surfaceHeight(wx, wz));
+        const beach = surf <= SEA + 2;
+        for (let y = 0; y <= surf; y++) {
+          let id;
+          if (y <= 2) id = B.BEDROCK;
+          else if (y < surf - 3) id = B.STONE;
+          else if (y < surf) id = (beach ? B.SAND : B.DIRT);
+          else id = (surf > 72 ? B.SNOW : (beach ? B.SAND : B.GRASS));
+          if (id === B.STONE) id = oreFor(y, oreNoise(wx, y, wz));
+          c.blocks[y * 256 + lz * 16 + lx] = id;
+        }
+        // 地表花草（仅草地）
+        if (surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
+          const pr = plantHash(wx, wz);
+          if (pr < 0.07) {
+            const kind = pr < 0.035 ? B.GRASS_TALL : (pr < 0.052 ? B.FLOWER_YELLOW : B.FLOWER_RED);
+            c.blocks[(surf + 1) * 256 + lz * 16 + lx] = kind;
+          }
+        }
+        if (surf > SEA) {
+          for (let y = 5; y < surf - 2; y++) {
+            if (isCave(wx, y, wz)) c.blocks[y * 256 + lz * 16 + lx] = B.AIR;
+          }
+        }
+        if (surf < SEA) {
+          for (let y = surf + 1; y <= SEA; y++) c.water[y * 256 + lz * 16 + lx] = 8;
+        }
+      }
+    }
+  }
+  getBlock(x, y, z) {
+    if (y < 0) return B.BEDROCK;
+    if (y >= HEIGHT) return B.AIR;
+    const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
+    const c = this.chunks.get(key(cx, cz));
+    if (!c) return B.AIR;
+    return c.blocks[y * 256 + (z - cz * 16) * 16 + (x - cx * 16)];
+  }
+  getWater(x, y, z) {
+    if (y < 0 || y >= HEIGHT) return 0;
+    const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
+    const c = this.chunks.get(key(cx, cz));
+    if (!c) return 0;
+    return c.water[y * 256 + (z - cz * 16) * 16 + (x - cx * 16)];
+  }
+  setBlock(x, y, z, id) {
+    if (y < 0 || y >= HEIGHT) return;
+    const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
+    this.ensureChunk(cx, cz);
+    const c = this.chunks.get(key(cx, cz));
+    c.blocks[y * 256 + (z - cz * 16) * 16 + (x - cx * 16)] = id;
+    markDirtyBlock(x, y, z);
+  }
+  setWater(x, y, z, l) {
+    if (y < 0 || y >= HEIGHT) return;
+    const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
+    this.ensureChunk(cx, cz);
+    const c = this.chunks.get(key(cx, cz));
+    c.water[y * 256 + (z - cz * 16) * 16 + (x - cx * 16)] = l;
+    markDirtyBlock(x, y, z);
+  }
+  setRaw(x, y, z, id) { // 用于种树（不触发生成）
+    const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
+    const c = this.chunks.get(key(cx, cz));
+    if (!c || y < 0 || y >= HEIGHT) return;
+    c.blocks[y * 256 + (z - cz * 16) * 16 + (x - cx * 16)] = id;
+    markDirtyBlock(x, y, z);
+  }
+}
+const world = new World();
+
+function markChunk(cx, cz) { const c = world.chunks.get(key(cx, cz)); if (c) c.dirty = true; }
+function markDirtyBlock(x, y, z) {
+  const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
+  markChunk(cx, cz);
+  const lx = x - cx * 16, lz = z - cz * 16;
+  if (lx === 0) markChunk(cx - 1, cz);
+  if (lx === 15) markChunk(cx + 1, cz);
+  if (lz === 0) markChunk(cx, cz - 1);
+  if (lz === 15) markChunk(cx, cz + 1);
+}
+
+/* ============================ 植树 ============================ */
+function plantTrees(c) {
+  if (c.treesPlanted) return;
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++)
+    if (!world.chunkLoaded(c.cx + dx, c.cz + dz)) return;
+  c.treesPlanted = true;
+  const rnd = mulberry32((c.cx * 374761393 + c.cz * 668265263) ^ 0x9e3779b9);
+  const baseX = c.cx * 16, baseZ = c.cz * 16;
+  for (let lz = 2; lz < 14; lz++) {
+    for (let lx = 2; lx < 14; lx++) {
+      const wx = baseX + lx, wz = baseZ + lz;
+      const surf = Math.floor(surfaceHeight(wx, wz));
+      if (surf <= SEA) continue;
+      const ground = world.getBlock(wx, surf, wz);
+      if (ground !== B.GRASS && ground !== B.SNOW) continue;
+      if (rnd() > 0.025) continue;
+      const h = 4 + ((rnd() * 3) | 0);
+      for (let y = surf + 1; y <= surf + h; y++) {
+        const here = world.getBlock(wx, y, wz);
+        if (here === B.AIR || isCrossPlant(here)) world.setRaw(wx, y, wz, B.LOG);
+      }
+      const top = surf + h;
+      for (let ly = top - 2; ly <= top + 1; ly++) {
+        const r = (ly >= top) ? 1 : 2;
+        for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
+          if (dx * dx + dz * dz > r * r + 1) continue;
+          if (world.getBlock(wx + dx, ly, wz + dz) === B.AIR) world.setRaw(wx + dx, ly, wz + dz, B.LEAVES);
+        }
+      }
+    }
+  }
+}
+
+/* ============================ 网格构建 ============================ */
+const AXIS = { x: 0, y: 1, z: 2 };
+const FACES = [
+  { n: [1, 0, 0], a: 'y', b: 'z', shade: 0.85, face: 'side', dir: [1, 0, 0], corners: [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]] },
+  { n: [-1, 0, 0], a: 'y', b: 'z', shade: 0.85, face: 'side', dir: [-1, 0, 0], corners: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]] },
+  { n: [0, 1, 0], a: 'x', b: 'z', shade: 1.0, face: 'top', dir: [0, 1, 0], corners: [[0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]] },
+  { n: [0, -1, 0], a: 'x', b: 'z', shade: 0.6, face: 'bottom', dir: [0, -1, 0], corners: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]] },
+  { n: [0, 0, 1], a: 'x', b: 'y', shade: 0.85, face: 'side', dir: [0, 0, 1], corners: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]] },
+  { n: [0, 0, -1], a: 'x', b: 'y', shade: 0.85, face: 'side', dir: [0, 0, -1], corners: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]] },
+];
+const UV_CORNER = [[0, 0], [1, 0], [1, 1], [0, 1]];
+
+function uvFor(tile, k) {
+  const u0 = (tile * TILE + 0.5) / ATLAS_W, u1 = (tile * TILE + 15.5) / ATLAS_W;
+  const v0 = 0.5 / TILE, v1 = 15.5 / TILE;
+  const c = UV_CORNER[k];
+  return [u0 + (u1 - u0) * c[0], v0 + (v1 - v0) * c[1]];
+}
+
+function aoAt(bx, by, bz, f, w, solid) {
+  const p = [bx, by, bz];
+  const a = AXIS[f.a], b = AXIS[f.b];
+  const s1 = (w[a] === p[a]) ? 1 : -1;
+  const s2 = (w[b] === p[b]) ? 1 : -1;
+  const n1 = [w[0], w[1], w[2]]; n1[a] += s1;
+  const n2 = [w[0], w[1], w[2]]; n2[b] += s2;
+  const n3 = [w[0], w[1], w[2]]; n3[a] += s1; n3[b] += s2;
+  const a1 = solid(n1[0], n1[1], n1[2]) ? 1 : 0;
+  const a2 = solid(n2[0], n2[1], n2[2]) ? 1 : 0;
+  const a3 = solid(n3[0], n3[1], n3[2]) ? 1 : 0;
+  let occ;
+  if (a1 && a2) occ = 0; else occ = 3 - (a1 + a2 + a3);
+  return AO_LEVELS[occ];
+}
+
+function undergroundFactor(colTop, lx, lz, y) {
+  const t = colTop[lz * 16 + lx];
+  if (t < 0 || y >= t) return 1.0;
+  return Math.max(0.32, 0.62 - (t - y) * 0.006);
+}
+
+function pushFace(A, bx, by, bz, f, tile, under, solid) {
+  const vi = A.pos.length / 3;
+  for (let k = 0; k < 4; k++) {
+    const c = f.corners[k];
+    const wx = bx + c[0], wy = by + c[1], wz = bz + c[2];
+    A.pos.push(wx, wy, wz);
+    A.nor.push(f.n[0], f.n[1], f.n[2]);
+    const [u, v] = uvFor(tile, k);
+    A.uv.push(u, v);
+    const ao = aoAt(bx, by, bz, f, [wx, wy, wz], solid);
+    const vv = Math.min(1, f.shade * ao * under);
+    A.col.push(vv, vv, vv);
+  }
+  A.idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+}
+
+function pushWaterFace(A, bx, by, bz, f, hgt) {
+  const vi = A.pos.length / 3;
+  for (let k = 0; k < 4; k++) {
+    const c = f.corners[k];
+    A.pos.push(bx + c[0], by + (c[1] === 1 ? hgt : 0), bz + c[2]);
+    A.nor.push(f.n[0], f.n[1], f.n[2]);
+  }
+  A.idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+}
+
+// 花草等十字面植物（两个交叉四边形，走 cutout 材质）
+function pushCrossPlant(A, bx, by, bz, tile) {
+  const quads = [
+    [[0, 0, 0], [1, 0, 1], [1, 1, 1], [0, 1, 0]],
+    [[1, 0, 0], [0, 0, 1], [0, 1, 1], [1, 1, 0]]
+  ];
+  for (const q of quads) {
+    const vi = A.pos.length / 3;
+    for (let k = 0; k < 4; k++) {
+      A.pos.push(bx + q[k][0], by + q[k][1], bz + q[k][2]);
+      A.nor.push(0, 1, 0);
+      const [u, v] = uvFor(tile, k);
+      A.uv.push(u, v);
+      A.col.push(0.95, 0.95, 0.95);
+    }
+    A.idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+  }
+}
+
+function makeGeo(A) {
+  if (A.pos.length === 0) return null;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(A.pos), 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(A.nor), 3));
+  if (A.uv && A.uv.length) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(A.uv), 2));
+  if (A.col && A.col.length) g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(A.col), 3));
+  g.setIndex(new THREE.BufferAttribute(new Uint32Array(A.idx), 1));
+  g.computeBoundingSphere();
+  return g;
+}
+
+function buildChunkGeometry(c) {
+  const baseX = c.cx * 16, baseZ = c.cz * 16;
+  const colTop = new Int16Array(256);
+  for (let i = 0; i < 256; i++) colTop[i] = -1;
+  for (let lz = 0; lz < 16; lz++) for (let lx = 0; lx < 16; lx++) {
+    const i = lz * 16 + lx;
+    for (let y = HEIGHT - 1; y >= 0; y--) {
+      const id = c.blocks[y * 256 + i];
+      if (!isSeeThrough(id)) { colTop[i] = y; break; }
+    }
+  }
+  const A = { pos: [], nor: [], uv: [], col: [], idx: [] };
+  const C = { pos: [], nor: [], uv: [], col: [], idx: [] };
+  const W = { pos: [], nor: [], idx: [] };
+  const T = { pos: [], nor: [], uv: [], col: [], idx: [] };   // 火把（自发光）
+  const solid = (x, y, z) => !isSeeThrough(world.getBlock(x, y, z));
+
+  for (let y = 0; y < HEIGHT; y++) {
+    for (let lz = 0; lz < 16; lz++) {
+      for (let lx = 0; lx < 16; lx++) {
+        const i = y * 256 + lz * 16 + lx;
+        const wx = baseX + lx, wz = baseZ + lz;
+        // 水单独存放在 c.water，必须先于实体方块判断
+        const L = c.water[i];
+        if (L > 0) {
+          if (L >= 8) {
+            // 满水（海洋/湖泊）：只渲染顶面 → 连续平滑水面
+            const nb = world.getBlock(wx, y + 1, wz);
+            if (isSeeThrough(nb) && nb !== B.WATER) pushWaterFace(W, wx, y, wz, FACES[2], 1.0);
+          } else {
+            // 流动水：渲染所有暴露面（瀑布/水流需要侧面）
+            const hgt = L / 8;
+            for (const f of FACES) {
+              const nb = world.getBlock(wx + f.dir[0], y + f.dir[1], wz + f.dir[2]);
+              if (nb === B.WATER || !isSeeThrough(nb)) continue;
+              pushWaterFace(W, wx, y, wz, f, hgt);
+            }
+          }
+          continue;
+        }
+        const id = c.blocks[i];
+        if (id === B.AIR) continue;
+        if (isTorch(id)) { pushCrossPlant(T, wx, y, wz, tileOf(id).top); continue; }
+        if (isCrossPlant(id)) { pushCrossPlant(C, wx, y, wz, tileOf(id).top); continue; }
+        const cutout = (id === B.GLASS);
+        const t = tileOf(id);
+        const under = undergroundFactor(colTop, lx, lz, y);
+        const target = cutout ? C : A;
+        for (const f of FACES) {
+          const nb = world.getBlock(wx + f.dir[0], y + f.dir[1], wz + f.dir[2]);
+          const vis = cutout ? (isSeeThrough(nb) && nb !== B.GLASS) : isSeeThrough(nb);
+          if (!vis) continue;
+          pushFace(target, wx, y, wz, f, t[f.face], under, solid);
+        }
+      }
+    }
+  }
+  return { opaque: makeGeo(A), cutout: makeGeo(C), water: makeGeo(W), torch: makeGeo(T) };
+}
+
+function buildChunkMeshes(c) {
+  if (c.group) { scene.remove(c.group); disposeGroup(c.group); }
+  const g = new THREE.Group();
+  const geo = buildChunkGeometry(c);
+  if (geo.opaque) { const m = new THREE.Mesh(geo.opaque, opaqueMat); m.castShadow = true; m.receiveShadow = true; g.add(m); }
+  if (geo.cutout) { const m = new THREE.Mesh(geo.cutout, cutoutMat); m.castShadow = true; m.receiveShadow = true; g.add(m); }
+  if (geo.water) { const m = new THREE.Mesh(geo.water, waterMat); m.receiveShadow = true; g.add(m); }
+  if (geo.torch) { const m = new THREE.Mesh(geo.torch, torchMat); g.add(m); }
+  c.group = g;
+  scene.add(g);
+  c.dirty = false;
+}
+function disposeGroup(g) {
+  for (const m of g.children) { m.geometry.dispose(); }
+}
+
+/* ============================ 流水模拟 ============================ */
+const waterQ = [];
+const waterSet = new Set();
+function wk(x, y, z) { return x + ',' + y + ',' + z; }
+function enqueueWater(x, y, z) {
+  if (y < 0 || y >= HEIGHT) return;
+  const k = wk(x, y, z);
+  if (waterSet.has(k)) return;
+  waterSet.add(k); waterQ.push([x, y, z]);
+}
+function enqueueAround(x, y, z) {
+  enqueueWater(x + 1, y, z); enqueueWater(x - 1, y, z);
+  enqueueWater(x, y + 1, z); enqueueWater(x, y - 1, z);
+  enqueueWater(x, y, z + 1); enqueueWater(x, y, z - 1);
+}
+function waterStep(x, y, z) {
+  const L = world.getWater(x, y, z);
+  if (L === 0) return;
+  if (world.getBlock(x, y - 1, z) === B.AIR) {
+    world.setWater(x, y, z, 0);
+    world.setWater(x, y - 1, z, Math.min(L, 7));
+    enqueueAround(x, y, z); enqueueAround(x, y - 1, z);
+    return;
+  }
+  if (L > 1) {
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (const [dx, dz] of dirs) {
+      const nx = x + dx, nz = z + dz;
+      if (world.getBlock(nx, y, nz) === B.AIR && world.getWater(nx, y, nz) === 0 && world.chunkLoaded(Math.floor(nx / 16), Math.floor(nz / 16))) {
+        world.setWater(nx, y, nz, L - 1);
+        enqueueWater(nx, y, nz);
+      }
+    }
+  }
+}
+function updateWater(n) {
+  for (let i = 0; i < n && waterQ.length; i++) {
+    const cell = waterQ.shift();
+    waterSet.delete(wk(cell[0], cell[1], cell[2]));
+    waterStep(cell[0], cell[1], cell[2]);
+  }
+}
+
+/* ============================ 火把光源 ============================ */
+const torchLights = new Map();
+const MAX_TORCH_LIGHTS = 12;
+function addTorchLight(x, y, z) {
+  const k = x + ',' + y + ',' + z;
+  if (torchLights.has(k) || torchLights.size >= MAX_TORCH_LIGHTS) return;
+  const light = new THREE.PointLight(0xffb066, 2.3, 24, 2);   // 亮度增强 + 半径约 1.7 倍
+  light.position.set(x + 0.5, y + 0.6, z + 0.5);
+  scene.add(light);
+  torchLights.set(k, light);
+}
+function removeTorchLight(x, y, z) {
+  const k = x + ',' + y + ',' + z;
+  const light = torchLights.get(k);
+  if (light) { scene.remove(light); torchLights.delete(k); }
+}
+
+/* ============================ 破坏/放置粒子 ============================ */
+const MAX_PARTICLES = 260;
+const particleGeo = new THREE.BoxGeometry(0.09, 0.09, 0.09);
+const particles = [];
+const BLOCK_COLORS = {
+  [B.GRASS]: 0x7fae4c, [B.DIRT]: 0x8a6242, [B.STONE]: 0x8f8f8f, [B.COBBLE]: 0x7c7c7c,
+  [B.SAND]: 0xd8c698, [B.GRAVEL]: 0x76706a, [B.LOG]: 0x6b4a2b, [B.LEAVES]: 0x3f8c33,
+  [B.PLANKS]: 0xb08a4f, [B.SNOW]: 0xeef4f8, [B.GLASS]: 0xcfe4ee, [B.BEDROCK]: 0x3a3a3a,
+  [B.STONE_BRICK]: 0x8a8a8a, [B.MOSSY]: 0x6f7a5e, [B.BRICK]: 0x9c5a48, [B.SANDSTONE]: 0xd8c698,
+  [B.QUARTZ]: 0xeae6e2, [B.TORCH]: 0xffb066,
+};
+function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
+function spawnParticles(x, y, z, color, count) {
+  for (let n = 0; n < count; n++) {
+    if (particles.length >= MAX_PARTICLES) {
+      const old = particles.shift();
+      scene.remove(old.m); old.mat.dispose();
+    }
+    const mat = new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 1 });
+    const m = new THREE.Mesh(particleGeo, mat);
+    m.position.set(x + 0.5, y + 0.5, z + 0.5);
+    scene.add(m);
+    particles.push({
+      m, mat,
+      vx: (Math.random() - 0.5) * 3.2,
+      vy: 1.5 + Math.random() * 3.5,
+      vz: (Math.random() - 0.5) * 3.2,
+      life: 0.45 + Math.random() * 0.3,
+    });
+  }
+}
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.life -= dt;
+    if (p.life <= 0) {
+      scene.remove(p.m); p.mat.dispose();
+      particles.splice(i, 1);
+      continue;
+    }
+    p.vy -= 14 * dt;
+    p.m.position.x += p.vx * dt;
+    p.m.position.y += p.vy * dt;
+    p.m.position.z += p.vz * dt;
+    p.mat.opacity = Math.max(0, p.life / 0.6);
+    p.m.rotation.x += dt * 6;
+    p.m.rotation.y += dt * 4;
+  }
+}
+
+/* ============================ 玩家 ============================ */
+const player = {
+  pos: new THREE.Vector3(8.5, 60, 8.5),
+  vel: new THREE.Vector3(),
+  yaw: 0, pitch: 0,
+  onGround: false, fly: false, sprint: false,
+  halfW: 0.3, height: 1.8, eye: 1.62,
+};
+function findSpawn() {
+  for (let r = 0; r < 200; r += 4) {
+    for (let a = 0; a < 8; a++) {
+      const x = Math.cos(a * 0.785) * r, z = Math.sin(a * 0.785) * r;
+      const s = surfaceHeight(Math.round(x), Math.round(z));
+      if (s > SEA + 1) return { x: Math.round(x) + 0.5, z: Math.round(z) + 0.5, y: s + 2 };
+    }
+  }
+  return { x: 8.5, z: 8.5, y: SEA + 4 };
+}
+
+const keys = {};
+const mouse = { dx: 0, dy: 0, down: [false, false, false] };
+
+function playerAABB(pos) {
+  return { minX: pos.x - player.halfW, maxX: pos.x + player.halfW, minY: pos.y, maxY: pos.y + player.height, minZ: pos.z - player.halfW, maxZ: pos.z + player.halfW };
+}
+function isCrossPlant(id) { return id === B.FLOWER_RED || id === B.FLOWER_YELLOW || id === B.GRASS_TALL; }
+function isTorch(id) { return id === B.TORCH; }
+// 透明/可透视（用于面剔除与 AO）
+function isSeeThrough(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || isCrossPlant(id) || isTorch(id); }
+// 确定性的列哈希（用于花草摆放）
+function plantHash(x, z) {
+  let h = (x * 374761393 + z * 668265263) ^ 0x9e3779b9;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function isSolid(id) { return !isSeeThrough(id); }
+
+function collideAxis(axis, vel) {
+  if (axis === 0) player.pos.x += vel;
+  else if (axis === 1) player.pos.y += vel;
+  else player.pos.z += vel;
+  const bb = playerAABB(player.pos);
+  const x0 = Math.floor(bb.minX), x1 = Math.floor(bb.maxX);
+  const y0 = Math.floor(bb.minY), y1 = Math.floor(bb.maxY);
+  const z0 = Math.floor(bb.minZ), z1 = Math.floor(bb.maxZ);
+  let hit = false;
+  for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) {
+    if (!isSolid(world.getBlock(x, y, z))) continue;
+    if (axis === 0) {
+      if (vel > 0 && bb.maxX > x) { player.pos.x = x - player.halfW - 0.001; hit = true; }
+      else if (vel < 0 && bb.minX < x + 1) { player.pos.x = x + 1 + player.halfW + 0.001; hit = true; }
+    } else if (axis === 1) {
+      if (vel > 0 && bb.maxY > y) { player.pos.y = y - player.height - 0.001; hit = true; }
+      else if (vel < 0 && bb.minY < y + 1) { player.pos.y = y + 1 + 0.001; hit = true; }
+    } else {
+      if (vel > 0 && bb.maxZ > z) { player.pos.z = z - player.halfW - 0.001; hit = true; }
+      else if (vel < 0 && bb.minZ < z + 1) { player.pos.z = z + 1 + player.halfW + 0.001; hit = true; }
+    }
+    if (hit) {
+      if (axis === 0) player.vel.x = 0;
+      else if (axis === 1) player.vel.y = 0;
+      else player.vel.z = 0;
+      return true;
+    }
+  }
+  return false;
+}
+
+function inWater() {
+  const bb = playerAABB(player.pos);
+  const x0 = Math.floor(bb.minX), x1 = Math.floor(bb.maxX);
+  const y0 = Math.floor(bb.minY), y1 = Math.floor(bb.maxY);
+  const z0 = Math.floor(bb.minZ), z1 = Math.floor(bb.maxZ);
+  for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++)
+    if (world.getWater(x, y, z) > 0) return true;
+  return false;
+}
+
+function updatePlayer(dt) {
+  const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+  const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+  const move = new THREE.Vector3();
+  if (keys['KeyW']) move.add(forward);
+  if (keys['KeyS']) move.sub(forward);
+  if (keys['KeyD']) move.add(right);
+  if (keys['KeyA']) move.sub(right);
+  if (move.lengthSq() > 0) move.normalize();
+
+  const water = inWater();
+  let speed = player.fly ? 16 : (player.sprint ? 7.5 : 4.5);
+  if (keys['ShiftLeft'] || keys['ShiftRight']) speed = player.fly ? 10 : 2.2;
+  if (water) speed *= 0.6;
+  const accel = player.onGround || player.fly ? 14 : 4;
+  player.vel.x = THREE.MathUtils.lerp(player.vel.x, move.x * speed, Math.min(1, accel * dt));
+  player.vel.z = THREE.MathUtils.lerp(player.vel.z, move.z * speed, Math.min(1, accel * dt));
+
+  if (player.fly) {
+    player.vel.y = 0;
+    if (keys['Space']) player.vel.y = 8;
+    if (keys['ShiftLeft'] || keys['ShiftRight']) player.vel.y = -8;
+    player.pos.addScaledVector(player.vel, dt);
+    if (player.pos.y < 2) player.pos.y = 2;
+    player.onGround = false;
+  } else {
+    const g = water ? -8 : -25;
+    player.vel.y += g * dt;
+    player.vel.y = Math.max(player.vel.y, -50);
+    if (keys['Space']) {
+      if (player.onGround) { player.vel.y = 8.5; player.onGround = false; }
+      else if (water) player.vel.y = 3.2;
+    }
+    if (water) player.vel.y = Math.max(player.vel.y, -3.5);
+
+    const px = collideAxis(0, player.vel.x * dt) ? 0 : 1;
+    const pz = collideAxis(2, player.vel.z * dt) ? 0 : 1;
+    const wasFalling = player.vel.y <= 0;
+    const py = collideAxis(1, player.vel.y * dt);
+    player.onGround = py && wasFalling;
+  }
+
+  // 轻微头部摆动
+  const spd = Math.hypot(player.vel.x, player.vel.z);
+  bob = THREE.MathUtils.lerp(bob, player.onGround ? spd : 0, Math.min(1, 6 * dt));
+  bobT += dt * (6 + spd * 2);
+  const bobY = Math.sin(bobT) * 0.05 * Math.min(1, bob / 5);
+  const bobX = Math.cos(bobT * 0.5) * 0.025 * Math.min(1, bob / 5);
+
+  camera.position.set(player.pos.x, player.pos.y + player.eye + bobY, player.pos.z);
+  camera.rotation.set(player.pitch, player.yaw, 0);
+  camera.translateX(bobX);
+}
+let bob = 0, bobT = 0;
+
+/* ============================ 射线拾取 ============================ */
+function raycast(origin, dir, maxDist) {
+  let x = Math.floor(origin.x), y = Math.floor(origin.y), z = Math.floor(origin.z);
+  const stepX = dir.x > 0 ? 1 : -1, stepY = dir.y > 0 ? 1 : -1, stepZ = dir.z > 0 ? 1 : -1;
+  const tdx = dir.x !== 0 ? Math.abs(1 / dir.x) : Infinity;
+  const tdy = dir.y !== 0 ? Math.abs(1 / dir.y) : Infinity;
+  const tdz = dir.z !== 0 ? Math.abs(1 / dir.z) : Infinity;
+  let tmx = tdx === Infinity ? Infinity : (stepX > 0 ? (x + 1 - origin.x) : (origin.x - x)) * tdx;
+  let tmy = tdy === Infinity ? Infinity : (stepY > 0 ? (y + 1 - origin.y) : (origin.y - y)) * tdy;
+  let tmz = tdz === Infinity ? Infinity : (stepZ > 0 ? (z + 1 - origin.z) : (origin.z - z)) * tdz;
+  let face = [0, 0, 0];
+  let t = 0;
+  while (t <= maxDist) {
+    const id = world.getBlock(x, y, z);
+    const w = world.getWater(x, y, z);
+    if (id !== B.AIR || w > 0) {
+      const hitId = (id === B.AIR && w > 0) ? B.WATER : id;
+      return { x, y, z, id: hitId, n: [face[0], face[1], face[2]] };
+    }
+    if (tmx < tmy && tmx < tmz) { x += stepX; t = tmx; tmx += tdx; face = [-stepX, 0, 0]; }
+    else if (tmy < tmz) { y += stepY; t = tmy; tmy += tdy; face = [0, -stepY, 0]; }
+    else { z += stepZ; t = tmz; tmz += tdz; face = [0, 0, -stepZ]; }
+  }
+  return null;
+}
+
+function blockHitsPlayer(bx, by, bz) {
+  const bb = playerAABB(player.pos);
+  return bx < bb.maxX && bx + 1 > bb.minX && by < bb.maxY && by + 1 > bb.minY && bz < bb.maxZ && bz + 1 > bb.minZ;
+}
+
+/* ============================ 音效 ============================ */
+let audioCtx = null;
+function playPop() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(220 + Math.random() * 80, t);
+    o.frequency.exponentialRampToValueAtTime(60, t + 0.08);
+    g.gain.setValueAtTime(0.12, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(t); o.stop(t + 0.1);
+  } catch (e) { /* ignore */ }
+}
+
+/* ============================ 热键栏 + 背包 ============================ */
+const palette = [B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.SAND, B.LOG, B.PLANKS, B.LEAVES, B.GLASS, B.WATER,
+  B.STONE_BRICK, B.MOSSY, B.BRICK, B.SANDSTONE, B.QUARTZ, B.FLOWER_RED, B.FLOWER_YELLOW, B.GRASS_TALL, B.TORCH];
+const HOTBAR_SIZE = 9;
+const hotbar = palette.slice(0, HOTBAR_SIZE);   // 物品栏固定 9 格，其余进背包
+let selected = 0;
+const hotbarEl = document.getElementById('hotbar');
+
+function drawFace(ctx, tile, x0, y0, x1, y1, x2, y2, dark) {
+  ctx.save();
+  ctx.setTransform((x1 - x0) / 16, (y1 - y0) / 16, (x2 - x0) / 16, (y2 - y0) / 16, x0, y0);
+  ctx.drawImage(atlas.cv, tile * TILE, 0, TILE, TILE, 0, 0, 16, 16);
+  if (dark > 0) { ctx.fillStyle = 'rgba(0,0,0,' + dark + ')'; ctx.fillRect(0, 0, 16, 16); }
+  ctx.restore();
+}
+function drawIsometricBlock(ctx, topTile, sideTile) {
+  drawFace(ctx, topTile, 16, 4, 24, 12, 8, 12, 0);        // 顶面（菱形）
+  drawFace(ctx, sideTile, 8, 12, 16, 19, 8, 22, 0.25);     // 左面（暗）
+  drawFace(ctx, sideTile, 16, 19, 24, 12, 16, 29, 0.10);   // 右面（亮）
+}
+function makeIconCanvas(id) {
+  const S = 32;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const t = tileOf(id);
+  if (isCrossPlant(id) || isTorch(id) || id === B.WATER) {
+    // 花草/火把/水等平面物：直接贴图
+    ctx.drawImage(atlas.cv, t.top * TILE, 0, TILE, TILE, 4, 4, S - 8, S - 8);
+  } else {
+    drawIsometricBlock(ctx, t.top, t.side);   // 立体方块图标
+  }
+  return cv;
+}
+function buildHotbar() {
+  hotbarEl.innerHTML = '';
+  for (let i = 0; i < HOTBAR_SIZE; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'slot' + (i === selected ? ' active' : '');
+    const num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = i + 1;
+    slot.appendChild(num);
+    slot.appendChild(makeIconCanvas(hotbar[i]));
+    hotbarEl.appendChild(slot);
+  }
+}
+function refreshHotbar() { buildHotbar(); }   // 重绘整个物品栏，保证图标实时更新
+function select(i) {
+  selected = ((i % HOTBAR_SIZE) + HOTBAR_SIZE) % HOTBAR_SIZE;
+  refreshHotbar();
+  const sn = document.getElementById('invSlotNum');
+  if (sn) sn.textContent = selected + 1;
+}
+
+/* ============================ 输入 ============================ */
+let locked = false;
+let started = false;
+let inventoryOpen = false;
+const menuEl = document.getElementById('menu');
+const pauseEl = document.getElementById('pause');
+const inventoryEl = document.getElementById('inventory');
+const invGrid = document.getElementById('invGrid');
+const invSlotNum = document.getElementById('invSlotNum');
+const underwaterEl = document.getElementById('underwater');
+const hudMeta = document.getElementById('hudMeta');
+
+function refreshOverlays() {
+  menuEl.style.display = (!locked && !started && !inventoryOpen) ? 'flex' : 'none';
+  pauseEl.style.display = (!locked && started && !inventoryOpen) ? 'flex' : 'none';
+  inventoryEl.style.display = inventoryOpen ? 'flex' : 'none';
+}
+function buildInventory() {
+  invGrid.innerHTML = '';
+  palette.forEach((id) => {
+    const slot = document.createElement('div');
+    slot.className = 'inv-slot' + (hotbar.includes(id) ? ' in-hotbar' : '');
+    slot.appendChild(makeIconCanvas(id));
+    slot.addEventListener('click', () => {
+      hotbar[selected] = id;      // 放入当前选中的物品栏格
+      refreshHotbar();
+      closeInventory();
+    });
+    invGrid.appendChild(slot);
+  });
+  invSlotNum.textContent = selected + 1;
+}
+function openInventory() {
+  if (!started) return;
+  inventoryOpen = true;
+  buildInventory();
+  refreshOverlays();
+  document.exitPointerLock();
+}
+function closeInventory() {
+  inventoryOpen = false;
+  refreshOverlays();
+  canvas.requestPointerLock();
+}
+function toggleInventory() {
+  if (inventoryOpen) closeInventory();
+  else if (locked) openInventory();
+}
+function toggleDayNight() { timeOfDay = (timeOfDay < 0.5) ? 0.74 : 0.24; }   // 0 键快速切换昼夜
+
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === canvas;
+  if (locked) { started = true; inventoryOpen = false; }
+  refreshOverlays();
+});
+menuEl.addEventListener('click', () => { canvas.requestPointerLock(); });
+document.getElementById('resumeBtn').addEventListener('click', () => { canvas.requestPointerLock(); });
+document.getElementById('homeBtn').addEventListener('click', () => { location.href = './index.html'; });
+
+document.addEventListener('mousemove', (e) => {
+  if (!locked) return;
+  mouse.dx += e.movementX; mouse.dy += e.movementY;
+});
+document.addEventListener('mousedown', (e) => {
+  if (!locked) return;
+  if (e.button === 0 || e.button === 2) { mouse.down[e.button] = true; onMousedown(e.button); }
+  else if (e.button === 1) onMousedown(1);
+});
+document.addEventListener('mouseup', (e) => { mouse.down[e.button] = false; });
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+document.addEventListener('keydown', (e) => {
+  keys[e.code] = true;
+  if (e.code === 'KeyF') { player.fly = !player.fly; player.vel.y = 0; }
+  if (e.code === 'KeyN') { timeOfDay = 0.24; }                 // 跳到白天
+  if (e.code === 'KeyE') { toggleInventory(); }                 // 背包
+  if (e.code === 'Escape' && inventoryOpen) { closeInventory(); return; }
+  if (e.code === 'ControlLeft' || e.code === 'ControlRight') player.sprint = true;
+  const n = parseInt(e.key, 10);
+  if (n >= 1 && n <= 9) select(n - 1);
+  else if (e.key === '0') toggleDayNight();                     // 0 键切换昼夜
+  if (e.code === 'Space') e.preventDefault();
+});
+document.addEventListener('keyup', (e) => {
+  keys[e.code] = false;
+  if (e.code === 'ControlLeft' || e.code === 'ControlRight') player.sprint = false;
+});
+addEventListener('wheel', (e) => {
+  if (!locked) return;
+  select(selected + (e.deltaY > 0 ? 1 : -1));
+});
+
+function onMousedown(btn) {
+  const origin = camera.position;
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const hit = raycast(origin, dir, 6);
+  if (btn === 0) { // 破坏
+    if (!hit) return;
+    if (hit.id === B.TORCH) removeTorchLight(hit.x, hit.y, hit.z);
+    if (hit.id === B.WATER) world.setWater(hit.x, hit.y, hit.z, 0);
+    else world.setBlock(hit.x, hit.y, hit.z, B.AIR);
+    spawnParticles(hit.x, hit.y, hit.z, blockColor(hit.id), 14);
+    enqueueAround(hit.x, hit.y, hit.z);
+    playPop();
+  } else if (btn === 2) { // 放置
+    if (!hit) return;
+    const px = hit.x + hit.n[0], py = hit.y + hit.n[1], pz = hit.z + hit.n[2];
+    if (py < 0 || py >= HEIGHT) return;
+    if (blockHitsPlayer(px, py, pz)) return;
+    const sel = hotbar[selected];
+    const air = world.getBlock(px, py, pz) === B.AIR && world.getWater(px, py, pz) === 0;
+    if (!air) return;
+    if (sel === B.WATER) world.setWater(px, py, pz, 8);
+    else world.setBlock(px, py, pz, sel);
+    if (sel === B.TORCH) addTorchLight(px, py, pz);
+    spawnParticles(px, py, pz, blockColor(sel), 10);
+    enqueueAround(px, py, pz);
+    playPop();
+  } else if (btn === 1) { // 选取
+    if (hit && hit.id !== B.AIR && hit.id !== B.WATER) {
+      const idx = hotbar.indexOf(hit.id);
+      if (idx >= 0) select(idx);
+      else { hotbar[selected] = hit.id; refreshHotbar(); }
+    }
+  }
+}
+
+/* ============================ 流式加载 ============================ */
+function updateStreaming() {
+  const pcx = Math.floor(player.pos.x / 16), pcz = Math.floor(player.pos.z / 16);
+  // 生成
+  let gen = 0;
+  for (let r = 0; r <= GEN_R && gen < MAXGEN; r++) {
+    for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+      const cx = pcx + dx, cz = pcz + dz;
+      if (!world.chunkLoaded(cx, cz)) { world.ensureChunk(cx, cz); gen++; }
+    }
+  }
+  // 植树
+  let trees = 0;
+  for (const c of world.chunks.values()) {
+    if (trees >= MAXTREE) break;
+    if (!c.treesPlanted) { plantTrees(c); if (c.treesPlanted) trees++; }
+  }
+  // 网格（邻居齐全才构建，避免边缘接缝）
+  let mesh = 0;
+  for (const c of world.chunks.values()) {
+    if (mesh >= MAXMESH) break;
+    if (!c.dirty || Math.abs(c.cx - pcx) > MESH_R || Math.abs(c.cz - pcz) > MESH_R) continue;
+    let ok = true;
+    for (let dz = -1; dz <= 1 && ok; dz++) for (let dx = -1; dx <= 1; dx++)
+      if (!world.chunkLoaded(c.cx + dx, c.cz + dz)) { ok = false; break; }
+    if (ok) { buildChunkMeshes(c); mesh++; }
+  }
+  // 卸载
+  for (const [k, c] of world.chunks) {
+    if (Math.abs(c.cx - pcx) > GEN_R + 2 || Math.abs(c.cz - pcz) > GEN_R + 2) {
+      // 清理该区块内的火把光源
+      for (let i = 0; i < c.blocks.length; i++) {
+        if (c.blocks[i] === B.TORCH) {
+          const ty = Math.floor(i / 256);
+          const tz = c.cz * 16 + Math.floor((i % 256) / 16);
+          const tx = c.cx * 16 + (i % 16);
+          removeTorchLight(tx, ty, tz);
+        }
+      }
+      if (c.group) { scene.remove(c.group); disposeGroup(c.group); }
+      world.chunks.delete(k);
+    }
+  }
+}
+
+/* ============================ 主循环 ============================ */
+const clock = new THREE.Clock();
+let fpsAcc = 0, fpsFrames = 0;
+let loadedOnce = false;
+
+function animate() {
+  setTimeout(animate, 0);   // 不锁 vsync，帧率可突破屏幕刷新率；游戏速度由 dt 保证
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  // 视角
+  if (locked) {
+    player.yaw -= mouse.dx * 0.0022;
+    player.pitch -= mouse.dy * 0.0022;
+    player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch));
+  }
+  mouse.dx = 0; mouse.dy = 0;
+
+  if (locked) updatePlayer(dt);   // 暂停时不推进玩家物理，避免松开鼠标后人物继续漂移
+  updateStreaming();
+  updateWater(150);
+  updateParticles(dt);
+
+  // 昼夜推进
+  timeOfDay = (timeOfDay + dt / DAY_LENGTH) % 1;
+  updateEnvironment(timeOfDay);
+
+  // 水体/水下氛围
+  const submerged = inWater();
+  underwaterEl.style.opacity = submerged ? '1' : '0';
+  scene.fog.color.copy(submerged ? FOG_UNDERWATER : FOG_COLOR);
+  scene.fog.far = submerged ? 34 : 80;
+  waterMat.uniforms.uTime.value = clock.elapsedTime;
+
+  // 太阳 / 月亮跟随玩家（阴影）
+  sun.position.copy(player.pos).addScaledVector(sunDir, 130);
+  sun.target.position.copy(player.pos);
+  sun.target.updateMatrixWorld();
+  moon.position.copy(player.pos).addScaledVector(moonDir, 130);
+  moon.target.position.copy(player.pos);
+  moon.target.updateMatrixWorld();
+  sky.position.copy(player.pos);
+
+  // 云层漂移
+  const ct = clock.elapsedTime;
+  clouds.forEach((cl, i) => {
+    cl.position.set(
+      player.pos.x + Math.sin(ct * 0.01 + i * 2.1) * 120,
+      cl.position.y,
+      player.pos.z + Math.cos(ct * 0.008 + i * 1.7) * 120
+    );
+  });
+
+  renderer.render(scene, camera);
+
+  // FPS
+  fpsAcc += dt; fpsFrames++;
+  if (fpsAcc >= 0.5) {
+    const fps = Math.round(fpsFrames / fpsAcc);
+    const chunks = world.chunks.size;
+    const hour = (timeOfDay * 24 + 6) % 24;
+    const hh = Math.floor(hour), mm = Math.floor((hour - hh) * 60);
+    const clockStr = String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+    hudMeta.textContent = `FPS ${fps} · XYZ ${Math.round(player.pos.x)} ${Math.round(player.pos.y)} ${Math.round(player.pos.z)} · 时间 ${clockStr} · 区块 ${chunks} · ${player.fly ? '飞行' : '行走'} · ${submerged ? '水下' : ''}`;
+    fpsAcc = 0; fpsFrames = 0;
+  }
+
+  if (!loadedOnce) {
+    const target = 49; // 出生点 7x7 区块
+    const pct = Math.min(100, Math.round((world.chunks.size / target) * 100));
+    pfillEl.style.width = pct + '%';
+    if (world.chunks.size >= target) {
+      loadedOnce = true;
+      pfillEl.style.width = '100%';
+      setLoading('✓ 世界就绪 · 点击进入世界');
+    } else {
+      setLoading(`正在生成地形… ${pct}% (区块 ${world.chunks.size}/${target})`);
+    }
+  }
+}
+
+/* ============================ 启动 ============================ */
+try {
+  (function boot() {
+    const spawn = findSpawn();
+    player.pos.set(spawn.x, spawn.y, spawn.z);
+    player.yaw = Math.PI * 0.25;
+    // 同步生成出生点附近（7x7，随后逐帧流式扩展）
+    const scx = Math.floor(spawn.x / 16), scz = Math.floor(spawn.z / 16);
+    for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) world.ensureChunk(scx + dx, scz + dz);
+    buildHotbar();
+    refreshHotbar();
+    camera.position.set(spawn.x, spawn.y + player.eye, spawn.z);
+    camera.rotation.set(0, player.yaw, 0);
+    animate();
+  })();
+} catch (e) {
+  console.error('[boot] 初始化失败:', e);
+  setLoading('❌ 初始化失败：' + (e && e.message ? e.message : e) + '（按 F12 查看控制台详情）', true);
+}
+</script>
+</body>
+</html>

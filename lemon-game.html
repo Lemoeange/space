@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="description" content="柠檬狂奔 - 柠檬跳跃小游戏">
+<meta name="theme-color" content="#ffd23f">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/favicon.png">
+<link rel="preload" href="assets/fonts/ZCOOLQingKeHuangYou-subset.woff2" as="font" type="font/woff2" crossorigin>
+<title>柠檬狂奔 · 小游戏</title>
+<style>
+  @font-face {
+    font-family: "ZDDJ";
+    src: url("assets/fonts/ZCOOLQingKeHuangYou-subset.woff2") format("woff2"),
+         url("assets/fonts/ZCOOLQingKeHuangYou-subset.woff") format("woff"),
+         url("assets/fonts/ZCOOLQingKeHuangYou-subset.ttf") format("truetype");
+    font-display: swap;
+  }
+  :root {
+    --bg: #fffbeb;
+    --card: #ffffff;
+    --ink: #6b5b1f;
+    --muted: #a89a5e;
+    --line: rgba(214, 192, 120, .35);
+    --accent: #ffd23f;
+    --lime: #b8d93c;
+    --font-main: "ZDDJ", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--font-main);
+    background: var(--bg);
+    color: var(--ink);
+    display: -webkit-flex; display: flex;
+    -webkit-align-items: center; align-items: center;
+    -webkit-justify-content: center; justify-content: center;
+    padding: 16px;
+    overflow: hidden;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .game-box {
+    width: 100%;
+    max-width: 760px;
+    background: var(--card);
+    border: 2px solid var(--line);
+    border-radius: 24px;
+    box-shadow: 6px 6px 0 rgba(224, 200, 110, .35);
+    padding: 16px;
+  }
+  .topbar {
+    display: -webkit-flex; display: flex;
+    -webkit-align-items: baseline; align-items: baseline;
+    -webkit-justify-content: space-between; justify-content: space-between;
+  }
+  .topbar h1 { font-size: 24px; font-weight: 400; letter-spacing: 4px; }
+  .topbar .score { font-size: 16px; color: var(--muted); }
+  .topbar .score b { color: var(--ink); font-size: 20px; font-weight: 400; }
+  .stage { position: relative; margin-top: 12px; }
+  canvas {
+    display: block;
+    width: 100%;
+    background: #fffdf2;
+    border: 2px solid var(--line);
+    border-radius: 16px;
+    cursor: pointer;
+    touch-action: none;
+  }
+  .overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: -webkit-flex; display: flex;
+    -webkit-flex-direction: column; flex-direction: column;
+    -webkit-align-items: center; align-items: center;
+    -webkit-justify-content: center; justify-content: center;
+    background: rgba(255, 251, 235, .85);
+    border-radius: 16px;
+    text-align: center;
+  }
+  .overlay.hidden { display: none; }
+  .big { font-size: 32px; letter-spacing: 6px; }
+  .big-emoji { font-size: 56px; }
+  .hint { font-size: 14px; color: var(--muted); margin-top: 10px; letter-spacing: 2px; }
+  .score-line { font-size: 16px; color: var(--muted); margin-top: 12px; letter-spacing: 2px; }
+  .score-line b { color: var(--ink); font-size: 20px; font-weight: 400; }
+  .btn {
+    display: inline-block;
+    margin-top: 16px;
+    padding: 9px 26px;
+    border-radius: 999px;
+    border: 2px solid var(--ink);
+    background: linear-gradient(120deg, #ffd23f, #b8d93c);
+    border-color: #a8862a;
+    color: #4a421f;
+    font-family: var(--font-main);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 #a8862a;
+    -webkit-transition: -webkit-transform .15s ease, box-shadow .15s ease;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .btn:active { -webkit-transform: translate(2px, 2px); transform: translate(2px, 2px); box-shadow: 1px 1px 0 #a8862a; }
+
+  /* ---------- 侧栏抽屉(与主页一致,始终为抽屉,左侧滑出) ---------- */
+  .sidebar {
+    width: 300px;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 80;
+    margin: 0;
+    padding: 76px 16px 16px;
+    background: rgba(255, 255, 255, .97);
+    overflow-y: auto;
+    -webkit-transform: translateX(-100%);
+    transform: translateX(-100%);
+    -webkit-transition: -webkit-transform .28s ease;
+    transition: transform .28s ease;
+    pointer-events: auto;
+  }
+  .sidebar, .sidebar * { pointer-events: auto; }
+  .sidebar.open { -webkit-transform: translateX(0); transform: translateX(0); }
+  .sidebar .side-card + .side-card { margin-top: 12px; }
+  .side-card { padding: 8px 0; background: var(--card); border: 2px solid var(--line); border-radius: 24px; box-shadow: 6px 6px 0 rgba(224, 200, 110, .35); }
+  .side-head {
+    padding: 14px 20px 4px;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .side-body ul { list-style: none; padding: 4px 12px 12px; }
+  .side-body ul { list-style: none; padding: 4px 12px 12px; }
+  .side-body li { margin: 2px 0; }
+  .side-body li a, .side-body li button {
+    display: block;
+    width: 100%;
+    padding: 9px 8px;
+    border-radius: 12px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 14px;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    -webkit-transition: background .2s ease, color .2s ease;
+    transition: background .2s ease, color .2s ease;
+  }
+  .side-body li a:hover, .side-body li button:hover { background: var(--accent-soft); color: #c7941a; }
+
+  .quick-list { list-style: none; padding: 12px; }
+  .quick-list li { margin: 2px 0; }
+  .quick-list li a {
+    display: block;
+    width: 100%;
+    padding: 9px 8px;
+    border-radius: 12px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 14px;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    -webkit-transition: background .2s ease, color .2s ease;
+    transition: background .2s ease, color .2s ease;
+  }
+  .quick-list li a:hover { background: var(--accent-soft); color: #c7941a; }
+
+  .menu-btn {
+    display: block;
+    position: fixed; top: 16px; left: 16px;
+    z-index: 90;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    border: 2px solid #a8862a;
+    background: rgba(255, 210, 63, .75);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    color: #4a421f;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 4px 4px 0 #a8862a;
+  }
+  .mask {
+    display: none;
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 300px;
+    z-index: 70;
+    background: rgba(140, 115, 40, .35);
+    opacity: 0;
+    pointer-events: none;
+    -webkit-transition: opacity .25s ease;
+    transition: opacity .25s ease;
+  }
+  .mask.show {
+    opacity: 1;
+    display: block;
+    -webkit-transition-delay: .28s;
+    transition-delay: .28s;
+  }
+
+  /* 左侧空间充足(宽且高):正文右移 300px 给抽屉留出左侧空位,不遮挡、无遮罩、点击外面不收起 */
+  @media (min-width: 1280px) and (min-height: 600px) {
+    body { padding-left: 300px; }
+    .mask.show { display: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="game-box">
+    <div class="topbar">
+      <h1>柠檬狂奔</h1>
+      <div class="score">得分 <b id="scoreNum">0</b></div>
+    </div>
+    <div class="stage">
+      <canvas id="game"></canvas>
+      <div class="overlay" id="ovStart">
+        <div class="big-emoji">🍋</div>
+        <div class="big">柠檬狂奔</div>
+        <div class="hint">点击 或 按空格 让柠檬跳起来</div>
+        <button class="btn" id="btnStart">开始</button>
+      </div>
+      <div class="overlay hidden" id="ovOver">
+        <div class="big-emoji">💦</div>
+        <div class="score-line">本局得分 <b id="finalScore">0</b></div>
+        <div class="score-line">最高纪录 <b id="bestScore">0</b></div>
+        <button class="btn" id="btnAgain">再来一次</button>
+      </div>
+    </div>
+  </div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="side-card">
+    <ul class="quick-list">
+      <li><a href="index.html?nointro=1">🏠 回到主页</a></li>
+      <li><a href="index.html?nointro=1#p-projects">哈气项目</a></li>
+      <li><a href="index.html?nointro=1#p-links">友情链接</a></li>
+    </ul>
+  </div>
+  <div class="side-card">
+    <div class="side-head">这是占位</div>
+    <div class="side-body open">
+      <ul>
+        <li><a href="#">哈气哈气</a></li>
+        <li><a href="#">什么什么</a></li>
+        <li><a href="#">汽水日记</a></li>
+      </ul>
+    </div>
+  </div>
+</aside>
+<button class="menu-btn" id="menuBtn" aria-label="打开菜单" aria-expanded="false">🍋</button>
+<div class="mask" id="mask"></div>
+
+<script>
+(function () {
+  var canvas = document.getElementById('game');
+  var ctx = canvas.getContext('2d');
+  var scoreNum = document.getElementById('scoreNum');
+  var ovStart = document.getElementById('ovStart');
+  var ovOver = document.getElementById('ovOver');
+  var finalScore = document.getElementById('finalScore');
+  var bestScore = document.getElementById('bestScore');
+
+  var W = 760, H = 340;
+  var dpr = 1;
+  var groundY = H - 56;
+
+  var state = 'ready';
+  var speed = 4.5;
+  var score = 0;
+  var spawnTimer = 120;
+  var elapsed = 0;
+  var high = 0;
+  var clouds = [
+    { x: 120, y: 70, s: 1.0, v: 0.3 },
+    { x: 420, y: 110, s: 0.7, v: 0.22 },
+    { x: 650, y: 50, s: 1.3, v: 0.36 }
+  ];
+
+  var player = { x: 90, y: 0, r: 21, vy: 0, grounded: true, rot: 0 };
+  var obstacles = [];
+  var bubbles = [];
+  var dust = [];
+  var airTimer = 0;
+  var dustTimer = 0;
+
+  function resize() {
+    var cssW = canvas.clientWidth || 700;
+    var cssH = Math.round(cssW * 340 / 760);
+    dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    canvas.style.height = cssH + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    W = cssW;
+    H = cssH;
+    groundY = H - Math.max(42, H * 0.16);
+  }
+
+  function loadHigh() {
+    try { high = parseInt(localStorage.getItem('lemonHigh'), 10) || 0; } catch (e) { high = 0; }
+  }
+  function saveHigh() {
+    try { localStorage.setItem('lemonHigh', String(high)); } catch (e) {}
+  }
+
+  function start() {
+    state = 'run';
+    speed = 4.5;
+    score = 0;
+    spawnTimer = 110;
+    elapsed = 0;
+    obstacles = [];
+    bubbles = [];
+    dust = [];
+    dustTimer = 0;
+    player.y = groundY - player.r;
+    player.vy = 0;
+    player.grounded = true;
+    player.rot = 0;
+    ovStart.classList.add('hidden');
+    ovOver.classList.add('hidden');
+  }
+
+  function gameOver() {
+    state = 'over';
+    if (Math.floor(score) > high) {
+      high = Math.floor(score);
+      saveHigh();
+    }
+    finalScore.textContent = Math.floor(score);
+    bestScore.textContent = high;
+    ovOver.classList.remove('hidden');
+  }
+
+  function jump() {
+    if (player.grounded) {
+      player.vy = -11.6;
+      player.grounded = false;
+    }
+  }
+
+  function handleTap() {
+    if (state === 'ready' || state === 'over') {
+      start();
+    } else if (state === 'run') {
+      jump();
+    }
+  }
+
+  function spawnBubble(burst) {
+    var n = burst ? 6 : 1;
+    for (var i = 0; i < n; i++) {
+      bubbles.push({
+        x: player.x - player.r * 0.3 + (Math.random() * 18 - 9),
+        y: player.y + player.r * 0.7,
+        r: 3 + Math.random() * 5,
+        vx: Math.random() * 0.6 - 0.3,
+        vy: -(1.1 + Math.random() * 0.9),
+        life: 22 + Math.random() * 12
+      });
+    }
+  }
+
+  function spawnObstacle() {
+    var kinds = [
+      { w: 24, h: 38 },
+      { w: 30, h: 30 },
+      { w: 20, h: 46 }
+    ];
+    var k = kinds[Math.floor(Math.random() * kinds.length)];
+    obstacles.push({ x: W + 20, w: k.w, h: k.h });
+  }
+
+  function spawnDust() {
+    var n = Math.random() < .6 ? 1 : 2;
+    for (var i = 0; i < n; i++) {
+      dust.push({
+        x: player.x - player.r * 0.9 + Math.random() * 8,
+        y: groundY - 2 - Math.random() * 4,
+        r: 2 + Math.random() * 3,
+        vx: -(1.6 + Math.random() * 1.2),
+        vy: -(0.2 + Math.random() * 0.5),
+        life: 16 + Math.random() * 10
+      });
+    }
+  }
+
+  function update(dt) {
+    elapsed += dt;
+    speed = Math.min(10.5, speed + 0.0016 * dt);
+
+    for (var c = 0; c < clouds.length; c++) {
+      clouds[c].x -= clouds[c].v * dt;
+      if (clouds[c].x < -90) { clouds[c].x = W + 90; }
+    }
+
+    if (state === 'run') {
+      score += speed * dt * 0.055;
+      scoreNum.textContent = Math.floor(score);
+
+      if (player.grounded) {
+        player.rot += speed * dt / player.r;
+        dustTimer += dt;
+        if (dustTimer > 5) {
+          dustTimer = 0;
+          spawnDust();
+        }
+      } else {
+        player.vy += 0.55 * dt;
+        player.y += player.vy * dt;
+        if (player.y >= groundY - player.r) {
+          player.y = groundY - player.r;
+          player.grounded = true;
+          spawnBubble(true);
+        }
+        airTimer += dt;
+        if (airTimer > 3) {
+          airTimer = 0;
+          spawnBubble(false);
+        }
+      }
+
+      spawnTimer -= speed * dt;
+      if (spawnTimer <= 0) {
+        spawnObstacle();
+        spawnTimer = 240 + Math.random() * 170;
+      }
+
+      for (var i = obstacles.length - 1; i >= 0; i--) {
+        var ob = obstacles[i];
+        ob.x -= speed * dt;
+        if (ob.x + ob.w < -30) {
+          obstacles.splice(i, 1);
+          continue;
+        }
+        var px = player.x - player.r * 0.45;
+        var py = player.y - player.r * 0.72;
+        var pw = player.r * 0.9;
+        var ph = player.r * 1.45;
+        var ow = ob.w * 0.72;
+        var oh = ob.h * 0.85;
+        if (px < ob.x + ob.w - (ob.w - ow) / 2 && px + pw > ob.x + (ob.w - ow) / 2 &&
+            py < groundY - (ob.h - oh) / 2 && py + ph > groundY - ob.h + (ob.h - oh) / 2) {
+          gameOver();
+        }
+      }
+    }
+
+    for (var b = bubbles.length - 1; b >= 0; b--) {
+      var bu = bubbles[b];
+      bu.x += bu.vx * dt;
+      bu.y += bu.vy * dt;
+      bu.life -= dt;
+      if (bu.life <= 0) { bubbles.splice(b, 1); }
+    }
+
+    for (var d = dust.length - 1; d >= 0; d--) {
+      var du = dust[d];
+      du.x += du.vx * dt;
+      du.y += du.vy * dt;
+      du.life -= dt;
+      if (du.life <= 0) { dust.splice(d, 1); }
+    }
+  }
+
+  function drawCloud(c) {
+    ctx.fillStyle = 'rgba(255, 255, 255, .85)';
+    var s = c.s;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 16 * s, 0, Math.PI * 2);
+    ctx.arc(c.x + 18 * s, c.y - 8 * s, 13 * s, 0, Math.PI * 2);
+    ctx.arc(c.x + 36 * s, c.y, 15 * s, 0, Math.PI * 2);
+    ctx.arc(c.x + 17 * s, c.y + 7 * s, 14 * s, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function roundedRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function drawLemon() {
+    var x = player.x, y = player.y, r = player.r;
+    ctx.save();
+    ctx.translate(x, y);
+    var g = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.15, 0, 0, r);
+    g.addColorStop(0, '#fff6b8');
+    g.addColorStop(0.6, '#ffd23f');
+    g.addColorStop(1, '#efb325');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r, r * 0.95, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(198, 148, 26, .55)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(255, 255, 255, .6)';
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.34, -r * 0.4, r * 0.26, r * 0.14, -0.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.save();
+    ctx.rotate(-Math.PI / 2 + player.rot);
+    ctx.fillStyle = '#7bbf3a';
+    ctx.beginPath();
+    ctx.ellipse(0, -r * 1.04, r * 0.3, r * 0.13, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#5fa02c';
+    ctx.beginPath();
+    ctx.arc(0, -r * 1.16, r * 0.07, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.restore();
+  }
+
+  function drawBubble(b) {
+    ctx.globalAlpha = Math.min(1, b.life / 8) * 0.7;
+    ctx.fillStyle = 'rgba(255, 255, 255, .55)';
+    ctx.strokeStyle = 'rgba(150, 190, 230, .9)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawDust(du) {
+    ctx.globalAlpha = Math.min(1, du.life / 8) * 0.45;
+    ctx.fillStyle = 'rgba(214, 192, 120, 1)';
+    ctx.beginPath();
+    ctx.arc(du.x, du.y, du.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawObstacle(ob) {
+    var x = ob.x, w = ob.w, h = ob.h, y = groundY - h;
+    ctx.fillStyle = '#8fd04e';
+    roundedRect(x, y + 6, w, h - 6, 7);
+    ctx.fill();
+    ctx.fillStyle = '#a8e05f';
+    roundedRect(x, y, w, 12, 6);
+    ctx.fill();
+    ctx.fillStyle = '#7cb93f';
+    roundedRect(x - 8, y + h * 0.3, 7, h * 0.42, 4);
+    ctx.fill();
+    roundedRect(x + w + 1, y + h * 0.18, 7, h * 0.42, 4);
+    ctx.fill();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#fffdf2';
+    ctx.fillRect(0, 0, W, H);
+
+    for (var c = 0; c < clouds.length; c++) { drawCloud(clouds[c]); }
+
+    ctx.fillStyle = 'rgba(184, 217, 60, .28)';
+    ctx.fillRect(0, groundY, W, H - groundY);
+    ctx.strokeStyle = 'rgba(150, 180, 60, .75)';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([12, 9]);
+    ctx.beginPath();
+    ctx.moveTo(0, groundY);
+    ctx.lineTo(W, groundY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    for (var o = 0; o < obstacles.length; o++) { drawObstacle(obstacles[o]); }
+    for (var b = 0; b < bubbles.length; b++) { drawBubble(bubbles[b]); }
+    for (var d = 0; d < dust.length; d++) { drawDust(dust[d]); }
+    if (state !== 'over') { drawLemon(); }
+  }
+
+  function frame(t) {
+    requestAnimationFrame(frame);
+    if (document.hidden) { lastT = t; return; }
+    var dt = Math.min(2.2, (t - lastT) / 16.667 || 1);
+    lastT = t;
+    update(dt);
+    draw();
+  }
+
+  var lastT = 0;
+
+  function downHandler(e) {
+    if (e.cancelable) { e.preventDefault(); }
+    if (sidebar.classList.contains('open')) { return; }
+    handleTap();
+  }
+  canvas.addEventListener('touchstart', downHandler, { passive: false });
+  canvas.addEventListener('mousedown', downHandler);
+
+  document.addEventListener('keydown', function (e) {
+    if (e.keyCode === 32 || e.keyCode === 38) {
+      e.preventDefault();
+      if (!sidebar.classList.contains('open')) { handleTap(); }
+    }
+  });
+
+  document.getElementById('btnStart').addEventListener('click', start);
+  document.getElementById('btnAgain').addEventListener('click', start);
+
+  var sidebar = document.getElementById('sidebar');
+  var mask = document.getElementById('mask');
+  var menuBtn = document.getElementById('menuBtn');
+  function closeDrawer() {
+    sidebar.classList.remove('open');
+    mask.classList.remove('show');
+    menuBtn.setAttribute('aria-expanded', 'false');
+  }
+  function openDrawer() {
+    sidebar.classList.add('open');
+    mask.classList.add('show');
+    menuBtn.setAttribute('aria-expanded', 'true');
+  }
+  menuBtn.addEventListener('click', function () {
+    if (sidebar.classList.contains('open')) {
+      closeDrawer();
+    } else {
+      openDrawer();
+    }
+  });
+  var wideQuery = window.matchMedia('(min-width: 1280px) and (min-height: 600px)');
+  document.addEventListener('click', function (e) {
+    if (wideQuery.matches) return;
+    if (!sidebar.classList.contains('open')) return;
+    var node = e.target;
+    while (node && node !== document) {
+      if (node === sidebar || node === menuBtn) return;
+      node = node.parentNode;
+    }
+    closeDrawer();
+  });
+
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', resize);
+
+  loadHigh();
+  bestScore.textContent = high;
+  resize();
+  player.y = groundY - player.r;
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

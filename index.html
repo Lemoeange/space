@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="Lemorange 的个人主页与柠檬狂奔小游戏">
+<meta name="theme-color" content="#ffd23f">
+<meta property="og:title" content="Lemorange · 柠檬主页">
+<meta property="og:description" content="摸鱼爱好者的个人主页与柠檬狂奔小游戏">
+<meta property="og:type" content="website">
+<meta property="og:image" content="assets/avatar.jpg">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/favicon.png">
+<link rel="preload" href="assets/fonts/ZCOOLQingKeHuangYou-subset.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/title.webp" as="image">
+<link rel="preload" href="assets/bg-summer.webp" as="image">
+<title>Lemorange的主页</title>
+<style>
+  @font-face {
+    font-family: "ZDDJ";
+    src: url("assets/fonts/ZCOOLQingKeHuangYou-subset.woff2") format("woff2"),
+         url("assets/fonts/ZCOOLQingKeHuangYou-subset.woff") format("woff"),
+         url("assets/fonts/ZCOOLQingKeHuangYou-subset.ttf") format("truetype");
+    font-display: swap;
+  }
+  :root {
+    --bg: #fffbeb;
+    --card: #ffffff;
+    --ink: #6b5b1f;
+    --muted: #a89a5e;
+    --line: rgba(214, 192, 120, .35);
+    --accent: #ffd23f;
+    --accent-strong: #ffc71f;
+    --accent-soft: #fff7d1;
+    --lime: #b8d93c;
+    --cream: #fff3c4;
+    --radius: 24px;
+    --font-main: "ZDDJ", "PingFang SC", "Hiragino Sans GB", "Heiti SC", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "微软雅黑", "WenQuanYi Micro Hei", sans-serif;
+    --font-display: "ZDDJ", var(--font-main);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; overflow-y: scroll; }
+  body {
+    font-family: var(--font-main);
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  /* ---------- 主页毛玻璃背景 ---------- */
+  .bg-deco {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at 14% 8%, rgba(255, 210, 63, .55), transparent 46%),
+      radial-gradient(ellipse at 88% 16%, rgba(184, 217, 60, .48), transparent 46%),
+      radial-gradient(ellipse at 85% 88%, rgba(255, 150, 120, .4), transparent 46%),
+      radial-gradient(ellipse at 8% 92%, rgba(255, 230, 128, .55), transparent 46%),
+      var(--bg);
+  }
+  .page { position: relative; z-index: 1; max-width: 980px; margin: 0 auto; padding: 20px 16px 48px; }
+
+  .card {
+    background: rgba(255, 255, 255, .6);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+    border-radius: var(--radius);
+    border: 2px solid var(--line);
+    box-shadow: 6px 6px 0 rgba(224, 200, 110, .35);
+  }
+
+  /* ---------- 柠檬气泡 ---------- */
+  #bubbles {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 90;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .bubble {
+    position: absolute;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 210, 63, .85);
+    background: rgba(255, 255, 255, .55);
+    box-shadow: inset -2px -2px 4px rgba(255, 210, 63, .4);
+    -webkit-animation: bubble-rise 1.6s ease-out forwards;
+    animation: bubble-rise 1.6s ease-out forwards;
+  }
+  @-webkit-keyframes bubble-rise {
+    0% { -webkit-transform: translate(0, 0) scale(1); opacity: .9; }
+    100% { -webkit-transform: translate(var(--dx), -90px) scale(.35); opacity: 0; }
+  }
+  @keyframes bubble-rise {
+    0% { transform: translate(0, 0) scale(1); opacity: .9; }
+    100% { transform: translate(var(--dx), -90px) scale(.35); opacity: 0; }
+  }
+
+  .profile { overflow: hidden; position: relative; }
+  .cover {
+    height: 168px;
+    background: linear-gradient(120deg, #fff3b0, #ffd23f 55%, #d3f26a);
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before {
+    content: "🍋";
+    position: absolute;
+    top: 18px; left: 12%;
+    font-size: 34px;
+    opacity: .85;
+  }
+  .cover::after {
+    content: "🍋";
+    position: absolute;
+    bottom: 22px; right: 10%;
+    font-size: 44px;
+    opacity: .85;
+  }
+  .profile-row { padding: 0 24px 24px; }
+  .avatar {
+    width: 98px; height: 98px;
+    margin-top: -50px;
+    border-radius: 50%;
+    padding: 5px;
+    background: var(--card);
+    border: 2px dashed var(--accent);
+    position: relative;
+    z-index: 2;
+  }
+  .avatar img { width: 100%; height: 100%; border-radius: 50%; display: block; object-fit: cover; }
+  .name-row { margin-top: 12px; }
+  .name-row h1 { font-size: 24px; font-weight: 800; display: inline-block; font-family: var(--font-display); }
+  .badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 3px 12px;
+    border-radius: 999px;
+    background: var(--cream);
+    color: #c7941a;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .bio { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 10px; }
+  .meta span { margin-right: 14px; }
+  .btn-row { margin-top: 14px; }
+  .btn {
+    display: inline-block;
+    padding: 9px 22px;
+    border-radius: 999px;
+    border: 2px solid var(--ink);
+    background: var(--card);
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    -webkit-transition: -webkit-transform .15s ease, box-shadow .15s ease;
+    transition: transform .15s ease, box-shadow .15s ease;
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+  .btn + .btn { margin-left: 10px; }
+  .btn.primary {
+    background: linear-gradient(120deg, #fc8bab, #fb7299);
+    border-color: #d14d77;
+    color: #ffffff;
+    box-shadow: 3px 3px 0 #d14d77;
+  }
+  .btn:active { -webkit-transform: translate(2px, 2px); transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+  .profile-about {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 2px dashed var(--line);
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .profile-about p + p { margin-top: 6px; }
+
+  .tabs {
+    display: -webkit-flex; display: flex;
+    margin-top: 16px;
+    padding: 6px;
+    border-radius: 999px;
+    border: 2px solid var(--line);
+    background: rgba(255, 255, 255, .62);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+  }
+  .tab {
+    -webkit-flex: 1; flex: 1;
+    padding: 10px 0;
+    border-radius: 999px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 14.5px;
+    font-weight: 700;
+    cursor: pointer;
+    -webkit-transition: background .2s ease, color .2s ease;
+    transition: background .2s ease, color .2s ease;
+  }
+  .tab.active { background: var(--accent-soft); color: #c7941a; }
+
+  .panels { padding-top: 16px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .post { padding: 20px 24px; }
+  .post + .post { margin-top: 16px; }
+  .post-head { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; }
+  .post-head img { width: 42px; height: 42px; border-radius: 50%; margin-right: 12px; object-fit: cover; border: 2px solid var(--accent-soft); }
+  .post-head picture { margin-right: 12px; }
+  .post-head picture img { margin-right: 0; }
+  .post-head b { display: block; font-size: 14.5px; }
+  .post-head span { color: var(--muted); font-size: 12.5px; }
+  .post p { font-size: 14.5px; margin-top: 12px; }
+  .post-actions { display: -webkit-flex; display: flex; margin-top: 14px; }
+  .post-actions button {
+    margin-right: 24px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 13px;
+    cursor: pointer;
+    -webkit-transition: background .2s ease, color .2s ease;
+    transition: background .2s ease, color .2s ease;
+  }
+  .post-actions button:hover { background: var(--accent-soft); color: #c7941a; }
+
+  .card-link { display: block; text-decoration: none; color: inherit; }
+  .card-link .post-go { margin-top: 12px; color: #c7941a; font-weight: 700; }
+  .card-link:hover .post-go { text-decoration: underline; }
+
+  .layout {
+    display: -webkit-flex; display: flex;
+    -webkit-align-items: flex-start; align-items: flex-start;
+    -webkit-flex-direction: row-reverse; flex-direction: row-reverse;
+    margin-top: 16px;
+  }
+  .main { -webkit-flex: 1; flex: 1; min-width: 0; }
+  .main .tabs { margin-top: 0; }
+
+  /* ---------- 侧栏抽屉(始终为抽屉,从左侧滑出) ---------- */
+  .sidebar {
+    width: 300px;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 80;
+    margin: 0;
+    padding: 76px 16px 16px;
+    background: rgba(255, 255, 255, .97);
+    overflow-y: auto;
+    -webkit-transform: translateX(-100%);
+    transform: translateX(-100%);
+    -webkit-transition: -webkit-transform .28s ease;
+    transition: transform .28s ease;
+    pointer-events: auto;
+  }
+  .sidebar, .sidebar * { pointer-events: auto; }
+  .sidebar.open { -webkit-transform: translateX(0); transform: translateX(0); }
+  .sidebar .side-card + .side-card { margin-top: 12px; }
+  .side-card { padding: 8px 0; }
+  .side-card + .side-card { margin-top: 16px; }
+  .side-head {
+    padding: 14px 20px 4px;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .side-body ul { list-style: none; padding: 4px 12px 12px; }
+  .side-body li { margin: 2px 0; }
+  .side-body li a, .side-body li button {
+    display: block;
+    width: 100%;
+    padding: 9px 8px;
+    border-radius: 12px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 14px;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    -webkit-transition: background .2s ease, color .2s ease;
+    transition: background .2s ease, color .2s ease;
+  }
+  .side-body li a:hover, .side-body li button:hover { background: var(--accent-soft); color: #c7941a; }
+
+  .quick-list { list-style: none; padding: 12px; }
+  .quick-list li { margin: 2px 0; }
+  .quick-list li a {
+    display: block;
+    width: 100%;
+    padding: 9px 8px;
+    border-radius: 12px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 14px;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    -webkit-transition: background .2s ease, color .2s ease;
+    transition: background .2s ease, color .2s ease;
+  }
+  .quick-list li a:hover { background: var(--accent-soft); color: #c7941a; }
+
+  .menu-btn {
+    display: block;
+    position: fixed; top: 16px; left: 16px;
+    z-index: 90;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    border: 2px solid #a8862a;
+    background: rgba(255, 210, 63, .75);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    color: #4a421f;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 4px 4px 0 #a8862a;
+  }
+  .mask {
+    display: none;
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 300px; /* 不覆盖侧栏所在范围 */
+    z-index: 70;
+    background: rgba(140, 115, 40, .35);
+    opacity: 0;
+    pointer-events: none;
+    -webkit-transition: opacity .25s ease;
+    transition: opacity .25s ease;
+  }
+  .mask.show {
+    opacity: 1;
+    display: block;
+    -webkit-transition-delay: .28s; /* 等抽屉完全滑出后再缓缓变暗 */
+    transition-delay: .28s;
+  }
+
+  /* 左侧空间充足(宽且高):正文右移 300px 给抽屉留出左侧空位,不遮挡、无遮罩、点击外面不收起 */
+  @media (min-width: 1280px) and (min-height: 600px) {
+    body { padding-left: 300px; }
+    .mask.show { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bubble { display: none; }
+  }
+
+  /* ---------- 进入过渡页(仅首次进入时显示) ---------- */
+  body.no-scroll { overflow: hidden; }
+  .intro {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 100;
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--bg);
+    -webkit-transition: opacity .9s ease, -webkit-filter .9s ease, -webkit-transform .9s ease;
+    transition: opacity .9s ease, filter .9s ease, transform .9s ease;
+  }
+  .intro.leave {
+    opacity: 0;
+    -webkit-transform: scale(1.06);
+    transform: scale(1.06);
+    -webkit-filter: blur(28px);
+    filter: blur(28px);
+    pointer-events: none;
+  }
+  .intro-bg {
+    position: absolute;
+    top: -4%; left: -4%; right: -4%; bottom: -4%;
+    background: linear-gradient(160deg, #ffd96b, #ffb84f 45%, #ffd58f) center / cover no-repeat;
+    background: url("assets/bg-summer.webp") center / cover no-repeat;
+    -webkit-animation: intro-bg-blur 1.2s ease .3s forwards;
+    animation: intro-bg-blur 1.2s ease .3s forwards;
+  }
+  @-webkit-keyframes intro-bg-blur {
+    from { -webkit-filter: blur(0); }
+    to { -webkit-filter: blur(16px); }
+  }
+  @keyframes intro-bg-blur {
+    from { filter: blur(0); }
+    to { filter: blur(16px); }
+  }
+  .intro-bg::after {
+    content: "";
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+    background: linear-gradient(180deg, rgba(255, 200, 60, .28), rgba(255, 214, 112, .12) 50%, rgba(255, 150, 60, .32));
+  }
+  .intro-content {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 2;
+    display: -webkit-flex; display: flex;
+    -webkit-align-items: center; align-items: center;
+    -webkit-justify-content: center; justify-content: center;
+    padding: 9vh 4vw;
+  }
+  .intro-img img {
+    display: block;
+    max-width: 86vw;
+    max-height: 72vh;
+    width: auto;
+    height: auto;
+    margin: 0 auto;
+    border-radius: 28px;
+    box-shadow: 0 24px 60px rgba(150, 90, 10, .35), 0 8px 24px rgba(150, 90, 10, .25);
+    -webkit-animation: intro-img-in .9s ease .3s both;
+    animation: intro-img-in .9s ease .3s both;
+  }
+  @-webkit-keyframes intro-img-in {
+    from { opacity: 0; -webkit-transform: translateY(22px) scale(.94); }
+    to { opacity: 1; -webkit-transform: translateY(0) scale(1); }
+  }
+  @keyframes intro-img-in {
+    from { opacity: 0; transform: translateY(22px) scale(.94); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .intro-hint {
+    position: absolute;
+    left: 0; right: 0;
+    bottom: 8vh;
+    z-index: 3;
+    text-align: center;
+    font-family: "ZDDJ", "PingFang SC", sans-serif;
+    font-size: 26px;
+    letter-spacing: 8px;
+    color: #fff;
+    text-shadow: 0 3px 14px rgba(160, 90, 10, .5);
+    opacity: 0;
+    -webkit-transition: opacity .5s ease;
+    transition: opacity .5s ease;
+  }
+  .intro-hint.show {
+    opacity: 1;
+    -webkit-animation: hint-pulse 1.6s ease-in-out infinite;
+    animation: hint-pulse 1.6s ease-in-out infinite;
+  }
+  @-webkit-keyframes hint-pulse { 0%, 100% { -webkit-transform: scale(1); } 50% { -webkit-transform: scale(1.06); } }
+  @keyframes hint-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+
+  @media (max-width: 480px) {
+    .intro-content { padding: 7vh 4vw; }
+    .intro-img img { max-height: 62vh; }
+    .intro-hint { font-size: 20px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .intro-bg { -webkit-animation: none; animation: none; }
+    .intro-img img { -webkit-animation: none; animation: none; opacity: 1; }
+    .intro-hint.show { -webkit-animation: none; animation: none; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-deco"></div>
+<div class="intro" id="intro">
+  <div class="intro-bg"></div>
+  <div class="intro-content">
+    <div class="intro-img">
+      <picture>
+        <source srcset="assets/title.webp" type="image/webp">
+        <img src="assets/title-fallback.png" alt="夏日汽水">
+      </picture>
+    </div>
+  </div>
+  <div class="intro-hint" id="introHint">点 击 进 入</div>
+</div>
+<div class="page">
+  <section class="profile card">
+    <div class="cover"></div>
+    <div class="profile-row">
+      <div class="avatar">
+        <img src="assets/avatar.jpg" alt="头像">
+      </div>
+      <div class="name-row">
+        <h1>lemorange</h1>
+        <span class="badge">🍋 摸 鱼 系🍋</span>
+      </div>
+      <p class="bio">摸鱼爱好者。其他称呼：院长柠橙菌，柠檬。</p>
+      <p class="meta">
+        <span>🐱哈气中</span>
+        <span>📅 2003年1月落地</span>
+      </p>
+      <div class="btn-row">
+        <a class="btn primary" href="https://space.bilibili.com/491088100" target="_blank" rel="noopener">B 站</a>
+        <button class="btn">待加入</button>
+      </div>
+      <div class="profile-about">
+        <p>Lemorange：夏日来一杯柠檬气泡水最好了不是吗？</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="layout">
+    <div class="main">
+      <nav class="tabs" role="tablist">
+        <button class="tab active" role="tab" aria-selected="true" data-panel="p-projects">项目</button>
+        <button class="tab" role="tab" aria-selected="false" data-panel="p-links">链接</button>
+      </nav>
+      <div class="panels">
+        <div class="panel active" id="p-projects" role="tabpanel">
+          <a class="card-link" href="lemon-game.html">
+            <div class="post card">
+              <div class="post-head"><img src="assets/game.png" alt=""><div><b>柠檬狂奔</b><span>WEB 游戏</span></div></div>
+              <p>一个简单的小游戏。</p>
+              <p class="post-go">开始游戏 →</p>
+            </div>
+          </a>
+          <a class="card-link" href="minecraft.html" style="margin-top:16px;display:block">
+            <div class="post card">
+              <div class="post-head"><div><b>⛏️ 我的世界 · Web 复刻</b><span>3D 体素沙盒</span></div></div>
+              <p>电影感光影 · 精致水面 · 原版洞穴 · 流动水。</p>
+              <p class="post-go">进入游戏 →</p>
+            </div>
+          </a>
+          <a class="card-link" href="https://qm.qq.com/q/jH3kk15TXi" target="_blank" rel="noopener" style="margin-top:16px;display:block">
+            <div class="post card">
+              <div class="post-head">
+                <picture>
+                  <source srcset="assets/bot.webp" type="image/webp">
+                  <img src="assets/bot.jpg" alt="">
+                </picture>
+                <div><b>指挥使●▛▙指挥使●▛▙</b><span>AI 群友</span></div>
+              </div>
+              <p>一个带 PJSKbot 的 AI 群友。</p>
+              <p class="post-go">点此添加 →</p>
+            </div>
+          </a>
+        </div>
+        <div class="panel" id="p-links" role="tabpanel">
+          <div class="post card">
+            <p>这里还没有内容，敬请期待 🍋</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="side-card card">
+        <ul class="quick-list">
+          <li><a href="index.html?nointro=1">🏠 回到主页</a></li>
+          <li><a href="#p-projects">哈气项目</a></li>
+          <li><a href="#p-links">友情链接</a></li>
+        </ul>
+      </div>
+      <div class="side-card card">
+        <div class="side-head">这是占位</div>
+        <div class="side-body open">
+          <ul>
+            <li><a href="#">哈气哈气</a></li>
+            <li><a href="#">什么什么</a></li>
+            <li><a href="#">汽水日记</a></li>
+          </ul>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer style="text-align:center;color:var(--muted);font-size:13px;margin-top:40px">© 2026 lemorange · 今天也是柠檬味的一天 🍋</footer>
+</div>
+
+<button class="menu-btn" id="menuBtn" aria-label="打开菜单" aria-expanded="false">🍋</button>
+<div class="mask" id="mask"></div>
+<div id="bubbles"></div>
+
+<script>
+(function () {
+  var doc = document;
+
+  /* 进入过渡页:仅首次进入时显示;站内跳转(?nointro=1 或本会话已看过)直接跳过 */
+  var intro = doc.getElementById('intro');
+  if (intro) {
+    var skip = /nointro/.test(location.search);
+    try {
+      if (sessionStorage.getItem('lemonIntroSeen')) { skip = true; } else { sessionStorage.setItem('lemonIntroSeen', '1'); }
+    } catch (e) {}
+    if (skip) {
+      if (intro.parentNode) intro.parentNode.removeChild(intro);
+    } else {
+      var introHint = doc.getElementById('introHint');
+      var reduced = false;
+      try { reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+      var t2 = setTimeout(function () { introHint.classList.add('show'); }, 1200);
+      if (reduced) {
+        clearTimeout(t2);
+        introHint.classList.add('show');
+      } else {
+        doc.body.classList.add('no-scroll');
+      }
+      function leave() {
+        if (intro.classList.contains('leave')) return;
+        intro.classList.add('leave');
+        doc.body.classList.remove('no-scroll');
+        setTimeout(function () { if (intro.parentNode) intro.parentNode.removeChild(intro); }, 1000);
+      }
+      intro.addEventListener('click', leave);
+    }
+  }
+
+  var tabs = doc.querySelectorAll('.tab');
+  function showPanel(id) {
+    for (var j = 0; j < tabs.length; j++) {
+      tabs[j].classList.remove('active');
+      tabs[j].setAttribute('aria-selected', 'false');
+    }
+    for (var j2 = 0; j2 < tabs.length; j2++) {
+      if (tabs[j2].getAttribute('data-panel') === id) {
+        tabs[j2].classList.add('active');
+        tabs[j2].setAttribute('aria-selected', 'true');
+      }
+    }
+    var panels = doc.querySelectorAll('.panel');
+    for (var k = 0; k < panels.length; k++) panels[k].classList.remove('active');
+    var target = doc.getElementById(id);
+    if (target) target.classList.add('active');
+  }
+  for (var i = 0; i < tabs.length; i++) {
+    tabs[i].addEventListener('click', function () {
+      showPanel(this.getAttribute('data-panel'));
+    });
+  }
+  var acts = doc.querySelectorAll('[data-count]');
+  for (var m = 0; m < acts.length; m++) {
+    acts[m].addEventListener('click', function () {
+      var n = parseInt(this.textContent.replace(/[^0-9]/g, ''), 10) || 0;
+      this.textContent = this.textContent.replace(/[^👍💬\s]/g, '') + (n + 1);
+      this.classList.add('on');
+    });
+  }
+  var sidebar = doc.getElementById('sidebar');
+  var mask = doc.getElementById('mask');
+  var menuBtn = doc.getElementById('menuBtn');
+  function closeDrawer() {
+    sidebar.classList.remove('open');
+    mask.classList.remove('show');
+    menuBtn.setAttribute('aria-expanded', 'false');
+  }
+  function openDrawer() {
+    sidebar.classList.add('open');
+    mask.classList.add('show');
+    menuBtn.setAttribute('aria-expanded', 'true');
+  }
+  menuBtn.addEventListener('click', function () {
+    if (sidebar.classList.contains('open')) {
+      closeDrawer();
+    } else {
+      openDrawer();
+    }
+  });
+  /* 空间不足时:点击侧栏外(遮罩区域)收起;侧栏内点击绝不收起 */
+  var wideQuery = window.matchMedia('(min-width: 1280px) and (min-height: 600px)');
+  document.addEventListener('click', function (e) {
+    if (wideQuery.matches) return;
+    if (!sidebar.classList.contains('open')) return;
+    var node = e.target;
+    while (node && node !== document) {
+      if (node === sidebar || node === menuBtn) return;
+      node = node.parentNode;
+    }
+    closeDrawer();
+  });
+
+  /* 侧栏锚点跳转:切面板并(窄屏时)收起抽屉 */
+  var gotoLinks = doc.querySelectorAll('.sidebar a[href^="#"]');
+  for (var gl = 0; gl < gotoLinks.length; gl++) {
+    gotoLinks[gl].addEventListener('click', function () {
+      if (!wideQuery.matches) closeDrawer();
+    });
+  }
+  function applyHash() {
+    var id = location.hash.replace('#', '');
+    if (id && doc.getElementById(id)) showPanel(id);
+  }
+  window.addEventListener('hashchange', applyHash);
+  applyHash();
+
+  /* 柠檬汽水气泡：跟随鼠标/手指出现 */
+  var reduced = false;
+  try { reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+  if (!reduced) {
+    var bubbles = doc.getElementById('bubbles');
+    var last = 0;
+    function spawn(x, y) {
+      var now = Date.now();
+      if (now - last < 70) return;
+      last = now;
+      var count = Math.random() < .5 ? 1 : 2;
+      for (var i = 0; i < count; i++) {
+        var b = doc.createElement('div');
+        b.className = 'bubble';
+        var size = 6 + Math.random() * 10;
+        b.style.width = size + 'px';
+        b.style.height = size + 'px';
+        b.style.left = (x + (Math.random() * 22 - 11)) + 'px';
+        b.style.top = (y + (Math.random() * 14 - 7)) + 'px';
+        b.style.setProperty('--dx', (Math.random() * 40 - 20) + 'px');
+        var dur = 1 + Math.random() * .8;
+        b.style.webkitAnimationDuration = dur + 's';
+        b.style.animationDuration = dur + 's';
+        bubbles.appendChild(b);
+        (function (el) {
+          setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 2200);
+        })(b);
+      }
+    }
+    doc.addEventListener('mousemove', function (e) { spawn(e.clientX, e.clientY); }, false);
+    doc.addEventListener('touchmove', function (e) {
+      if (e.touches.length) spawn(e.touches[0].clientX, e.touches[0].clientY);
+    }, false);
+  }
+})();
+</script>
+</body>
+</html>
