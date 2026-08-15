@@ -2140,7 +2140,7 @@ function killZombie(i) {
   const n = 1 + ((Math.random() * 2) | 0);
   for (let k = 0; k < n; k++) dropItem(B.ROTTEN_FLESH, bx, by, bz);
   zombies.splice(i, 1);
-  playPop();
+  playZombieDeath();
 }
 function updateZombies(dt) {
   const night = timeOfDay >= 0.5;   // 夜晚（日落→日出）
@@ -2244,14 +2244,13 @@ function meleeAttack() {
   let hitAny = false;
   for (let i = zombies.length - 1; i >= 0; i--) {
     const m = zombies[i];
-    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; if (m.hp <= 0) killZombie(i); }
+    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; playZombieHit(); if (m.hp <= 0) killZombie(i); }
   }
   for (let i = animals.length - 1; i >= 0; i--) {
     const m = animals[i];
-    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; if (m.hp <= 0) killAnimal(i); }
+    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; playPop(); if (m.hp <= 0) killAnimal(i); }
   }
   if (hitAny) {
-    playPop();
     const tool = hotbar[selected];
     if (tool && isSword(tool.id) && tool.dur !== undefined) {
       tool.dur--;
@@ -2296,6 +2295,7 @@ function updateHungerBar() {
 function damagePlayer(dmg) {
   if (player.fly) return;   // 飞行模式不受伤害
   player.hp -= dmg;
+  playHurt();
   if (player.hp <= 0) {
     player.hp = 20;                       // 重生
     player.hunger = 20;
@@ -2336,7 +2336,7 @@ function eat(s) {
   refreshHotbar();
   updateHungerBar();
   eatCooldown = 0.5;
-  playPop();
+  playEat();
 }
 
 const keys = {};
@@ -2484,6 +2484,16 @@ function updatePlayer(dt) {
 
   // 轻微头部摆动
   const spd = Math.hypot(player.vel.x, player.vel.z);
+  // 脚步声
+  if (player.onGround && !player.fly && spd > 0.5) {
+    stepTimer -= dt;
+    if (stepTimer <= 0) { stepTimer = player.sprint ? 0.24 : 0.38; playStep(); }
+  } else {
+    stepTimer = 0;
+  }
+  // 入水水花
+  if (water && !wasInWater) playSplash();
+  wasInWater = water;
   bob = THREE.MathUtils.lerp(bob, player.onGround ? spd : 0, Math.min(1, 6 * dt));
   bobT += dt * (6 + spd * 2);
   const bobY = Math.sin(bobT) * 0.05 * Math.min(1, bob / 5);
@@ -2494,6 +2504,7 @@ function updatePlayer(dt) {
   camera.translateX(bobX);
 }
 let bob = 0, bobT = 0;
+let stepTimer = 0, wasInWater = false;
 
 /* ============================ 射线拾取 ============================ */
 function raycast(origin, dir, maxDist) {
@@ -2548,34 +2559,70 @@ function blockHitsPlayer(bx, by, bz) {
 
 /* ============================ 音效 ============================ */
 let audioCtx = null;
-function playPop() {
-  try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const t = audioCtx.currentTime;
-    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    o.type = 'triangle';
-    o.frequency.setValueAtTime(220 + Math.random() * 80, t);
-    o.frequency.exponentialRampToValueAtTime(60, t + 0.08);
-    g.gain.setValueAtTime(0.12, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
-    o.connect(g); g.connect(audioCtx.destination);
-    o.start(t); o.stop(t + 0.1);
-  } catch (e) { /* ignore */ }
+let masterGain = null;
+let noiseBuf = null;
+
+function ensureAudio() {
+  if (!audioCtx) {
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0.8;
+      masterGain.connect(audioCtx.destination);
+    } catch (e) { return false; }
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return true;
 }
-function playBreak() {                       // 工具损坏：低沉碎裂声
-  try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const t = audioCtx.currentTime;
-    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    o.type = 'sawtooth';
-    o.frequency.setValueAtTime(160, t);
-    o.frequency.exponentialRampToValueAtTime(50, t + 0.18);
-    g.gain.setValueAtTime(0.14, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-    o.connect(g); g.connect(audioCtx.destination);
-    o.start(t); o.stop(t + 0.22);
-  } catch (e) { /* ignore */ }
+function ensureNoise() {
+  if (!noiseBuf && audioCtx) {
+    const len = Math.floor(audioCtx.sampleRate * 1.0);
+    noiseBuf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  }
+  return noiseBuf;
 }
+// 短促音调
+function tone(f0, f1, dur, type, vol, delay) {
+  if (!ensureAudio()) return;
+  const t = audioCtx.currentTime + (delay || 0);
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = type || 'triangle';
+  o.frequency.setValueAtTime(f0, t);
+  o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+  g.gain.setValueAtTime(vol || 0.12, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(masterGain);
+  o.start(t); o.stop(t + dur + 0.03);
+}
+// 噪声爆发（复用同一缓冲区，避免每次分配）
+function burst(dur, vol, freq, type, delay) {
+  if (!ensureAudio() || !ensureNoise()) return;
+  const t = audioCtx.currentTime + (delay || 0);
+  const src = audioCtx.createBufferSource();
+  src.buffer = noiseBuf;
+  src.playbackRate.value = 0.8 + Math.random() * 0.4;
+  const f = audioCtx.createBiquadFilter();
+  f.type = type || 'lowpass';
+  f.frequency.value = freq || 800;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(vol || 0.1, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(f); f.connect(g); g.connect(masterGain);
+  src.start(t, Math.random() * 0.25, dur);
+}
+// —— 具体音效 ——
+function playPop() { tone(200 + Math.random() * 90, 60, 0.08, 'triangle', 0.12); }
+function playBreak() { tone(160, 45, 0.18, 'sawtooth', 0.15); }
+function playStep() { burst(0.06, 0.045, 430); }
+function playSplash() { burst(0.28, 0.16, 1300); tone(520, 170, 0.2, 'sine', 0.05); }
+function playEat() { burst(0.05, 0.09, 950); tone(300, 200, 0.07, 'square', 0.045, 0.03); }
+function playHurt() { tone(210, 85, 0.22, 'sawtooth', 0.16); }
+function playZombieHit() { burst(0.07, 0.1, 620); tone(150, 90, 0.1, 'triangle', 0.08); }
+function playZombieDeath() { tone(140, 40, 0.3, 'sawtooth', 0.14); burst(0.2, 0.08, 520); }
+function playGrow() { tone(430, 760, 0.16, 'sine', 0.05); }
+function playClick() { tone(640, 520, 0.05, 'sine', 0.05); }
 
 /* ============================ 热键栏 + 背包 + 物品 ============================ */
 const HOTBAR_SIZE = 9;
@@ -2775,7 +2822,7 @@ function updateCrops(dt) {
     crops.delete(k);
     const p = k.split(',');
     const x = +p[0], y = +p[1], z = +p[2];
-    if (world.getBlock(x, y, z) === B.WHEAT_CROP) world.setBlock(x, y, z, B.WHEAT_CROP_MATURE);
+    if (world.getBlock(x, y, z) === B.WHEAT_CROP) { world.setBlock(x, y, z, B.WHEAT_CROP_MATURE); playGrow(); }
   }
 }
 
@@ -3248,9 +3295,9 @@ document.addEventListener('pointerlockchange', () => {
   if (locked) { started = true; inventoryOpen = false; furnaceOpen = false; }
   refreshOverlays();
 });
-menuEl.addEventListener('click', () => { canvas.requestPointerLock(); });
-document.getElementById('resumeBtn').addEventListener('click', () => { canvas.requestPointerLock(); });
-document.getElementById('homeBtn').addEventListener('click', () => { location.href = './index.html'; });
+menuEl.addEventListener('click', () => { playClick(); canvas.requestPointerLock(); });
+document.getElementById('resumeBtn').addEventListener('click', () => { playClick(); canvas.requestPointerLock(); });
+document.getElementById('homeBtn').addEventListener('click', () => { playClick(); location.href = './index.html'; });
 
 document.addEventListener('mousemove', (e) => {
   if (!locked) return;
