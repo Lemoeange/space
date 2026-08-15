@@ -27,9 +27,9 @@
 
 ## 兼容目标
 
-- **浏览器**：Chrome / Edge / Firefox / Safari 较新版本。
-- **游戏（minecraft.html）**：需浏览器支持 **WebGL2** 与 **ES Module**。
-- **设备**：桌面端完整可用；主页在移动端可浏览，两个游戏需**鼠标 + 键盘**。
+- **主页与柠檬狂奔（`index.html` / `lemon-game.html`）**：兼容 **iOS 14 等老浏览器**，不使用任何新特性（无 ES Module、无 WebGL、无较新的 CSS/JS API），纯静态零依赖。
+- **我的世界（`minecraft.html`）**：**无兼容要求**，需较新浏览器，支持 **WebGL2** 与 **ES Module**。
+- **设备**：主页与柠檬狂奔在桌面 / 移动端均可浏览；我的世界需**鼠标 + 键盘**（桌面端）。
 - **网络**：主页与柠檬狂奔**零外部依赖**；我的世界依赖 Three.js，优先读取本地 `three.module.js`，缺失时自动回退 CDN。
 
 ## 依赖
@@ -38,7 +38,7 @@
 | --- | --- | --- | --- |
 | Three.js | 0.160.0 | minecraft.html 的 3D 渲染 | ✅ 仅 Minecraft 需要 |
 | Node.js | ≥ 18 | start.bat / server.js | ⚠️ 仅本地调试，可换 Python |
-| ZCOOL 清刻黄（字体） | — | 站点标题 / 正文字体 | 已子集化内置在 `assets/` |
+| 黄油体（字体） | — | 站点标题 / 正文字体 | 已子集化内置在 `assets/` |
 
 除 Three.js 核心库外，无任何第三方库或框架。
 
@@ -47,7 +47,7 @@
 - **改主页**：编辑 `index.html`（结构、文案、卡片、侧栏都在一个文件里）。
 - **改游戏**：`lemon-game.html` / `minecraft.html` 各自独立，互不影响。
 - **加图片 / 字体**：放进 `assets/`，用相对路径引用（如 `assets/xxx.png`）。
-- **字体子集化**：站点使用「ZCOOL 清刻黄」子集字体；若需增补字形，用 `subset-font.py` 重新生成子集。
+- **字体子集化**：站点使用「黄油体」拆分出的子集字体；若需增补字形，用 `subset-font.py` 重新生成子集。
 - **本地预览**：双击 `start.bat`（需 Node），或 `python -m http.server 8080` 后访问 <http://localhost:8080>。
 - **同步到线上**：改完后双击 `push.bat`，GitHub Pages 自动更新。
 
@@ -114,4 +114,4 @@ git push -u origin main
 
 ## 子项目：🍋 柠檬狂奔
 
-`lemon-game.html` 是一个简单的小游戏，与主页共用同一套视觉风格（清刻黄字体 + 柠檬配色 + 侧栏）。
+`lemon-game.html` 是一个简单的小游戏，与主页共用同一套视觉风格（黄油体字体 + 柠檬配色 + 侧栏）。
