@@ -2,6 +2,8 @@ import glob
 import sys
 from fontTools.subset import main as subset_main
 
+# 字体：站酷庆科黄油体（ZCOOL QingKe HuangYou），即「黄油体」
+# 文件名沿用原始字体命名，此处仅做子集化拆分
 SRC = "assets/fonts/ZCOOLQingKeHuangYou-Regular.ttf"
 
 def charset():
