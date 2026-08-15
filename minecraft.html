@@ -299,7 +299,8 @@ const B = {
   IRON_PICKAXE:55, IRON_AXE:56, IRON_SHOVEL:57, IRON_SWORD:58,
   WOOD_SWORD:59,
   IRON_INGOT:60, GOLD_INGOT:61, CHARCOAL:62,
-  APPLE:63, WHEAT:64, BREAD:65, PUMPKIN_PIE:66, ROTTEN_FLESH:67, RAW_MEAT:68
+  APPLE:63, WHEAT:64, BREAD:65, PUMPKIN_PIE:66, ROTTEN_FLESH:67, RAW_MEAT:68,
+  WHEAT_CROP:69, WHEAT_CROP_MATURE:70
 };
 
 function mulberry32(a) {
@@ -464,7 +465,7 @@ const { HEIGHT, SEA, B, mulberry32, surfaceHeight, isCave, oreFor, oreNoise, bio
 /* ============================ 常量 ============================ */
 const CHUNK = 16;
 const TILE = 16;
-const ATLAS_TILES = 48;
+const ATLAS_TILES = 50;
 const ATLAS_W = ATLAS_TILES * TILE;
 const AO_LEVELS = [0.55, 0.7, 0.85, 1.0];
 const VIEW_R = 10;        // 视距（chunk 半径，每格 16 块）
@@ -494,6 +495,7 @@ function makeAtlas() {
   T.sugarcane = i++; T.mushroomRed = i++; T.mushroomBrown = i++;
   T.jungleLogSide = i++; T.jungleLeaves = i++; T.acaciaLogSide = i++; T.acaciaLeaves = i++;
   T.pumpkin = i++; T.fern = i++; T.lilyPad = i++; T.furnace = i++;
+  T.wheatCrop = i++; T.wheatMature = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -759,6 +761,19 @@ function makeAtlas() {
     if ((x + y) % 2 === 0) put(T.furnace, x, y, 244, 150, 40);   // 火焰（橙黄闪烁）
     else put(T.furnace, x, y, 250, 92, 36);
   }
+  // —— 小麦幼苗（十字面植物）——
+  plantClear(T.wheatCrop);
+  for (let x = 4; x <= 11; x += 3) {
+    for (let y = 7; y < TILE; y++) put(T.wheatCrop, x, y, 80, 150, 60);
+    put(T.wheatCrop, x + 1, 9, 92, 164, 70);
+  }
+  // —— 成熟小麦（十字面植物，金色）——
+  plantClear(T.wheatMature);
+  for (let x = 4; x <= 11; x += 3) {
+    for (let y = 3; y < TILE; y++) put(T.wheatMature, x, y, 196, 168, 70);
+    put(T.wheatMature, x + 1, 4, 216, 186, 84);
+    put(T.wheatMature, x - 1, 6, 176, 148, 60);
+  }
 
   ctx.putImageData(img, 0, 0);
   // 3D 渲染改用 2D 纹理数组（每 tile 独立一层，配合 RepeatWrapping 可让单个 tile 跨大四边形循环）
@@ -833,6 +848,8 @@ function tileOf(id) {
     case B.FERN: return { top: atlas.T.fern, side: atlas.T.fern, bottom: atlas.T.fern };
     case B.LILY_PAD: return { top: atlas.T.lilyPad, side: atlas.T.lilyPad, bottom: atlas.T.lilyPad };
     case B.FURNACE: return { top: atlas.T.furnace, side: atlas.T.furnace, bottom: atlas.T.furnace };
+    case B.WHEAT_CROP: return { top: atlas.T.wheatCrop, side: atlas.T.wheatCrop, bottom: atlas.T.wheatCrop };
+    case B.WHEAT_CROP_MATURE: return { top: atlas.T.wheatMature, side: atlas.T.wheatMature, bottom: atlas.T.wheatMature };
     default: return { top: atlas.T.stone, side: atlas.T.stone, bottom: atlas.T.stone };
   }
 }
@@ -917,7 +934,7 @@ void main() {
 }`;
 
 // —— 时间与日月方向（昼夜循环）——
-let timeOfDay = 0.30;          // 0..1（0=日出，0.25=正午，0.5=日落，0.75=午夜）
+let timeOfDay = 0.5 / 24;        // 进入游戏即 6:30（0=日出6:00，0.25=正午12:00，0.5=日落18:00，0.75=午夜0:00）
 const DAY_LENGTH = 1440;       // 一昼夜秒数（白天 12 分钟 + 夜晚 12 分钟；现实 1 秒 = 游戏 1 分钟）
 const sunDir = new THREE.Vector3();
 const moonDir = new THREE.Vector3();
@@ -1301,6 +1318,7 @@ function saveWorld() {
       inv: inv.map((s) => (s ? [s.id, s.count, s.dur || 0] : null)),
       selected,
       hunger: player.hunger,
+      crops: Array.from(crops.entries()),
     };
     localStorage.setItem('mc_inv_v1', JSON.stringify(invData));
   } catch (e) { console.warn('[save] 存档失败:', e && e.message); }
@@ -1328,6 +1346,7 @@ function loadWorld() {
       if (Array.isArray(d.inv)) d.inv.forEach((s, i) => { inv[i] = restore(s); });
       if (typeof d.selected === 'number' && d.selected >= 0 && d.selected < HOTBAR_SIZE) selected = d.selected;
       if (typeof d.hunger === 'number') player.hunger = Math.max(0, Math.min(20, d.hunger));
+      if (Array.isArray(d.crops)) { crops.clear(); d.crops.forEach(([k, v]) => crops.set(k, v)); }
       restoredInv = true;
     }
   } catch (e) { console.warn('[load] 读取存档失败:', e && e.message); }
@@ -1833,7 +1852,7 @@ const BLOCK_COLORS = {
   [B.BIRCH_LOG]: 0xd6cab0, [B.SPRUCE_LOG]: 0x543c24, [B.CACTUS]: 0x488e36,
   [B.SUGARCANE]: 0x6eaa46, [B.MUSHROOM_RED]: 0xc83c3c, [B.MUSHROOM_BROWN]: 0x966e46,
   [B.JUNGLE_LOG]: 0x966e46, [B.ACACIA_LOG]: 0xaa7846, [B.PUMPKIN]: 0xdc8c32, [B.FERN]: 0x3c8434, [B.LILY_PAD]: 0x469632,
-  [B.FURNACE]: 0x808080,
+  [B.FURNACE]: 0x808080, [B.WHEAT_CROP]: 0x50a03c, [B.WHEAT_CROP_MATURE]: 0xc4a846,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 function spawnParticles(x, y, z, color, count) {
@@ -2027,7 +2046,7 @@ function spawnAnimal(x, z) {
   }
   g.position.set(x, findGround(Math.floor(x), Math.floor(z)), z);
   scene.add(g);
-  animals.push({ g, legs, x, z, heading: Math.random() * Math.PI * 2, timer: 1 + Math.random() * 3, speed: 0.7 + Math.random() * 0.7, phase: Math.random() * 6, hp: 10, hurtT: 0 });
+  animals.push({ g, legs, x, z, heading: Math.random() * Math.PI * 2, timer: 1 + Math.random() * 3, speed: 0.7 + Math.random() * 0.7, phase: Math.random() * 6, hp: 3, hurtT: 0 });
 }
 function spawnAnimalsNear(cx, cz, count) {
   let spawned = 0;
@@ -2110,7 +2129,7 @@ function spawnZombie(x, z) {
   }
   g.position.set(x, findGround(Math.floor(x), Math.floor(z)), z);
   scene.add(g);
-  zombies.push({ g, legs, x, z, hp: 20, heading: 0, attackTimer: 0, phase: Math.random() * 6, hurtT: 0 });
+  zombies.push({ g, legs, x, z, hp: 3, heading: 0, attackTimer: 0, phase: Math.random() * 6, hurtT: 0 });
 }
 function killZombie(i) {
   const z = zombies[i];
@@ -2326,7 +2345,7 @@ const mouse = { dx: 0, dy: 0, down: [false, false, false] };
 function playerAABB(pos) {
   return { minX: pos.x - player.halfW, maxX: pos.x + player.halfW, minY: pos.y, maxY: pos.y + player.height, minZ: pos.z - player.halfW, maxZ: pos.z + player.halfW };
 }
-function isCrossPlant(id) { return id === B.FLOWER_RED || id === B.FLOWER_YELLOW || id === B.GRASS_TALL || id === B.MUSHROOM_RED || id === B.MUSHROOM_BROWN || id === B.FERN; }
+function isCrossPlant(id) { return id === B.FLOWER_RED || id === B.FLOWER_YELLOW || id === B.GRASS_TALL || id === B.MUSHROOM_RED || id === B.MUSHROOM_BROWN || id === B.FERN || id === B.WHEAT_CROP || id === B.WHEAT_CROP_MATURE; }
 function isLog(id) { return id === B.LOG || id === B.BIRCH_LOG || id === B.SPRUCE_LOG || id === B.JUNGLE_LOG || id === B.ACACIA_LOG; }
 function isLeaf(id) { return id === B.LEAVES || id === B.BIRCH_LEAVES || id === B.SPRUCE_LEAVES || id === B.JUNGLE_LEAVES || id === B.ACACIA_LEAVES; }
 function isTorch(id) { return id === B.TORCH; }
@@ -2645,6 +2664,7 @@ const NAMES = {
   [B.WOOD_SWORD]: '木剑',
   [B.IRON_INGOT]: '铁锭', [B.GOLD_INGOT]: '金锭', [B.CHARCOAL]: '木炭',
   [B.APPLE]: '苹果', [B.WHEAT]: '小麦', [B.BREAD]: '面包', [B.PUMPKIN_PIE]: '南瓜派', [B.ROTTEN_FLESH]: '腐肉', [B.RAW_MEAT]: '生肉',
+  [B.WHEAT_CROP]: '小麦苗', [B.WHEAT_CROP_MATURE]: '成熟小麦',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 // —— 食物：恢复饥饿值 ——
@@ -2728,6 +2748,34 @@ function updateFurnace(dt) {
     }
   } else {
     f.progress = Math.max(0, f.progress - dt * 2);
+  }
+}
+
+// —— 农作物种植（小麦）——
+const crops = new Map();        // "x,y,z" → 已生长秒数
+const GROW_TIME = 15;           // 幼苗到成熟所需秒数
+function plantWheat(px, py, pz, sel) {
+  world.setBlock(px, py, pz, B.WHEAT_CROP);
+  crops.set(px + ',' + py + ',' + pz, 0);
+  sel.count--;
+  if (sel.count <= 0) hotbar[selected] = null;
+  refreshHotbar();
+  spawnParticles(px, py, pz, 0x6ab04a, 6);
+  playPop();
+}
+function updateCrops(dt) {
+  if (crops.size === 0) return;
+  const grown = [];
+  for (const [k, age] of crops) {
+    const na = age + dt;
+    if (na >= GROW_TIME) grown.push(k);
+    else crops.set(k, na);
+  }
+  for (const k of grown) {
+    crops.delete(k);
+    const p = k.split(',');
+    const x = +p[0], y = +p[1], z = +p[2];
+    if (world.getBlock(x, y, z) === B.WHEAT_CROP) world.setBlock(x, y, z, B.WHEAT_CROP_MATURE);
   }
 }
 
@@ -3222,6 +3270,7 @@ const HARDNESS = {
   [B.TORCH]: 0.1, [B.FLOWER_RED]: 0.1, [B.FLOWER_YELLOW]: 0.1, [B.GRASS_TALL]: 0.1,
   [B.MUSHROOM_RED]: 0.1, [B.MUSHROOM_BROWN]: 0.1, [B.FERN]: 0.1, [B.PUMPKIN]: 0.6, [B.LILY_PAD]: 0.05,
   [B.FURNACE]: 2.0,
+  [B.WHEAT_CROP]: 0.1, [B.WHEAT_CROP_MATURE]: 0.1,
 };
 function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
 // 破坏掉落物
@@ -3229,6 +3278,7 @@ function dropOf(id) {
   if (id === B.GRASS) return B.DIRT;         // 草方块掉泥土
   if (id === B.STONE) return B.COBBLE;       // 石头掉圆石
   if (id === B.GRASS_TALL) return B.WHEAT;   // 草丛掉小麦
+  if (id === B.WHEAT_CROP || id === B.WHEAT_CROP_MATURE) return B.WHEAT;   // 作物掉小麦
   if (isLeaf(id)) return null;               // 树叶不掉落（苹果单独判定）
   if (isTool(id) || id === B.STICK || id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL) return null;
   return id;
@@ -3304,6 +3354,11 @@ function updateBreaking(dt) {
     let drop = dropOf(bid);                       // 掉落物
     if (drop === null && isLeaf(bid) && Math.random() < 0.08) drop = B.APPLE;   // 树叶偶尔掉苹果
     if (drop !== null && drop !== undefined) dropItem(drop, bx, by, bz);
+    if (bid === B.WHEAT_CROP_MATURE) {            // 成熟小麦额外多掉小麦（共 2~3）
+      dropItem(B.WHEAT, bx, by, bz);
+      if (Math.random() < 0.5) dropItem(B.WHEAT, bx, by, bz);
+    }
+    if (bid === B.WHEAT_CROP || bid === B.WHEAT_CROP_MATURE) crops.delete(bx + ',' + by + ',' + bz);
     spawnParticles(bx, by, bz, blockColor(bid), 14);
     enqueueAround(bx, by, bz);
     playPop();
@@ -3362,8 +3417,19 @@ function onMousedown(btn) {
   camera.getWorldDirection(dir);
   const sel = hotbar[selected];
   if (btn === 2) { // 放置 / 交互
-    if (sel && isFood(sel.id)) { eat(sel); return; }   // 右键进食
     const hit = raycast(origin, dir, 6);
+    // 小麦：右键草/土 → 种植（优先于进食）
+    if (sel && sel.id === B.WHEAT && hit) {
+      const px = hit.x + hit.n[0], py = hit.y + hit.n[1], pz = hit.z + hit.n[2];
+      if (py >= 0 && py < HEIGHT) {
+        const below = world.getBlock(px, py - 1, pz);
+        if ((below === B.GRASS || below === B.DIRT) && world.getBlock(px, py, pz) === B.AIR && world.getWater(px, py, pz) === 0) {
+          plantWheat(px, py, pz, sel);
+          return;
+        }
+      }
+    }
+    if (sel && isFood(sel.id)) { eat(sel); return; }   // 右键进食
     if (hit && hit.id === B.FURNACE) { openFurnace(); return; }   // 右键熔炉 → 打开冶炼界面
     if (!sel) return;
     const sid = sel.id;
@@ -3473,25 +3539,27 @@ function animate() {
   }
   mouse.dx = 0; mouse.dy = 0;
 
-  if (locked) updatePlayer(dt);   // 暂停时不推进玩家物理，避免松开鼠标后人物继续漂移
-  if (locked) updateBreaking(dt);
-  if (locked) updateHunger(dt);   // 饥饿值仅在游玩时消耗
+  if (locked) {
+    updatePlayer(dt);   // 暂停时不推进玩家物理，避免松开鼠标后人物继续漂移
+    updateBreaking(dt);
+    updateHunger(dt);   // 饥饿值仅在游玩时消耗
+    updateWater(150);
+    updateParticles(dt);
+    updateItems(dt);
+    updateWeather(dt);
+    updateAnimals(dt);
+    updateZombies(dt);
+    updateCrops(dt);
+    // 昼夜推进（未进入游戏/暂停时冻结）
+    timeOfDay = (timeOfDay + dt / DAY_LENGTH) % 1;
+  }
   updateStreaming();
-  updateWater(150);
   updateFurnace(dt);
-  updateParticles(dt);
-  updateItems(dt);
-  updateWeather(dt);
-  updateAnimals(dt);
-  updateZombies(dt);
   if (furnaceOpen) {
     furnaceRefreshT += dt;
     if (furnaceRefreshT >= 0.25) { buildFurnaceUI(); furnaceRefreshT = 0; }
     updateFurnaceBar();
   }
-
-  // 昼夜推进
-  timeOfDay = (timeOfDay + dt / DAY_LENGTH) % 1;
   updateEnvironment(timeOfDay);
 
   // 水体/水下氛围
