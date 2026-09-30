@@ -3,8 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <meta name="description" content="Lemorange 的个人主页与柠檬狂奔小游戏">
-<meta name="theme-color" content="#ffd23f">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#ffd23f" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16130b" media="(prefers-color-scheme: dark)">
 <meta property="og:title" content="Lemorange · 柠檬主页">
 <meta property="og:description" content="摸鱼爱好者的个人主页与柠檬狂奔小游戏">
 <meta property="og:type" content="website">
@@ -12,32 +15,65 @@
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/favicon.png">
 <link rel="preload" href="assets/fonts/ZCOOLQingKeHuangYou-subset.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="assets/title.webp" as="image">
 <link rel="preload" href="assets/bg-summer.webp" as="image">
 <title>Lemorange的主页</title>
 <style>
   @font-face {
     font-family: "ZDDJ";
-    src: url("assets/fonts/ZCOOLQingKeHuangYou-subset.woff2") format("woff2"),
-         url("assets/fonts/ZCOOLQingKeHuangYou-subset.woff") format("woff"),
-         url("assets/fonts/ZCOOLQingKeHuangYou-subset.ttf") format("truetype");
+    src: url("assets/fonts/ZCOOLQingKeHuangYou-subset.woff2") format("woff2");
     font-display: swap;
   }
+
+  /* ---------- 设计令牌:浅色 ---------- */
   :root {
+    color-scheme: light dark;
     --bg: #fffbeb;
     --card: #ffffff;
     --ink: #6b5b1f;
     --muted: #a89a5e;
+    --accent-ink: #c7941a;          /* 强调底色上的文字色 */
     --line: rgba(214, 192, 120, .35);
     --accent: #ffd23f;
     --accent-strong: #ffc71f;
     --accent-soft: #fff7d1;
     --lime: #b8d93c;
     --cream: #fff3c4;
+    --glass: rgba(255, 255, 255, .6);
+    --glass-soft: rgba(255, 255, 255, .97);
+    --shadow: rgba(224, 200, 110, .35);
+    --mask: rgba(140, 115, 40, .35);
+    --deco-1: rgba(255, 210, 63, .55);
+    --deco-2: rgba(184, 217, 60, .48);
+    --deco-3: rgba(255, 150, 120, .4);
+    --deco-4: rgba(255, 230, 128, .55);
     --radius: 24px;
+    --drawer-w: min(300px, 86vw);
     --font-main: "ZDDJ", "PingFang SC", "Hiragino Sans GB", "Heiti SC", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "微软雅黑", "WenQuanYi Micro Hei", sans-serif;
     --font-display: "ZDDJ", var(--font-main);
   }
+
+  /* ---------- 设计令牌:深色(跟随系统) ---------- */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16130b;
+      --card: #262010;
+      --ink: #f2e7c2;
+      --muted: #b3a473;
+      --accent-ink: #ffd76b;
+      --line: rgba(255, 210, 63, .22);
+      --accent-soft: rgba(255, 210, 63, .16);
+      --cream: rgba(255, 210, 63, .18);
+      --glass: rgba(48, 42, 24, .55);
+      --glass-soft: rgba(30, 26, 15, .97);
+      --shadow: rgba(0, 0, 0, .5);
+      --mask: rgba(0, 0, 0, .55);
+      --deco-1: rgba(255, 210, 63, .16);
+      --deco-2: rgba(184, 217, 60, .13);
+      --deco-3: rgba(255, 150, 120, .12);
+      --deco-4: rgba(255, 230, 128, .14);
+    }
+  }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; overflow-y: scroll; }
   body {
@@ -46,34 +82,50 @@
     color: var(--ink);
     line-height: 1.65;
   }
+  img { max-width: 100%; }
+  :focus-visible { outline: 3px solid var(--accent-strong); outline-offset: 2px; border-radius: 6px; }
+
   /* ---------- 主页毛玻璃背景 ---------- */
   .bg-deco {
     position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
+    inset: 0;
     z-index: 0;
     pointer-events: none;
     background:
-      radial-gradient(ellipse at 14% 8%, rgba(255, 210, 63, .55), transparent 46%),
-      radial-gradient(ellipse at 88% 16%, rgba(184, 217, 60, .48), transparent 46%),
-      radial-gradient(ellipse at 85% 88%, rgba(255, 150, 120, .4), transparent 46%),
-      radial-gradient(ellipse at 8% 92%, rgba(255, 230, 128, .55), transparent 46%),
+      radial-gradient(ellipse at 14% 8%, var(--deco-1), transparent 46%),
+      radial-gradient(ellipse at 88% 16%, var(--deco-2), transparent 46%),
+      radial-gradient(ellipse at 85% 88%, var(--deco-3), transparent 46%),
+      radial-gradient(ellipse at 8% 92%, var(--deco-4), transparent 46%),
       var(--bg);
   }
-  .page { position: relative; z-index: 1; max-width: 980px; margin: 0 auto; padding: 20px 16px 48px; }
+  .page {
+    position: relative;
+    z-index: 1;
+    max-width: 980px;
+    margin: 0 auto;
+    padding:
+      max(20px, env(safe-area-inset-top))
+      max(16px, env(safe-area-inset-right))
+      calc(48px + env(safe-area-inset-bottom))
+      max(16px, env(safe-area-inset-left));
+  }
 
   .card {
-    background: rgba(255, 255, 255, .6);
+    background: var(--glass);
     -webkit-backdrop-filter: blur(18px);
     backdrop-filter: blur(18px);
     border-radius: var(--radius);
     border: 2px solid var(--line);
-    box-shadow: 6px 6px 0 rgba(224, 200, 110, .35);
+    box-shadow: 6px 6px 0 var(--shadow);
+  }
+  @supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+    .card, .tabs { background: var(--card); }
   }
 
   /* ---------- 柠檬气泡 ---------- */
   #bubbles {
     position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
+    inset: 0;
     z-index: 90;
     pointer-events: none;
     overflow: hidden;
@@ -84,16 +136,6 @@
     border: 1.5px solid rgba(255, 210, 63, .85);
     background: rgba(255, 255, 255, .55);
     box-shadow: inset -2px -2px 4px rgba(255, 210, 63, .4);
-    -webkit-animation: bubble-rise 1.6s ease-out forwards;
-    animation: bubble-rise 1.6s ease-out forwards;
-  }
-  @-webkit-keyframes bubble-rise {
-    0% { -webkit-transform: translate(0, 0) scale(1); opacity: .9; }
-    100% { -webkit-transform: translate(var(--dx), -90px) scale(.35); opacity: 0; }
-  }
-  @keyframes bubble-rise {
-    0% { transform: translate(0, 0) scale(1); opacity: .9; }
-    100% { transform: translate(var(--dx), -90px) scale(.35); opacity: 0; }
   }
 
   .profile { overflow: hidden; position: relative; }
@@ -137,7 +179,7 @@
     padding: 3px 12px;
     border-radius: 999px;
     background: var(--cream);
-    color: #c7941a;
+    color: var(--accent-ink);
     font-size: 12px;
     font-weight: 700;
   }
@@ -156,7 +198,7 @@
     font-weight: 700;
     cursor: pointer;
     text-decoration: none;
-    -webkit-transition: -webkit-transform .15s ease, box-shadow .15s ease;
+    touch-action: manipulation;
     transition: transform .15s ease, box-shadow .15s ease;
     box-shadow: 3px 3px 0 var(--ink);
   }
@@ -177,9 +219,12 @@
     width: 15px; height: 15px;
     vertical-align: -2px;
     margin-right: 6px;
-    fill: #ffffff;
+    fill: currentColor;
   }
-  .btn:active { -webkit-transform: translate(2px, 2px); transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+  .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+  @media (prefers-color-scheme: dark) {
+    .btn.github { background: #e6edf3; border-color: #8b949e; color: #0d1117; box-shadow: 3px 3px 0 #8b949e; }
+  }
   .profile-about {
     margin-top: 18px;
     padding-top: 16px;
@@ -190,90 +235,98 @@
   .profile-about p + p { margin-top: 6px; }
 
   .tabs {
-    display: -webkit-flex; display: flex;
+    display: flex;
     margin-top: 16px;
     padding: 6px;
     border-radius: 999px;
     border: 2px solid var(--line);
-    background: rgba(255, 255, 255, .62);
+    background: var(--glass);
     -webkit-backdrop-filter: blur(18px);
     backdrop-filter: blur(18px);
   }
   .tab {
-    -webkit-flex: 1; flex: 1;
+    flex: 1;
     padding: 10px 0;
     border-radius: 999px;
     background: none;
     border: none;
     color: var(--muted);
+    font-family: inherit;
     font-size: 14.5px;
     font-weight: 700;
     cursor: pointer;
-    -webkit-transition: background .2s ease, color .2s ease;
+    touch-action: manipulation;
     transition: background .2s ease, color .2s ease;
   }
-  .tab.active { background: var(--accent-soft); color: #c7941a; }
+  .tab.active { background: var(--accent-soft); color: var(--accent-ink); }
 
   .panels { padding-top: 16px; }
-  .panel { display: none; }
-  .panel.active { display: block; }
+  .panel { display: block; scroll-margin-top: 84px; }   /* 侧栏跳转滚到面板时,给固定的菜单按钮留出空间 */
+  .panel[hidden] { display: none; }
+  /* 侧栏跳转后高亮一下目标板块,让"跳到哪了"一目了然 */
+  .panel.flash { animation: panel-flash 1.1s ease-out 1 both; border-radius: var(--radius); }
+  @keyframes panel-flash {
+    from { outline: 3px solid var(--accent-strong); outline-offset: 10px; background: var(--accent-soft); }
+    to { outline: 3px solid transparent; outline-offset: 10px; background: transparent; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .panel.flash { animation: none; outline: 3px solid var(--accent-strong); outline-offset: 10px; }
+  }
 
   .post { padding: 20px 24px; }
   .post + .post { margin-top: 16px; }
-  .post-head { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; }
+  .post-head { display: flex; align-items: center; }
   .post-head img { width: 42px; height: 42px; border-radius: 50%; margin-right: 12px; object-fit: cover; border: 2px solid var(--accent-soft); }
-  .post-head picture { margin-right: 12px; }
-  .post-head picture img { margin-right: 0; }
   .post-head b { display: block; font-size: 14.5px; }
   .post-head span { color: var(--muted); font-size: 12.5px; }
   .post p { font-size: 14.5px; margin-top: 12px; }
-  .post-actions { display: -webkit-flex; display: flex; margin-top: 14px; }
-  .post-actions button {
-    margin-right: 24px;
-    padding: 4px 10px;
-    border-radius: 999px;
-    background: none;
-    border: none;
-    color: var(--muted);
-    font-size: 13px;
-    cursor: pointer;
-    -webkit-transition: background .2s ease, color .2s ease;
-    transition: background .2s ease, color .2s ease;
-  }
-  .post-actions button:hover { background: var(--accent-soft); color: #c7941a; }
 
   .card-link { display: block; text-decoration: none; color: inherit; }
-  .card-link .post-go { margin-top: 12px; color: #c7941a; font-weight: 700; }
+  .card-link .post-go { margin-top: 12px; color: var(--accent-ink); font-weight: 700; }
   .card-link:hover .post-go { text-decoration: underline; }
+  .card-link + .card-link { margin-top: 16px; }
 
   .layout {
-    display: -webkit-flex; display: flex;
-    -webkit-align-items: flex-start; align-items: flex-start;
-    -webkit-flex-direction: row-reverse; flex-direction: row-reverse;
+    display: flex;
+    align-items: flex-start;
+    flex-direction: row-reverse;
     margin-top: 16px;
   }
-  .main { -webkit-flex: 1; flex: 1; min-width: 0; }
+  .main { flex: 1; min-width: 0; }
   .main .tabs { margin-top: 0; }
+  .foot { text-align: center; color: var(--muted); font-size: 13px; margin-top: 40px; }
+
+  /* ---------- 滚动进入动画(渐进增强:JS 不可用时不隐藏任何内容) ---------- */
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      opacity: 0;
+      translate: 0 22px;
+      transition: opacity .55s ease, translate .55s ease;
+    }
+    .reveal.in { opacity: 1; translate: 0 0; }
+  }
 
   /* ---------- 侧栏抽屉(始终为抽屉,从左侧滑出) ---------- */
   .sidebar {
-    width: 300px;
+    width: var(--drawer-w);
     position: fixed;
     top: 0; left: 0; bottom: 0;
     z-index: 80;
     margin: 0;
-    padding: 76px 16px 16px;
-    background: rgba(255, 255, 255, .97);
+    padding:
+      calc(76px + env(safe-area-inset-top))
+      calc(16px + env(safe-area-inset-right))
+      calc(16px + env(safe-area-inset-bottom))
+      calc(16px + env(safe-area-inset-left));
+    background: var(--glass-soft);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
     overflow-y: auto;
-    -webkit-transform: translateX(-100%);
-    transform: translateX(-100%);
-    -webkit-transition: -webkit-transform .28s ease;
-    transition: transform .28s ease;
-    pointer-events: auto;
+    overscroll-behavior: contain;
+    translate: -100% 0;
+    transition: translate .28s ease;
   }
-  .sidebar, .sidebar * { pointer-events: auto; }
-  .sidebar.open { -webkit-transform: translateX(0); transform: translateX(0); }
-  .sidebar .side-card + .side-card { margin-top: 12px; }
+  .sidebar.open { translate: 0 0; }
   .side-card { padding: 8px 0; }
   .side-card + .side-card { margin-top: 16px; }
   .side-head {
@@ -292,14 +345,15 @@
     background: none;
     border: none;
     color: var(--muted);
+    font-family: inherit;
     font-size: 14px;
     text-align: left;
     text-decoration: none;
     cursor: pointer;
-    -webkit-transition: background .2s ease, color .2s ease;
+    touch-action: manipulation;
     transition: background .2s ease, color .2s ease;
   }
-  .side-body li a:hover, .side-body li button:hover { background: var(--accent-soft); color: #c7941a; }
+  .side-body li a:hover, .side-body li button:hover { background: var(--accent-soft); color: var(--accent-ink); }
 
   .quick-list { list-style: none; padding: 12px; }
   .quick-list li { margin: 2px 0; }
@@ -311,18 +365,30 @@
     background: none;
     border: none;
     color: var(--muted);
+    font-family: inherit;
     font-size: 14px;
     text-align: left;
     text-decoration: none;
     cursor: pointer;
-    -webkit-transition: background .2s ease, color .2s ease;
+    touch-action: manipulation;
     transition: background .2s ease, color .2s ease;
   }
-  .quick-list li a:hover { background: var(--accent-soft); color: #c7941a; }
+  .quick-list li a:hover { background: var(--accent-soft); color: var(--accent-ink); }
+
+  /* 占位项:明确显示为不可点,避免"点了没反应"的困惑 */
+  .quick-list li a[aria-disabled="true"],
+  .side-body li a[aria-disabled="true"] {
+    opacity: .5;
+    cursor: default;
+  }
+  .quick-list li a[aria-disabled="true"]:hover,
+  .side-body li a[aria-disabled="true"]:hover { background: none; color: var(--muted); }
 
   .menu-btn {
     display: block;
-    position: fixed; top: 16px; left: 16px;
+    position: fixed;
+    top: calc(16px + env(safe-area-inset-top));
+    left: calc(16px + env(safe-area-inset-left));
     z-index: 90;
     width: 56px; height: 56px;
     border-radius: 50%;
@@ -333,66 +399,54 @@
     color: #4a421f;
     font-size: 24px;
     cursor: pointer;
+    touch-action: manipulation;
     box-shadow: 4px 4px 0 #a8862a;
   }
   .mask {
-    display: none;
     position: fixed;
-    top: 0; right: 0; bottom: 0; left: 300px; /* 不覆盖侧栏所在范围 */
+    top: 0; right: 0; bottom: 0;
+    left: var(--drawer-w);           /* 不覆盖侧栏所在范围 */
     z-index: 70;
-    background: rgba(140, 115, 40, .35);
+    background: var(--mask);
     opacity: 0;
     pointer-events: none;
-    -webkit-transition: opacity .25s ease;
     transition: opacity .25s ease;
   }
-  .mask.show {
-    opacity: 1;
-    display: block;
-    -webkit-transition-delay: .28s; /* 等抽屉完全滑出后再缓缓变暗 */
-    transition-delay: .28s;
-  }
+  .mask.show { opacity: 1; pointer-events: auto; }
 
   /* 左侧空间充足(宽且高):正文右移 300px 给抽屉留出左侧空位,不遮挡、无遮罩、点击外面不收起 */
   @media (min-width: 1280px) and (min-height: 600px) {
-    body { padding-left: 300px; }
-    .mask.show { display: none; }
+    body { padding-left: var(--drawer-w); }
+    .mask { display: none; }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .bubble { display: none; }
+  /* 空间不足时:抽屉是完全的模态层,锁住背景滚动 */
+  @media (max-width: 1279px), (max-height: 599px) {
+    body:has(.sidebar.open) { overflow: hidden; }
   }
 
   /* ---------- 进入过渡页(仅首次进入时显示) ---------- */
   body.no-scroll { overflow: hidden; }
   .intro {
     position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
+    inset: 0;
     z-index: 100;
     overflow: hidden;
     cursor: pointer;
     background: var(--bg);
-    -webkit-transition: opacity .9s ease, -webkit-filter .9s ease, -webkit-transform .9s ease;
-    transition: opacity .9s ease, filter .9s ease, transform .9s ease;
+    transition: opacity .9s ease, filter .9s ease, scale .9s ease;
   }
   .intro.leave {
     opacity: 0;
-    -webkit-transform: scale(1.06);
-    transform: scale(1.06);
-    -webkit-filter: blur(28px);
+    scale: 1.06;
     filter: blur(28px);
     pointer-events: none;
   }
+  .intro:focus-visible { outline-offset: -8px; }
   .intro-bg {
     position: absolute;
-    top: -4%; left: -4%; right: -4%; bottom: -4%;
-    background: linear-gradient(160deg, #ffd96b, #ffb84f 45%, #ffd58f) center / cover no-repeat;
+    inset: -4%;
     background: url("assets/bg-summer.webp") center / cover no-repeat;
-    -webkit-animation: intro-bg-blur 1.2s ease .3s forwards;
     animation: intro-bg-blur 1.2s ease .3s forwards;
-  }
-  @-webkit-keyframes intro-bg-blur {
-    from { -webkit-filter: blur(0); }
-    to { -webkit-filter: blur(16px); }
   }
   @keyframes intro-bg-blur {
     from { filter: blur(0); }
@@ -401,16 +455,16 @@
   .intro-bg::after {
     content: "";
     position: absolute;
-    top: 0; right: 0; bottom: 0; left: 0;
+    inset: 0;
     background: linear-gradient(180deg, rgba(255, 200, 60, .28), rgba(255, 214, 112, .12) 50%, rgba(255, 150, 60, .32));
   }
   .intro-content {
     position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
+    inset: 0;
     z-index: 2;
-    display: -webkit-flex; display: flex;
-    -webkit-align-items: center; align-items: center;
-    -webkit-justify-content: center; justify-content: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 9vh 4vw;
   }
   .intro-img img {
@@ -422,73 +476,67 @@
     margin: 0 auto;
     border-radius: 28px;
     box-shadow: 0 24px 60px rgba(150, 90, 10, .35), 0 8px 24px rgba(150, 90, 10, .25);
-    -webkit-animation: intro-img-in .9s ease .3s both;
     animation: intro-img-in .9s ease .3s both;
   }
-  @-webkit-keyframes intro-img-in {
-    from { opacity: 0; -webkit-transform: translateY(22px) scale(.94); }
-    to { opacity: 1; -webkit-transform: translateY(0) scale(1); }
-  }
   @keyframes intro-img-in {
-    from { opacity: 0; transform: translateY(22px) scale(.94); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
+    from { opacity: 0; translate: 0 22px; scale: .94; }
+    to { opacity: 1; translate: 0 0; scale: 1; }
   }
-
   .intro-hint {
     position: absolute;
     left: 0; right: 0;
-    bottom: 8vh;
+    bottom: calc(8vh + env(safe-area-inset-bottom));
     z-index: 3;
     text-align: center;
-    font-family: "ZDDJ", "PingFang SC", sans-serif;
+    font-family: var(--font-display);
     font-size: 26px;
     letter-spacing: 8px;
     color: #fff;
     text-shadow: 0 3px 14px rgba(160, 90, 10, .5);
     opacity: 0;
-    -webkit-transition: opacity .5s ease;
     transition: opacity .5s ease;
   }
   .intro-hint.show {
     opacity: 1;
-    -webkit-animation: hint-pulse 1.6s ease-in-out infinite;
     animation: hint-pulse 1.6s ease-in-out infinite;
   }
-  @-webkit-keyframes hint-pulse { 0%, 100% { -webkit-transform: scale(1); } 50% { -webkit-transform: scale(1.06); } }
-  @keyframes hint-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+  @keyframes hint-pulse { 0%, 100% { scale: 1; } 50% { scale: 1.06; } }
 
   @media (max-width: 480px) {
     .intro-content { padding: 7vh 4vw; }
     .intro-img img { max-height: 62vh; }
     .intro-hint { font-size: 20px; }
   }
+
   @media (prefers-reduced-motion: reduce) {
-    .intro-bg { -webkit-animation: none; animation: none; }
-    .intro-img img { -webkit-animation: none; animation: none; opacity: 1; }
-    .intro-hint.show { -webkit-animation: none; animation: none; }
+    .bubble { display: none; }
+    .intro-bg, .intro-img img, .intro-hint.show { animation: none; }
+    .intro-img img { opacity: 1; }
+    .sidebar, .mask, .btn, .intro, .tab { transition: none; }
   }
 </style>
 </head>
 <body>
 <div class="bg-deco"></div>
-<div class="intro" id="intro">
+<noscript><style>.intro { display: none; }</style></noscript>
+<div class="intro" id="intro" role="button" tabindex="0" aria-label="点击进入主页">
   <div class="intro-bg"></div>
   <div class="intro-content">
     <div class="intro-img">
       <picture>
-        <source srcset="assets/title.webp" type="image/webp">
-        <img src="assets/title-fallback.png" alt="夏日汽水">
+        <source type="image/avif" srcset="assets/title-700.avif 700w, assets/title-1200.avif 1200w, assets/title-1600.avif 1600w" sizes="86vw">
+        <img src="assets/title.webp" width="1600" height="743" alt="直到网页变成一杯柠檬汽水" fetchpriority="high" decoding="async">
       </picture>
     </div>
   </div>
   <div class="intro-hint" id="introHint">点 击 进 入</div>
 </div>
-<div class="page">
+<div class="page" id="page">
   <section class="profile card">
     <div class="cover"></div>
     <div class="profile-row">
       <div class="avatar">
-        <img src="assets/avatar.jpg" alt="头像">
+        <img src="assets/avatar.jpg" alt="头像" width="150" height="150" decoding="async">
       </div>
       <div class="name-row">
         <h1>lemorange</h1>
@@ -513,33 +561,30 @@
 
   <div class="layout">
     <div class="main">
-      <nav class="tabs" role="tablist">
-        <button class="tab active" role="tab" aria-selected="true" data-panel="p-projects">项目</button>
-        <button class="tab" role="tab" aria-selected="false" data-panel="p-links">链接</button>
+      <nav class="tabs" role="tablist" aria-label="主页内容">
+        <button class="tab active" role="tab" id="tab-p-projects" aria-controls="p-projects" aria-selected="true">项目</button>
+        <button class="tab" role="tab" id="tab-p-links" aria-controls="p-links" aria-selected="false" tabindex="-1">链接</button>
       </nav>
       <div class="panels">
-        <div class="panel active" id="p-projects" role="tabpanel">
-          <a class="card-link" href="lemon-game.html">
+        <div class="panel" id="p-projects" role="tabpanel" aria-labelledby="tab-p-projects" tabindex="0">
+          <a class="card-link" href="lemon-game.html" data-reveal>
             <div class="post card">
-              <div class="post-head"><img src="assets/game.png" alt=""><div><b>柠檬狂奔</b><span>WEB 游戏</span></div></div>
+              <div class="post-head"><img src="assets/game.png" alt="" width="142" height="142" loading="lazy" decoding="async"><div><b>柠檬狂奔</b><span>WEB 游戏</span></div></div>
               <p>一个简单的小游戏。</p>
               <p class="post-go">开始游戏 →</p>
             </div>
           </a>
-          <a class="card-link" href="minecraft.html" style="margin-top:16px;display:block">
+          <a class="card-link" href="minecraft.html" data-reveal>
             <div class="post card">
-              <div class="post-head"><div><b>⛏️ 我的世界 · Web 复刻</b><span>WEB 游戏</span></div></div>
+              <div class="post-head"><img src="assets/mc.png" alt="" width="128" height="128" loading="lazy" decoding="async"><div><b>⛏️ 我的世界 · Web 复刻</b><span>WEB 游戏</span></div></div>
               <p>一个仿mc游戏</p>
               <p class="post-go">进入游戏 →</p>
             </div>
           </a>
-          <a class="card-link" href="https://qm.qq.com/q/jH3kk15TXi" target="_blank" rel="noopener" style="margin-top:16px;display:block">
+          <a class="card-link" href="https://qm.qq.com/q/jH3kk15TXi" target="_blank" rel="noopener" data-reveal>
             <div class="post card">
               <div class="post-head">
-                <picture>
-                  <source srcset="assets/bot.webp" type="image/webp">
-                  <img src="assets/bot.jpg" alt="">
-                </picture>
+                <img src="assets/bot.webp" alt="" width="256" height="256" loading="lazy" decoding="async">
                 <div><b>指挥使●▛▙指挥使●▛▙</b><span>AI 群友</span></div>
               </div>
               <p>一个带 PJSKbot 的 AI 群友。</p>
@@ -547,186 +592,285 @@
             </div>
           </a>
         </div>
-        <div class="panel" id="p-links" role="tabpanel">
-          <div class="post card">
+        <div class="panel" id="p-links" role="tabpanel" aria-labelledby="tab-p-links" tabindex="0" hidden>
+          <div class="post card" data-reveal>
             <p>这里还没有内容，敬请期待 🍋</p>
           </div>
         </div>
       </div>
     </div>
 
-    <aside class="sidebar" id="sidebar">
-      <div class="side-card card">
-        <ul class="quick-list">
-          <li><a href="index.html?nointro=1">🏠 回到主页</a></li>
-          <li><a href="#p-projects">哈气项目</a></li>
-          <li><a href="#p-links">友情链接</a></li>
-        </ul>
-      </div>
-      <div class="side-card card">
-        <div class="side-head">这是占位</div>
-        <div class="side-body open">
-          <ul>
-            <li><a href="#">哈气哈气</a></li>
-            <li><a href="#">什么什么</a></li>
-            <li><a href="#">汽水日记</a></li>
-          </ul>
-        </div>
-      </div>
-    </aside>
   </div>
 
-  <footer style="text-align:center;color:var(--muted);font-size:13px;margin-top:40px">© 2026 lemorange · 今天也是柠檬味的一天 🍋</footer>
+  <footer class="foot">© 2026 lemorange · 今天也是柠檬味的一天 🍋</footer>
 </div>
 
-<button class="menu-btn" id="menuBtn" aria-label="打开菜单" aria-expanded="false">🍋</button>
+<!-- 抽屉刻意放在 #page 之外:窄屏打开抽屉时会把 #page 设为 inert 当模态遮罩,
+     抽屉若在 #page 内会跟着一起失效,表现就是"点了完全没反应"。
+     它本来就是 position: fixed,挪出来不影响布局,顺带让层级回到 body(高于遮罩)。 -->
+<aside class="sidebar" id="sidebar" aria-label="侧边导航" inert>
+  <div class="side-card card">
+    <ul class="quick-list">
+      <li><a href="index.html?nointro=1">🏠 回到主页</a></li>
+      <li><a href="#p-projects">哈气项目</a></li>
+      <li><a href="#p-links">友情链接</a></li>
+    </ul>
+  </div>
+  <div class="side-card card">
+    <div class="side-head">这是占位</div>
+    <div class="side-body open">
+      <ul>
+        <li><a href="#" aria-disabled="true">哈气哈气</a></li>
+        <li><a href="#" aria-disabled="true">什么什么</a></li>
+        <li><a href="#" aria-disabled="true">汽水日记</a></li>
+      </ul>
+    </div>
+  </div>
+</aside>
+<button class="menu-btn" id="menuBtn" aria-label="打开菜单" aria-expanded="false" aria-controls="sidebar">🍋</button>
 <div class="mask" id="mask"></div>
 <div id="bubbles"></div>
 
 <script>
-(function () {
-  var doc = document;
+(() => {
+  const doc = document;
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const sidebar = doc.getElementById('sidebar');
+  const mask = doc.getElementById('mask');
+  const menuBtn = doc.getElementById('menuBtn');
+  const page = doc.getElementById('page');
 
-  /* 进入过渡页:仅首次进入时显示;站内跳转(?nointro=1 或本会话已看过)直接跳过 */
-  var intro = doc.getElementById('intro');
+  /* ---------- 进入过渡页:仅首次进入时显示;站内跳转(?nointro=1 或本会话已看过)直接跳过 ---------- */
+  const intro = doc.getElementById('intro');
   if (intro) {
-    var skip = /nointro/.test(location.search);
+    let skip = location.search.includes('nointro');
     try {
-      if (sessionStorage.getItem('lemonIntroSeen')) { skip = true; } else { sessionStorage.setItem('lemonIntroSeen', '1'); }
-    } catch (e) {}
+      if (sessionStorage.getItem('lemonIntroSeen')) skip = true;
+      else sessionStorage.setItem('lemonIntroSeen', '1');
+    } catch (e) { /* 隐私模式等存储不可用时忽略 */ }
+
     if (skip) {
-      if (intro.parentNode) intro.parentNode.removeChild(intro);
+      intro.remove();
     } else {
-      var introHint = doc.getElementById('introHint');
-      var reduced = false;
-      try { reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
-      var t2 = setTimeout(function () { introHint.classList.add('show'); }, 1200);
-      if (reduced) {
-        clearTimeout(t2);
-        introHint.classList.add('show');
-      } else {
-        doc.body.classList.add('no-scroll');
-      }
-      function leave() {
+      const hint = doc.getElementById('introHint');
+      let hintTimer = 0;
+      const showHint = () => hint.classList.add('show');
+      const leave = () => {
         if (intro.classList.contains('leave')) return;
+        clearTimeout(hintTimer);
+        doc.removeEventListener('keydown', onKey);
         intro.classList.add('leave');
         doc.body.classList.remove('no-scroll');
-        setTimeout(function () { if (intro.parentNode) intro.parentNode.removeChild(intro); }, 1000);
+        setTimeout(() => intro.remove(), reduceMotion.matches ? 0 : 1000);
+      };
+      const onKey = (e) => {
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+          e.preventDefault();
+          leave();
+        }
+      };
+      if (reduceMotion.matches) {
+        showHint();
+      } else {
+        doc.body.classList.add('no-scroll');
+        hintTimer = setTimeout(showHint, 1200);
       }
       intro.addEventListener('click', leave);
+      doc.addEventListener('keydown', onKey);
     }
   }
 
-  var tabs = doc.querySelectorAll('.tab');
-  function showPanel(id) {
-    for (var j = 0; j < tabs.length; j++) {
-      tabs[j].classList.remove('active');
-      tabs[j].setAttribute('aria-selected', 'false');
+  /* ---------- 标签页(遵循 WAI-ARIA tabs 模式:方向键切换) ---------- */
+  const tabs = [...doc.querySelectorAll('.tab')];
+  const panels = [...doc.querySelectorAll('.panel')];
+
+  function selectTab(id, focus) {
+    if (!panels.some((p) => p.id === id)) return;   // 未知 id:别把所有面板都藏起来
+    for (const t of tabs) {
+      const on = t.getAttribute('aria-controls') === id;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+      if (on && focus) t.focus();
     }
-    for (var j2 = 0; j2 < tabs.length; j2++) {
-      if (tabs[j2].getAttribute('data-panel') === id) {
-        tabs[j2].classList.add('active');
-        tabs[j2].setAttribute('aria-selected', 'true');
-      }
-    }
-    var panels = doc.querySelectorAll('.panel');
-    for (var k = 0; k < panels.length; k++) panels[k].classList.remove('active');
-    var target = doc.getElementById(id);
-    if (target) target.classList.add('active');
+    for (const p of panels) p.hidden = p.id !== id;
   }
-  for (var i = 0; i < tabs.length; i++) {
-    tabs[i].addEventListener('click', function () {
-      showPanel(this.getAttribute('data-panel'));
+
+  tabs.forEach((tab, i) => {
+    tab.addEventListener('click', () => selectTab(tab.getAttribute('aria-controls')));
+    tab.addEventListener('keydown', (e) => {
+      const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!step) return;
+      e.preventDefault();
+      const next = tabs[(i + step + tabs.length) % tabs.length];
+      selectTab(next.getAttribute('aria-controls'), true);
     });
-  }
-  var acts = doc.querySelectorAll('[data-count]');
-  for (var m = 0; m < acts.length; m++) {
-    acts[m].addEventListener('click', function () {
-      var n = parseInt(this.textContent.replace(/[^0-9]/g, ''), 10) || 0;
-      this.textContent = this.textContent.replace(/[^👍💬\s]/g, '') + (n + 1);
-      this.classList.add('on');
-    });
-  }
-  var sidebar = doc.getElementById('sidebar');
-  var mask = doc.getElementById('mask');
-  var menuBtn = doc.getElementById('menuBtn');
-  function closeDrawer() {
-    sidebar.classList.remove('open');
-    mask.classList.remove('show');
-    menuBtn.setAttribute('aria-expanded', 'false');
-  }
-  function openDrawer() {
-    sidebar.classList.add('open');
-    mask.classList.add('show');
-    menuBtn.setAttribute('aria-expanded', 'true');
-  }
-  menuBtn.addEventListener('click', function () {
-    if (sidebar.classList.contains('open')) {
-      closeDrawer();
-    } else {
-      openDrawer();
-    }
   });
+
+  /* ---------- 侧栏抽屉 ---------- */
+  const wideQuery = matchMedia('(min-width: 1280px) and (min-height: 600px)');
+  let lastFocus = null;
+
+  /* 唯一的状态同步点:抽屉是否打开、正文是否需要 inert,全部在这里决定 */
+  function syncDrawer() {
+    const open = sidebar.classList.contains('open');
+    sidebar.inert = !open;                          // 收起时不可聚焦、读屏不可见
+    page.inert = open && !wideQuery.matches;        // 窄屏时抽屉是模态层
+    mask.classList.toggle('show', open);
+    menuBtn.setAttribute('aria-expanded', String(open));
+  }
+
+  function openDrawer() {
+    lastFocus = doc.activeElement;
+    sidebar.classList.add('open');
+    syncDrawer();
+    const first = sidebar.querySelector('a, button');
+    if (first) first.focus({ preventScroll: true });
+  }
+
+  function closeDrawer(restoreFocus) {
+    if (!sidebar.classList.contains('open')) return;
+    sidebar.classList.remove('open');
+    syncDrawer();
+    const back = restoreFocus && lastFocus;
+    if (back && back.focus) back.focus({ preventScroll: true });
+    lastFocus = null;
+  }
+
+  menuBtn.addEventListener('click', () => {
+    if (sidebar.classList.contains('open')) closeDrawer(true);
+    else openDrawer();
+  });
+
   /* 空间不足时:点击侧栏外(遮罩区域)收起;侧栏内点击绝不收起 */
-  var wideQuery = window.matchMedia('(min-width: 1280px) and (min-height: 600px)');
-  document.addEventListener('click', function (e) {
+  doc.addEventListener('click', (e) => {
     if (wideQuery.matches) return;
     if (!sidebar.classList.contains('open')) return;
-    var node = e.target;
-    while (node && node !== document) {
-      if (node === sidebar || node === menuBtn) return;
-      node = node.parentNode;
-    }
-    closeDrawer();
+    if (e.target.closest('#sidebar, #menuBtn')) return;
+    closeDrawer(true);
   });
 
-  /* 侧栏锚点跳转:切面板并(窄屏时)收起抽屉 */
-  var gotoLinks = doc.querySelectorAll('.sidebar a[href^="#"]');
-  for (var gl = 0; gl < gotoLinks.length; gl++) {
-    gotoLinks[gl].addEventListener('click', function () {
-      if (!wideQuery.matches) closeDrawer();
+  doc.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeDrawer(true);
+  });
+
+  if (wideQuery.addEventListener) wideQuery.addEventListener('change', syncDrawer);
+  else if (wideQuery.addListener) wideQuery.addListener(syncDrawer);   // 老 WebKit 回退
+  syncDrawer();
+
+  /* 目标板块高亮一下,让"跳到哪了"一目了然 */
+  let flashTimer = 0;
+  function flashPanel(id) {
+    const panel = doc.getElementById(id);
+    if (!panel) return;
+    panel.classList.remove('flash');
+    void panel.offsetWidth;                  // 重启动画
+    panel.classList.add('flash');
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => panel.classList.remove('flash'), 1300);
+  }
+
+  /* 立即把目标板块滚进视野(84px 是给固定菜单按钮留的余量)。
+     用瞬时滚动而不是平滑滚动:平滑滚动在真机上会被抽屉的过渡动画打断,结果就是"看不到跳转"。 */
+  function jumpTo(id) {
+    const panel = doc.getElementById(id);
+    if (!panel) return;
+    const maxY = Math.max(0, doc.documentElement.scrollHeight - window.innerHeight);
+    const y = Math.min(maxY, Math.max(0, panel.getBoundingClientRect().top + window.scrollY - 84));
+    window.scrollTo({ top: y, behavior: 'auto' });
+    flashPanel(id);
+  }
+
+  /* 侧栏里的链接。
+     关键:收起抽屉会让侧栏变成 inert,而 inert 会吃掉"正在派发的这一次点击"的激活行为,
+     于是点了等于没点。所以面板切换当场做掉(不依赖 <a> 默认行为),收起动作推迟到本次事件之后。 */
+  for (const link of sidebar.querySelectorAll('a')) {
+    link.addEventListener('click', (e) => {
+      const href = link.getAttribute('href') || '';
+      if (href.charAt(0) !== '#') {                       // 真跳页:交给浏览器,收起延后
+        if (!wideQuery.matches) setTimeout(() => closeDrawer(false), 0);
+        return;
+      }
+      const id = href.slice(1);
+      e.preventDefault();
+      if (!id || !doc.getElementById(id)) return;        // 占位链接:不跳转,也不收起抽屉
+      selectTab(id);
+      try { history.pushState(null, '', href); } catch (err) { /* 个别环境不允许改地址,忽略 */ }
+      if (wideQuery.matches) {
+        flashPanel(id);                    // 宽屏抽屉不收,只把目标高亮出来
+      } else {
+        closeDrawer(false);                // 先收起抽屉(此时它已在 inert 区域之外,能正常响应)
+        void doc.body.offsetHeight;        // 强制提交样式,保证紧接着的滚动立即生效
+        jumpTo(id);                        // 再立即滚到目标板块
+      }
     });
   }
-  function applyHash() {
-    var id = location.hash.replace('#', '');
-    if (id && doc.getElementById(id)) showPanel(id);
-  }
-  window.addEventListener('hashchange', applyHash);
-  applyHash();
 
-  /* 柠檬汽水气泡：跟随鼠标/手指出现 */
-  var reduced = false;
-  try { reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
-  if (!reduced) {
-    var bubbles = doc.getElementById('bubbles');
-    var last = 0;
-    function spawn(x, y) {
-      var now = Date.now();
-      if (now - last < 70) return;
+  function applyHash() {
+    const id = location.hash.slice(1);
+    if (!id || !doc.getElementById(id)) return;
+    selectTab(id);
+    if (!wideQuery.matches) jumpTo(id);
+  }
+  addEventListener('hashchange', applyHash);
+  applyHash();
+  /* 首次加载就带 hash:即使宽屏也滚过去(原生锚点跳转对当时还 display:none 的面板无效) */
+  if (location.hash.length > 1) jumpTo(location.hash.slice(1));
+
+  /* ---------- 柠檬汽水气泡:跟随鼠标 / 手指出现 ---------- */
+  if (!reduceMotion.matches) {
+    const layer = doc.getElementById('bubbles');
+    const MAX_LIVE = 28;                 // 同时存在的上限,避免快速划动时 DOM 数量失控
+    let last = 0;
+    let live = 0;
+
+    const spawn = (x, y) => {
+      const now = performance.now();
+      if (now - last < 70 || live >= MAX_LIVE) return;
       last = now;
-      var count = Math.random() < .5 ? 1 : 2;
-      for (var i = 0; i < count; i++) {
-        var b = doc.createElement('div');
-        b.className = 'bubble';
-        var size = 6 + Math.random() * 10;
-        b.style.width = size + 'px';
-        b.style.height = size + 'px';
-        b.style.left = (x + (Math.random() * 22 - 11)) + 'px';
-        b.style.top = (y + (Math.random() * 14 - 7)) + 'px';
-        b.style.setProperty('--dx', (Math.random() * 40 - 20) + 'px');
-        var dur = 1 + Math.random() * .8;
-        b.style.webkitAnimationDuration = dur + 's';
-        b.style.animationDuration = dur + 's';
-        bubbles.appendChild(b);
-        (function (el) {
-          setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 2200);
-        })(b);
+      const count = Math.random() < .5 ? 1 : 2;
+      for (let i = 0; i < count; i++) {
+        const el = doc.createElement('div');
+        el.className = 'bubble';
+        const size = 6 + Math.random() * 10;
+        el.style.cssText = `width:${size}px;height:${size}px;` +
+          `left:${x + Math.random() * 22 - 11}px;top:${y + Math.random() * 14 - 7}px`;
+        layer.appendChild(el);
+        live++;
+        const dur = (1 + Math.random() * .8) * 1000;
+        const dx = Math.random() * 40 - 20;
+        const done = () => { el.remove(); live--; };
+        if (el.animate) {
+          /* Web Animations:合成器线程执行,结束即回收,无需定时器 */
+          const anim = el.animate([
+            { transform: 'translate(0, 0) scale(1)', opacity: .9 },
+            { transform: `translate(${dx}px, -90px) scale(.35)`, opacity: 0 }
+          ], { duration: dur, easing: 'ease-out', fill: 'forwards' });
+          anim.onfinish = done;
+        } else {
+          setTimeout(done, dur);
+        }
       }
-    }
-    doc.addEventListener('mousemove', function (e) { spawn(e.clientX, e.clientY); }, false);
-    doc.addEventListener('touchmove', function (e) {
-      if (e.touches.length) spawn(e.touches[0].clientX, e.touches[0].clientY);
-    }, false);
+    };
+
+    doc.addEventListener('pointermove', (e) => spawn(e.clientX, e.clientY), { passive: true });
+  }
+
+  /* ---------- 卡片滚动进入动画 ---------- */
+  const revealTargets = doc.querySelectorAll('[data-reveal]');
+  if (revealTargets.length && 'IntersectionObserver' in window && !reduceMotion.matches) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((entry, i) => {
+        if (!entry.isIntersecting) return;
+        entry.target.style.transitionDelay = (i * 70) + 'ms';
+        entry.target.classList.add('in');
+        io.unobserve(entry.target);
+      });
+    }, { rootMargin: '0px 0px -8% 0px' });
+    revealTargets.forEach((el) => {
+      el.classList.add('reveal');
+      io.observe(el);
+    });
   }
 })();
 </script>

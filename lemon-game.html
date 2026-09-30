@@ -2,9 +2,12 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <meta name="description" content="柠檬狂奔 - 柠檬跳跃小游戏">
-<meta name="theme-color" content="#ffd23f">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#ffd23f" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16130b" media="(prefers-color-scheme: dark)">
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/favicon.png">
 <link rel="preload" href="assets/fonts/ZCOOLQingKeHuangYou-subset.woff2" as="font" type="font/woff2" crossorigin>
@@ -12,75 +15,114 @@
 <style>
   @font-face {
     font-family: "ZDDJ";
-    src: url("assets/fonts/ZCOOLQingKeHuangYou-subset.woff2") format("woff2"),
-         url("assets/fonts/ZCOOLQingKeHuangYou-subset.woff") format("woff"),
-         url("assets/fonts/ZCOOLQingKeHuangYou-subset.ttf") format("truetype");
+    src: url("assets/fonts/ZCOOLQingKeHuangYou-subset.woff2") format("woff2");
     font-display: swap;
   }
+
   :root {
+    color-scheme: light dark;
     --bg: #fffbeb;
     --card: #ffffff;
     --ink: #6b5b1f;
     --muted: #a89a5e;
+    --accent-ink: #c7941a;
     --line: rgba(214, 192, 120, .35);
     --accent: #ffd23f;
-    --lime: #b8d93c;
+    --accent-soft: #fff7d1;
+    --glass-soft: rgba(255, 255, 255, .97);
+    --shadow: rgba(224, 200, 110, .35);
+    --mask: rgba(140, 115, 40, .35);
+    --stage: #fffdf2;
+    --overlay: rgba(255, 251, 235, .85);
+    --drawer-w: min(300px, 86vw);
     --font-main: "ZDDJ", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif;
   }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16130b;
+      --card: #262010;
+      --ink: #f2e7c2;
+      --muted: #b3a473;
+      --accent-ink: #ffd76b;
+      --line: rgba(255, 210, 63, .22);
+      --accent-soft: rgba(255, 210, 63, .16);
+      --glass-soft: rgba(30, 26, 15, .97);
+      --shadow: rgba(0, 0, 0, .5);
+      --mask: rgba(0, 0, 0, .55);
+      --stage: #1b1710;
+      --overlay: rgba(22, 19, 11, .85);
+    }
+  }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { height: 100%; }
   body {
     font-family: var(--font-main);
     background: var(--bg);
     color: var(--ink);
-    display: -webkit-flex; display: flex;
-    -webkit-align-items: center; align-items: center;
-    -webkit-justify-content: center; justify-content: center;
-    padding: 16px;
-    overflow: hidden;
+    display: flex;
+    min-height: 100dvh;
+    padding:
+      max(16px, env(safe-area-inset-top))
+      max(16px, env(safe-area-inset-right))
+      max(16px, env(safe-area-inset-bottom))
+      max(16px, env(safe-area-inset-left));
+    overscroll-behavior: none;       /* 游戏中下拉不触发刷新 */
+    -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     user-select: none;
   }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
   .game-box {
+    margin: auto;                    /* 比 align-items:center 更安全:超屏时可从顶部滚动 */
     width: 100%;
     max-width: 760px;
     background: var(--card);
     border: 2px solid var(--line);
     border-radius: 24px;
-    box-shadow: 6px 6px 0 rgba(224, 200, 110, .35);
+    box-shadow: 6px 6px 0 var(--shadow);
     padding: 16px;
   }
   .topbar {
-    display: -webkit-flex; display: flex;
-    -webkit-align-items: baseline; align-items: baseline;
-    -webkit-justify-content: space-between; justify-content: space-between;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
   }
   .topbar h1 { font-size: 24px; font-weight: 400; letter-spacing: 4px; }
   .topbar .score { font-size: 16px; color: var(--muted); }
   .topbar .score b { color: var(--ink); font-size: 20px; font-weight: 400; }
-  .stage { position: relative; margin-top: 12px; }
+
+  /* .stage 既是画布的定位容器,也是覆盖层的尺寸参照 */
+  .stage { position: relative; margin-top: 12px; touch-action: none; }
   canvas {
     display: block;
     width: 100%;
-    background: #fffdf2;
+    aspect-ratio: 760 / 340;         /* 显示尺寸完全交给 CSS,JS 只同步后备缓冲 */
+    height: auto;
+    background: var(--stage);
     border: 2px solid var(--line);
     border-radius: 16px;
     cursor: pointer;
     touch-action: none;
   }
+  /* 竖屏手机上给柠檬更多腾挪空间,也让覆盖层文字放得下 */
+  @media (max-width: 620px) and (orientation: portrait) {
+    canvas { aspect-ratio: 4 / 3; }
+  }
+
   .overlay {
     position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    display: -webkit-flex; display: flex;
-    -webkit-flex-direction: column; flex-direction: column;
-    -webkit-align-items: center; align-items: center;
-    -webkit-justify-content: center; justify-content: center;
-    background: rgba(255, 251, 235, .85);
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--overlay);
     border-radius: 16px;
     text-align: center;
   }
-  .overlay.hidden { display: none; }
+  .overlay[hidden] { display: none; }
   .big { font-size: 32px; letter-spacing: 6px; }
   .big-emoji { font-size: 56px; }
   .hint { font-size: 14px; color: var(--muted); margin-top: 10px; letter-spacing: 2px; }
@@ -91,48 +133,60 @@
     margin-top: 16px;
     padding: 9px 26px;
     border-radius: 999px;
-    border: 2px solid var(--ink);
+    border: 2px solid #a8862a;
     background: linear-gradient(120deg, #ffd23f, #b8d93c);
-    border-color: #a8862a;
     color: #4a421f;
     font-family: var(--font-main);
     font-size: 15px;
     font-weight: 700;
     letter-spacing: 3px;
     cursor: pointer;
+    touch-action: manipulation;
     box-shadow: 3px 3px 0 #a8862a;
-    -webkit-transition: -webkit-transform .15s ease, box-shadow .15s ease;
     transition: transform .15s ease, box-shadow .15s ease;
   }
-  .btn:active { -webkit-transform: translate(2px, 2px); transform: translate(2px, 2px); box-shadow: 1px 1px 0 #a8862a; }
+  .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #a8862a; }
+
+  /* 矮视口(横屏手机)收紧一些,避免整页被撑出滚动条 */
+  @media (max-height: 520px) {
+    body { padding: 8px; }
+    .game-box { padding: 12px; }
+    .topbar h1 { font-size: 18px; }
+    .big-emoji { font-size: 40px; }
+    .big { font-size: 24px; }
+    .hint { margin-top: 6px; }
+    .btn { margin-top: 10px; padding: 6px 20px; font-size: 13px; }
+  }
 
   /* ---------- 侧栏抽屉(与主页一致,始终为抽屉,左侧滑出) ---------- */
   .sidebar {
-    width: 300px;
+    width: var(--drawer-w);
     position: fixed;
     top: 0; left: 0; bottom: 0;
     z-index: 80;
     margin: 0;
-    padding: 76px 16px 16px;
-    background: rgba(255, 255, 255, .97);
+    padding:
+      calc(76px + env(safe-area-inset-top))
+      calc(16px + env(safe-area-inset-right))
+      calc(16px + env(safe-area-inset-bottom))
+      calc(16px + env(safe-area-inset-left));
+    background: var(--glass-soft);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
     overflow-y: auto;
-    -webkit-transform: translateX(-100%);
-    transform: translateX(-100%);
-    -webkit-transition: -webkit-transform .28s ease;
-    transition: transform .28s ease;
-    pointer-events: auto;
+    overscroll-behavior: contain;
+    translate: -100% 0;
+    transition: translate .28s ease;
   }
-  .sidebar, .sidebar * { pointer-events: auto; }
-  .sidebar.open { -webkit-transform: translateX(0); transform: translateX(0); }
-  .sidebar .side-card + .side-card { margin-top: 12px; }
-  .side-card { padding: 8px 0; background: var(--card); border: 2px solid var(--line); border-radius: 24px; box-shadow: 6px 6px 0 rgba(224, 200, 110, .35); }
+  .sidebar.open { translate: 0 0; }
+  .side-card { padding: 8px 0; background: var(--card); border: 2px solid var(--line); border-radius: 24px; box-shadow: 6px 6px 0 var(--shadow); }
+  .side-card + .side-card { margin-top: 16px; }
   .side-head {
     padding: 14px 20px 4px;
     font-size: 17px;
     font-weight: 700;
     color: var(--ink);
   }
-  .side-body ul { list-style: none; padding: 4px 12px 12px; }
   .side-body ul { list-style: none; padding: 4px 12px 12px; }
   .side-body li { margin: 2px 0; }
   .side-body li a, .side-body li button {
@@ -143,14 +197,15 @@
     background: none;
     border: none;
     color: var(--muted);
+    font-family: inherit;
     font-size: 14px;
     text-align: left;
     text-decoration: none;
     cursor: pointer;
-    -webkit-transition: background .2s ease, color .2s ease;
+    touch-action: manipulation;
     transition: background .2s ease, color .2s ease;
   }
-  .side-body li a:hover, .side-body li button:hover { background: var(--accent-soft); color: #c7941a; }
+  .side-body li a:hover, .side-body li button:hover { background: var(--accent-soft); color: var(--accent-ink); }
 
   .quick-list { list-style: none; padding: 12px; }
   .quick-list li { margin: 2px 0; }
@@ -162,18 +217,30 @@
     background: none;
     border: none;
     color: var(--muted);
+    font-family: inherit;
     font-size: 14px;
     text-align: left;
     text-decoration: none;
     cursor: pointer;
-    -webkit-transition: background .2s ease, color .2s ease;
+    touch-action: manipulation;
     transition: background .2s ease, color .2s ease;
   }
-  .quick-list li a:hover { background: var(--accent-soft); color: #c7941a; }
+  .quick-list li a:hover { background: var(--accent-soft); color: var(--accent-ink); }
+
+  /* 占位项:明确显示为不可点,避免"点了没反应"的困惑 */
+  .quick-list li a[aria-disabled="true"],
+  .side-body li a[aria-disabled="true"] {
+    opacity: .5;
+    cursor: default;
+  }
+  .quick-list li a[aria-disabled="true"]:hover,
+  .side-body li a[aria-disabled="true"]:hover { background: none; color: var(--muted); }
 
   .menu-btn {
     display: block;
-    position: fixed; top: 16px; left: 16px;
+    position: fixed;
+    top: calc(16px + env(safe-area-inset-top));
+    left: calc(16px + env(safe-area-inset-left));
     z-index: 90;
     width: 56px; height: 56px;
     border-radius: 50%;
@@ -184,48 +251,54 @@
     color: #4a421f;
     font-size: 24px;
     cursor: pointer;
+    touch-action: manipulation;
     box-shadow: 4px 4px 0 #a8862a;
   }
   .mask {
-    display: none;
     position: fixed;
-    top: 0; right: 0; bottom: 0; left: 300px;
+    top: 0; right: 0; bottom: 0;
+    left: var(--drawer-w);
     z-index: 70;
-    background: rgba(140, 115, 40, .35);
+    background: var(--mask);
     opacity: 0;
     pointer-events: none;
-    -webkit-transition: opacity .25s ease;
     transition: opacity .25s ease;
   }
-  .mask.show {
-    opacity: 1;
-    display: block;
-    -webkit-transition-delay: .28s;
-    transition-delay: .28s;
-  }
+  .mask.show { opacity: 1; pointer-events: auto; }
 
-  /* 左侧空间充足(宽且高):正文右移 300px 给抽屉留出左侧空位,不遮挡、无遮罩、点击外面不收起 */
   @media (min-width: 1280px) and (min-height: 600px) {
-    body { padding-left: 300px; }
-    .mask.show { display: none; }
+    body { padding-left: calc(var(--drawer-w) + 16px); }
+    .mask { display: none; }
+  }
+  @media (max-width: 1279px), (max-height: 599px) {
+    body:has(.sidebar.open) { overflow: hidden; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sidebar, .mask, .btn { transition: none; }
   }
 </style>
 </head>
 <body>
-  <div class="game-box">
+  <div class="game-box" id="gameBox">
     <div class="topbar">
       <h1>柠檬狂奔</h1>
       <div class="score">得分 <b id="scoreNum">0</b></div>
     </div>
-    <div class="stage">
-      <canvas id="game"></canvas>
+    <div class="stage" id="stage">
+      <canvas id="game" aria-label="柠檬狂奔游戏画面"></canvas>
       <div class="overlay" id="ovStart">
         <div class="big-emoji">🍋</div>
         <div class="big">柠檬狂奔</div>
         <div class="hint">点击 或 按空格 让柠檬跳起来</div>
         <button class="btn" id="btnStart">开始</button>
       </div>
-      <div class="overlay hidden" id="ovOver">
+      <div class="overlay" id="ovPause" hidden>
+        <div class="big-emoji">⏸️</div>
+        <div class="big">已 暂 停</div>
+        <div class="hint">点击 或 按空格 继续</div>
+        <button class="btn" id="btnResume">继续</button>
+      </div>
+      <div class="overlay" id="ovOver" hidden>
         <div class="big-emoji">💦</div>
         <div class="score-line">本局得分 <b id="finalScore">0</b></div>
         <div class="score-line">最高纪录 <b id="bestScore">0</b></div>
@@ -234,7 +307,7 @@
     </div>
   </div>
 
-<aside class="sidebar" id="sidebar">
+<aside class="sidebar" id="sidebar" aria-label="侧边导航" inert>
   <div class="side-card">
     <ul class="quick-list">
       <li><a href="index.html?nointro=1">🏠 回到主页</a></li>
@@ -246,96 +319,161 @@
     <div class="side-head">这是占位</div>
     <div class="side-body open">
       <ul>
-        <li><a href="#">哈气哈气</a></li>
-        <li><a href="#">什么什么</a></li>
-        <li><a href="#">汽水日记</a></li>
+        <li><a href="#" aria-disabled="true">哈气哈气</a></li>
+        <li><a href="#" aria-disabled="true">什么什么</a></li>
+        <li><a href="#" aria-disabled="true">汽水日记</a></li>
       </ul>
     </div>
   </div>
 </aside>
-<button class="menu-btn" id="menuBtn" aria-label="打开菜单" aria-expanded="false">🍋</button>
+<button class="menu-btn" id="menuBtn" aria-label="打开菜单" aria-expanded="false" aria-controls="sidebar">🍋</button>
 <div class="mask" id="mask"></div>
 
 <script>
-(function () {
-  var canvas = document.getElementById('game');
-  var ctx = canvas.getContext('2d');
-  var scoreNum = document.getElementById('scoreNum');
-  var ovStart = document.getElementById('ovStart');
-  var ovOver = document.getElementById('ovOver');
-  var finalScore = document.getElementById('finalScore');
-  var bestScore = document.getElementById('bestScore');
+(() => {
+  const doc = document;
+  const canvas = doc.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const stage = doc.getElementById('stage');
+  const scoreNum = doc.getElementById('scoreNum');
+  const ovStart = doc.getElementById('ovStart');
+  const ovPause = doc.getElementById('ovPause');
+  const ovOver = doc.getElementById('ovOver');
+  const finalScore = doc.getElementById('finalScore');
+  const bestScore = doc.getElementById('bestScore');
+  const sidebar = doc.getElementById('sidebar');
+  const mask = doc.getElementById('mask');
+  const menuBtn = doc.getElementById('menuBtn');
+  const gameBox = doc.getElementById('gameBox');
 
-  var W = 760, H = 340;
-  var dpr = 1;
-  var groundY = H - 56;
+  const STEP = 1000 / 60;          // 固定步长:一步等于原实现里的 dt=1
+  const MAX_STEPS = 5;             // 单帧最多补算几步,长时间卡顿后不会突然加速
+  const MAX_DPR = 2;               // 3x 屏只留 2x 后备缓冲,少一半像素
 
-  var state = 'ready';
-  var speed = 4.5;
-  var score = 0;
-  var spawnTimer = 120;
-  var elapsed = 0;
-  var high = 0;
-  var clouds = [
+  let W = 760, H = 340;
+  let groundY = H - 56;
+  let state = 'ready';
+  let paused = false;
+  let speed = 4.5;
+  let score = 0;
+  let spawnTimer = 120;
+  let high = 0;
+  let lastT = 0;
+  let acc = 0;
+  let shownScore = -1;
+  let lemonGrad = null;            // 柠檬径向渐变只创建一次
+
+  const clouds = [
     { x: 120, y: 70, s: 1.0, v: 0.3 },
     { x: 420, y: 110, s: 0.7, v: 0.22 },
     { x: 650, y: 50, s: 1.3, v: 0.36 }
   ];
+  const player = { x: 90, y: 0, r: 21, vy: 0, grounded: true, rot: 0 };
+  let obstacles = [];
+  let bubbles = [];
+  let dust = [];
+  let airTimer = 0;
+  let dustTimer = 0;
 
-  var player = { x: 90, y: 0, r: 21, vy: 0, grounded: true, rot: 0 };
-  var obstacles = [];
-  var bubbles = [];
-  var dust = [];
-  var airTimer = 0;
-  var dustTimer = 0;
+  /* ---------- 画面配色:跟随系统深浅色 ---------- */
+  const darkQuery = matchMedia('(prefers-color-scheme: dark)');
+  const PAL = {};
+  function readPalette() {
+    Object.assign(PAL, darkQuery.matches ? {
+      sky: '#1b1710',
+      ground: 'rgba(184, 217, 60, .16)',
+      groundLine: 'rgba(184, 217, 60, .5)',
+      cloud: 'rgba(255, 236, 190, .16)',
+      dust: 'rgba(214, 192, 120, .5)',
+      bubbleFill: 'rgba(255, 255, 255, .16)',
+      bubbleStroke: 'rgba(150, 190, 230, .55)'
+    } : {
+      sky: '#fffdf2',
+      ground: 'rgba(184, 217, 60, .28)',
+      groundLine: 'rgba(150, 180, 60, .75)',
+      cloud: 'rgba(255, 255, 255, .85)',
+      dust: 'rgba(214, 192, 120, 1)',
+      bubbleFill: 'rgba(255, 255, 255, .55)',
+      bubbleStroke: 'rgba(150, 190, 230, .9)'
+    });
+    lemonGrad = null;
+  }
+  readPalette();
 
+  /* ---------- 画布尺寸:CSS 决定显示尺寸,这里只同步后备缓冲 ---------- */
   function resize() {
-    var cssW = canvas.clientWidth || 700;
-    var cssH = Math.round(cssW * 340 / 760);
-    dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(cssW * dpr);
-    canvas.height = Math.round(cssH * dpr);
-    canvas.style.height = cssH + 'px';
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+    const cssW = Math.max(1, Math.round(canvas.clientWidth));
+    const cssH = Math.max(1, Math.round(canvas.clientHeight));
+    const bw = Math.round(cssW * dpr);
+    const bh = Math.round(cssH * dpr);
+    if (canvas.width !== bw || canvas.height !== bh) {
+      canvas.width = bw;
+      canvas.height = bh;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      lemonGrad = null;
+    }
     W = cssW;
     H = cssH;
     groundY = H - Math.max(42, H * 0.16);
+    if (state === 'run') {
+      if (player.grounded) player.y = groundY - player.r;
+      else player.y = Math.min(player.y, groundY - player.r);
+    } else {
+      player.y = groundY - player.r;
+    }
   }
 
   function loadHigh() {
     try { high = parseInt(localStorage.getItem('lemonHigh'), 10) || 0; } catch (e) { high = 0; }
   }
   function saveHigh() {
-    try { localStorage.setItem('lemonHigh', String(high)); } catch (e) {}
+    try { localStorage.setItem('lemonHigh', String(high)); } catch (e) { /* 忽略 */ }
   }
 
   function start() {
     state = 'run';
+    paused = false;
     speed = 4.5;
     score = 0;
+    shownScore = -1;
     spawnTimer = 110;
-    elapsed = 0;
     obstacles = [];
     bubbles = [];
     dust = [];
     dustTimer = 0;
-    player.y = groundY - player.r;
+    airTimer = 0;
+    acc = 0;
+    lastT = 0;
     player.vy = 0;
     player.grounded = true;
     player.rot = 0;
-    ovStart.classList.add('hidden');
-    ovOver.classList.add('hidden');
+    player.y = groundY - player.r;
+    ovStart.hidden = true;
+    ovOver.hidden = true;
+    ovPause.hidden = true;
+    /* 松开按钮焦点,这样接着按空格是"跳跃"而不是"再点一次按钮" */
+    if (doc.activeElement && doc.activeElement.blur) doc.activeElement.blur();
   }
 
   function gameOver() {
     state = 'over';
+    paused = false;
+    ovPause.hidden = true;
     if (Math.floor(score) > high) {
       high = Math.floor(score);
       saveHigh();
     }
     finalScore.textContent = Math.floor(score);
     bestScore.textContent = high;
-    ovOver.classList.remove('hidden');
+    ovOver.hidden = false;
+  }
+
+  function setPaused(on) {
+    if (state !== 'run' || paused === on) return;
+    paused = on;
+    acc = 0;
+    ovPause.hidden = !on;
   }
 
   function jump() {
@@ -346,16 +484,14 @@
   }
 
   function handleTap() {
-    if (state === 'ready' || state === 'over') {
-      start();
-    } else if (state === 'run') {
-      jump();
-    }
+    if (paused) { setPaused(false); return; }
+    if (state === 'ready' || state === 'over') start();
+    else if (state === 'run') jump();
   }
 
   function spawnBubble(burst) {
-    var n = burst ? 6 : 1;
-    for (var i = 0; i < n; i++) {
+    const n = burst ? 6 : 1;
+    for (let i = 0; i < n; i++) {
       bubbles.push({
         x: player.x - player.r * 0.3 + (Math.random() * 18 - 9),
         y: player.y + player.r * 0.7,
@@ -368,18 +504,18 @@
   }
 
   function spawnObstacle() {
-    var kinds = [
+    const kinds = [
       { w: 24, h: 38 },
       { w: 30, h: 30 },
       { w: 20, h: 46 }
     ];
-    var k = kinds[Math.floor(Math.random() * kinds.length)];
+    const k = kinds[Math.floor(Math.random() * kinds.length)];
     obstacles.push({ x: W + 20, w: k.w, h: k.h });
   }
 
   function spawnDust() {
-    var n = Math.random() < .6 ? 1 : 2;
-    for (var i = 0; i < n; i++) {
+    const n = Math.random() < .6 ? 1 : 2;
+    for (let i = 0; i < n; i++) {
       dust.push({
         x: player.x - player.r * 0.9 + Math.random() * 8,
         y: groundY - 2 - Math.random() * 4,
@@ -391,60 +527,64 @@
     }
   }
 
-  function update(dt) {
-    elapsed += dt;
-    speed = Math.min(10.5, speed + 0.0016 * dt);
+  /* 每步固定 1/60 秒:手感与原实现完全一致,但不受屏幕刷新率影响 */
+  function update() {
+    speed = Math.min(10.5, speed + 0.0016);
 
-    for (var c = 0; c < clouds.length; c++) {
-      clouds[c].x -= clouds[c].v * dt;
-      if (clouds[c].x < -90) { clouds[c].x = W + 90; }
+    for (const c of clouds) {
+      c.x -= c.v;
+      if (c.x < -90) c.x = W + 90;
     }
 
     if (state === 'run') {
-      score += speed * dt * 0.055;
-      scoreNum.textContent = Math.floor(score);
+      score += speed * 0.055;
+      const now = Math.floor(score);
+      if (now !== shownScore) {          // 分数真的变了才写 DOM
+        shownScore = now;
+        scoreNum.textContent = now;
+      }
 
       if (player.grounded) {
-        player.rot += speed * dt / player.r;
-        dustTimer += dt;
+        player.rot += speed / player.r;
+        dustTimer++;
         if (dustTimer > 5) {
           dustTimer = 0;
           spawnDust();
         }
       } else {
-        player.vy += 0.55 * dt;
-        player.y += player.vy * dt;
+        player.vy += 0.55;
+        player.y += player.vy;
         if (player.y >= groundY - player.r) {
           player.y = groundY - player.r;
           player.grounded = true;
           spawnBubble(true);
         }
-        airTimer += dt;
+        airTimer++;
         if (airTimer > 3) {
           airTimer = 0;
           spawnBubble(false);
         }
       }
 
-      spawnTimer -= speed * dt;
+      spawnTimer -= speed;
       if (spawnTimer <= 0) {
         spawnObstacle();
         spawnTimer = 240 + Math.random() * 170;
       }
 
-      for (var i = obstacles.length - 1; i >= 0; i--) {
-        var ob = obstacles[i];
-        ob.x -= speed * dt;
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const ob = obstacles[i];
+        ob.x -= speed;
         if (ob.x + ob.w < -30) {
           obstacles.splice(i, 1);
           continue;
         }
-        var px = player.x - player.r * 0.45;
-        var py = player.y - player.r * 0.72;
-        var pw = player.r * 0.9;
-        var ph = player.r * 1.45;
-        var ow = ob.w * 0.72;
-        var oh = ob.h * 0.85;
+        const px = player.x - player.r * 0.45;
+        const py = player.y - player.r * 0.72;
+        const pw = player.r * 0.9;
+        const ph = player.r * 1.45;
+        const ow = ob.w * 0.72;
+        const oh = ob.h * 0.85;
         if (px < ob.x + ob.w - (ob.w - ow) / 2 && px + pw > ob.x + (ob.w - ow) / 2 &&
             py < groundY - (ob.h - oh) / 2 && py + ph > groundY - ob.h + (ob.h - oh) / 2) {
           gameOver();
@@ -452,26 +592,26 @@
       }
     }
 
-    for (var b = bubbles.length - 1; b >= 0; b--) {
-      var bu = bubbles[b];
-      bu.x += bu.vx * dt;
-      bu.y += bu.vy * dt;
-      bu.life -= dt;
-      if (bu.life <= 0) { bubbles.splice(b, 1); }
+    for (let b = bubbles.length - 1; b >= 0; b--) {
+      const bu = bubbles[b];
+      bu.x += bu.vx;
+      bu.y += bu.vy;
+      bu.life--;
+      if (bu.life <= 0) bubbles.splice(b, 1);
     }
 
-    for (var d = dust.length - 1; d >= 0; d--) {
-      var du = dust[d];
-      du.x += du.vx * dt;
-      du.y += du.vy * dt;
-      du.life -= dt;
-      if (du.life <= 0) { dust.splice(d, 1); }
+    for (let d = dust.length - 1; d >= 0; d--) {
+      const du = dust[d];
+      du.x += du.vx;
+      du.y += du.vy;
+      du.life--;
+      if (du.life <= 0) dust.splice(d, 1);
     }
   }
 
   function drawCloud(c) {
-    ctx.fillStyle = 'rgba(255, 255, 255, .85)';
-    var s = c.s;
+    ctx.fillStyle = PAL.cloud;
+    const s = c.s;
     ctx.beginPath();
     ctx.arc(c.x, c.y, 16 * s, 0, Math.PI * 2);
     ctx.arc(c.x + 18 * s, c.y - 8 * s, 13 * s, 0, Math.PI * 2);
@@ -480,8 +620,12 @@
     ctx.fill();
   }
 
-  function roundedRect(x, y, w, h, r) {
+  function roundRectPath(x, y, w, h, r) {
     ctx.beginPath();
+    if (ctx.roundRect) {          // Safari 16.4+ 原生圆角矩形
+      ctx.roundRect(x, y, w, h, r);
+      return;
+    }
     ctx.moveTo(x + r, y);
     ctx.lineTo(x + w - r, y);
     ctx.quadraticCurveTo(x + w, y, x + w, y + r);
@@ -495,14 +639,16 @@
   }
 
   function drawLemon() {
-    var x = player.x, y = player.y, r = player.r;
+    const x = player.x, y = player.y, r = player.r;
     ctx.save();
     ctx.translate(x, y);
-    var g = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.15, 0, 0, r);
-    g.addColorStop(0, '#fff6b8');
-    g.addColorStop(0.6, '#ffd23f');
-    g.addColorStop(1, '#efb325');
-    ctx.fillStyle = g;
+    if (!lemonGrad) {
+      lemonGrad = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.15, 0, 0, r);
+      lemonGrad.addColorStop(0, '#fff6b8');
+      lemonGrad.addColorStop(0.6, '#ffd23f');
+      lemonGrad.addColorStop(1, '#efb325');
+    }
+    ctx.fillStyle = lemonGrad;
     ctx.beginPath();
     ctx.ellipse(0, 0, r, r * 0.95, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -531,8 +677,8 @@
 
   function drawBubble(b) {
     ctx.globalAlpha = Math.min(1, b.life / 8) * 0.7;
-    ctx.fillStyle = 'rgba(255, 255, 255, .55)';
-    ctx.strokeStyle = 'rgba(150, 190, 230, .9)';
+    ctx.fillStyle = PAL.bubbleFill;
+    ctx.strokeStyle = PAL.bubbleStroke;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
@@ -543,7 +689,7 @@
 
   function drawDust(du) {
     ctx.globalAlpha = Math.min(1, du.life / 8) * 0.45;
-    ctx.fillStyle = 'rgba(214, 192, 120, 1)';
+    ctx.fillStyle = PAL.dust;
     ctx.beginPath();
     ctx.arc(du.x, du.y, du.r, 0, Math.PI * 2);
     ctx.fill();
@@ -551,30 +697,30 @@
   }
 
   function drawObstacle(ob) {
-    var x = ob.x, w = ob.w, h = ob.h, y = groundY - h;
+    const x = ob.x, w = ob.w, h = ob.h, y = groundY - h;
     ctx.fillStyle = '#8fd04e';
-    roundedRect(x, y + 6, w, h - 6, 7);
+    roundRectPath(x, y + 6, w, h - 6, 7);
     ctx.fill();
     ctx.fillStyle = '#a8e05f';
-    roundedRect(x, y, w, 12, 6);
+    roundRectPath(x, y, w, 12, 6);
     ctx.fill();
     ctx.fillStyle = '#7cb93f';
-    roundedRect(x - 8, y + h * 0.3, 7, h * 0.42, 4);
+    roundRectPath(x - 8, y + h * 0.3, 7, h * 0.42, 4);
     ctx.fill();
-    roundedRect(x + w + 1, y + h * 0.18, 7, h * 0.42, 4);
+    roundRectPath(x + w + 1, y + h * 0.18, 7, h * 0.42, 4);
     ctx.fill();
   }
 
   function draw() {
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#fffdf2';
+    /* fillStyle 会被云、障碍物、气泡等改掉,所以每帧都要重新指定底色 */
+    ctx.fillStyle = PAL.sky;
     ctx.fillRect(0, 0, W, H);
 
-    for (var c = 0; c < clouds.length; c++) { drawCloud(clouds[c]); }
+    for (const c of clouds) drawCloud(c);
 
-    ctx.fillStyle = 'rgba(184, 217, 60, .28)';
+    ctx.fillStyle = PAL.ground;
     ctx.fillRect(0, groundY, W, H - groundY);
-    ctx.strokeStyle = 'rgba(150, 180, 60, .75)';
+    ctx.strokeStyle = PAL.groundLine;
     ctx.lineWidth = 3;
     ctx.setLineDash([12, 9]);
     ctx.beginPath();
@@ -583,76 +729,124 @@
     ctx.stroke();
     ctx.setLineDash([]);
 
-    for (var o = 0; o < obstacles.length; o++) { drawObstacle(obstacles[o]); }
-    for (var b = 0; b < bubbles.length; b++) { drawBubble(bubbles[b]); }
-    for (var d = 0; d < dust.length; d++) { drawDust(dust[d]); }
-    if (state !== 'over') { drawLemon(); }
+    for (const ob of obstacles) drawObstacle(ob);
+    for (const b of bubbles) drawBubble(b);
+    for (const d of dust) drawDust(d);
+    if (state !== 'over') drawLemon();
   }
 
   function frame(t) {
     requestAnimationFrame(frame);
-    if (document.hidden) { lastT = t; return; }
-    var dt = Math.min(2.2, (t - lastT) / 16.667 || 1);
+    const delta = lastT ? t - lastT : STEP;
     lastT = t;
-    update(dt);
+    if (paused) {
+      acc = 0;
+    } else {
+      acc += delta > 250 ? STEP : delta;   // 从后台切回或长卡顿时不补算
+      let steps = 0;
+      while (acc >= STEP && steps < MAX_STEPS) {
+        update();
+        acc -= STEP;
+        steps++;
+      }
+      if (steps === MAX_STEPS) acc = 0;
+    }
     draw();
   }
 
-  var lastT = 0;
+  /* ---------- 输入 ---------- */
+  stage.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return;      // 按钮有自己的处理器
+    if (e.cancelable) e.preventDefault();
+    if (!sidebar.classList.contains('open')) handleTap();
+  }, { passive: false });
 
-  function downHandler(e) {
-    if (e.cancelable) { e.preventDefault(); }
-    if (sidebar.classList.contains('open')) { return; }
-    handleTap();
-  }
-  canvas.addEventListener('touchstart', downHandler, { passive: false });
-  canvas.addEventListener('mousedown', downHandler);
-
-  document.addEventListener('keydown', function (e) {
-    if (e.keyCode === 32 || e.keyCode === 38) {
+  doc.addEventListener('keydown', (e) => {
+    if (e.target.closest && e.target.closest('button')) return;
+    if (e.code === 'Space' || e.key === 'ArrowUp' || e.key === 'Enter') {
       e.preventDefault();
-      if (!sidebar.classList.contains('open')) { handleTap(); }
+      if (!sidebar.classList.contains('open')) handleTap();
     }
   });
 
-  document.getElementById('btnStart').addEventListener('click', start);
-  document.getElementById('btnAgain').addEventListener('click', start);
+  doc.getElementById('btnStart').addEventListener('click', start);
+  doc.getElementById('btnAgain').addEventListener('click', start);
+  doc.getElementById('btnResume').addEventListener('click', () => setPaused(false));
 
-  var sidebar = document.getElementById('sidebar');
-  var mask = document.getElementById('mask');
-  var menuBtn = document.getElementById('menuBtn');
-  function closeDrawer() {
-    sidebar.classList.remove('open');
-    mask.classList.remove('show');
-    menuBtn.setAttribute('aria-expanded', 'false');
+  doc.addEventListener('visibilitychange', () => {
+    if (doc.hidden) setPaused(true);     // 切走即暂停,回来不会白白撞死
+  });
+
+  /* ---------- 侧栏抽屉 ---------- */
+  const wideQuery = matchMedia('(min-width: 1280px) and (min-height: 600px)');
+  let lastFocus = null;
+
+  function syncDrawer() {
+    const open = sidebar.classList.contains('open');
+    sidebar.inert = !open;
+    gameBox.inert = open && !wideQuery.matches;
+    mask.classList.toggle('show', open);
+    menuBtn.setAttribute('aria-expanded', String(open));
   }
+
   function openDrawer() {
+    lastFocus = doc.activeElement;
     sidebar.classList.add('open');
-    mask.classList.add('show');
-    menuBtn.setAttribute('aria-expanded', 'true');
+    setPaused(true);                     // 抽屉挡住画面时不再继续跑
+    syncDrawer();
+    const first = sidebar.querySelector('a, button');
+    if (first) first.focus({ preventScroll: true });
   }
-  menuBtn.addEventListener('click', function () {
-    if (sidebar.classList.contains('open')) {
-      closeDrawer();
-    } else {
-      openDrawer();
-    }
+
+  function closeDrawer(restoreFocus) {
+    if (!sidebar.classList.contains('open')) return;
+    sidebar.classList.remove('open');
+    syncDrawer();
+    const back = restoreFocus && lastFocus;
+    if (back && back.focus) back.focus({ preventScroll: true });
+    lastFocus = null;
+  }
+
+  menuBtn.addEventListener('click', () => {
+    if (sidebar.classList.contains('open')) closeDrawer(true);
+    else openDrawer();
   });
-  var wideQuery = window.matchMedia('(min-width: 1280px) and (min-height: 600px)');
-  document.addEventListener('click', function (e) {
+
+  doc.addEventListener('click', (e) => {
     if (wideQuery.matches) return;
     if (!sidebar.classList.contains('open')) return;
-    var node = e.target;
-    while (node && node !== document) {
-      if (node === sidebar || node === menuBtn) return;
-      node = node.parentNode;
-    }
-    closeDrawer();
+    if (e.target.closest('#sidebar, #menuBtn')) return;
+    closeDrawer(true);
   });
 
-  window.addEventListener('resize', resize);
-  window.addEventListener('orientationchange', resize);
+  doc.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeDrawer(true);
+  });
 
+  if (wideQuery.addEventListener) wideQuery.addEventListener('change', syncDrawer);
+  else if (wideQuery.addListener) wideQuery.addListener(syncDrawer);   // 老 WebKit 回退
+  syncDrawer();
+
+  /* 侧栏链接:占位链接不跳转也不收起;真跳页时把「收起」推迟到本次点击派发之后 ——
+     立即给侧栏加 inert 会吃掉 <a> 的激活行为,表现就是点了没反应 */
+  for (const link of sidebar.querySelectorAll('a')) {
+    link.addEventListener('click', (e) => {
+      const href = link.getAttribute('href') || '';
+      if (href === '#') { e.preventDefault(); return; }
+      if (!wideQuery.matches) setTimeout(() => closeDrawer(false), 0);
+    });
+  }
+
+  /* ---------- 尺寸与主题变化 ---------- */
+  if ('ResizeObserver' in window) {
+    new ResizeObserver(resize).observe(canvas);
+  } else {
+    window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', resize);
+  }
+  if (darkQuery.addEventListener) darkQuery.addEventListener('change', readPalette);
+
+  /* ---------- 启动 ---------- */
   loadHigh();
   bestScore.textContent = high;
   resize();
