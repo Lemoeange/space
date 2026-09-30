@@ -265,7 +265,7 @@
 <div id="menu">
   <div class="box">
     <h1>⛏️ 我的世界 <span class="tag">Web 复刻</span></h1>
-    <div class="sub">自然村庄生态 · 村民集市交易 · 绿宝石货币 · 铁傀儡守护者 · 动物繁育 · 浮漂垂钓 · 营火烘烤</div>
+    <div class="sub">村庄集市交易 · 绿宝石货币 · 驯服萌猫驱赶苦力怕 · 鸣响村庄之钟 · 铁傀儡守护者 · 动物繁育 · 储物箱</div>
     <div class="keys">
       <span><b>W A S D</b> 移动</span>
       <span><b>鼠标</b> 视角</span>
@@ -4801,6 +4801,32 @@ function updateCreepers(dt) {
       continue;
     }
 
+    // 检查周围 9 格内是否有猫咪（苦力怕天敌）：一旦感知到猫咪，引信立刻扑灭并抱头鼠窜！
+    let nearestCat = null, minCatD = 9.0;
+    for (const cat of cats) {
+      const cd = Math.hypot(cat.x - c.x, cat.z - c.z);
+      if (cd < minCatD) { minCatD = cd; nearestCat = cat; }
+    }
+    if (nearestCat) {
+      c.fuse = Math.max(0, c.fuse - dt * 2.5);
+      c.g.scale.set(1, 1, 1);
+      c.heading = Math.atan2(c.x - nearestCat.x, c.z - nearestCat.z);
+      const speed = 2.4;
+      const nx = c.x + Math.sin(c.heading) * speed * dt;
+      const nz = c.z + Math.cos(c.heading) * speed * dt;
+      const ti = Math.floor(nx), tz = Math.floor(nz);
+      const tg = findGround(ti, tz);
+      if (world.getWater(ti, cy, tz) === 0 && Math.abs(tg - cy) <= 1) {
+        c.x = nx; c.z = nz;
+      }
+      c.g.position.set(c.x, cy, c.z);
+      c.g.rotation.y = c.heading + Math.PI;
+      c.phase += dt * 6;
+      const swing = Math.sin(c.phase) * 0.35;
+      c.legs.forEach((leg, i2) => { leg.rotation.x = swing * (i2 % 2 === 0 ? 1 : -1); });
+      continue;
+    }
+
     const playerTooHigh = dy3 > 5;
     if (!playerTooHigh && dist3 < 3.2) {
       // 进入引爆倒计时
@@ -5733,20 +5759,23 @@ function updateVillagers(dt) {
 }
 
 function openTradeUI(v) {
+  if (chestOpen) closeChest();
+  if (furnaceOpen) closeFurnace();
+  if (inventoryOpen) closeInventory();
   currentTradingVillager = v;
   tradeOpen = true;
-  document.exitPointerLock();
+  document.exitPointerLock?.();
   buildTradeUI();
   document.getElementById('tradeUI').style.display = 'flex';
   playVillagerHmm();
 }
 
 function closeTradeUI() {
+  if (!tradeOpen) return;
   tradeOpen = false;
   currentTradingVillager = null;
   document.getElementById('tradeUI').style.display = 'none';
-  const game = document.getElementById('game');
-  game.requestPointerLock();
+  requestLock();
 }
 document.getElementById('closeTradeBtn').onclick = closeTradeUI;
 
@@ -5967,10 +5996,235 @@ function buildVillage(c) {
   spawnVillager(cotX + 0.5, cotZ + 0.5, 'librarian');
   spawnVillager(cx8 - 2.5, cz8 + 1.5, 'cleric');
 
+  // 8. 悬挂村庄之钟与生成 2 只萌态可掬的村庄流浪猫 (橘猫与三花猫)
+  world.setBlock(cx8, gy + 3, cz8, B.GOLD_BLOCK);
+  spawnCat(cx8 + 2.5, cz8 - 2.5, 'ginger');
+  spawnCat(cotX + 1.5, cotZ - 2.0, 'calico');
+
   // 标记 dirty 重新渲染区块网格
   for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
     const ck = world.chunks.get(key(c.cx + dx, c.cz + dz));
     if (ck) ck.dirty = true;
+  }
+}
+
+/* ============================ 🎯 准星实体射线检测 ============================ */
+function raycastTargetEntity(origin, dir, entities, maxDist, blockDist, radius = 0.55, height = 1.9) {
+  let best = null, bestDist = Math.min(maxDist, blockDist);
+  for (const ent of entities) {
+    const ey = (ent.g ? ent.g.position.y : ent.y) + height * 0.5;
+    const dx = ent.x - origin.x;
+    const dy = ey - origin.y;
+    const dz = ent.z - origin.z;
+    const t = dx * dir.x + dy * dir.y + dz * dir.z;
+    if (t < 0.4 || t >= bestDist) continue;
+    const px = origin.x + dir.x * t;
+    const py = origin.y + dir.y * t;
+    const pz = origin.z + dir.z * t;
+    const distSq = (ent.x - px) ** 2 + (ey - py) ** 2 + (ent.z - pz) ** 2;
+    if (distSq <= radius * radius) {
+      best = ent;
+      bestDist = t;
+    }
+  }
+  return best;
+}
+
+/* ============================ 🐱 村庄猫咪与驱赶苦力怕系统 (Village Cats) ============================ */
+const cats = [];
+
+const catHeadGeo = new THREE.BoxGeometry(0.26, 0.24, 0.26);
+const catEarGeo = new THREE.BoxGeometry(0.06, 0.08, 0.04);
+const catBodyGeo = new THREE.BoxGeometry(0.24, 0.24, 0.54);
+const catLegGeo = new THREE.BoxGeometry(0.08, 0.24, 0.08);
+const catTailGeo = new THREE.BoxGeometry(0.06, 0.32, 0.06);
+
+function paintCatFace(breed) {
+  return (ctx) => {
+    ctx.fillStyle = breed === 'ginger' ? '#e68028' : (breed === 'tuxedo' ? '#222224' : '#e8dec8');
+    ctx.fillRect(0, 0, 16, 16);
+    ctx.fillStyle = breed === 'tuxedo' ? '#44cc55' : '#e6b824';
+    ctx.fillRect(3, 6, 3, 3); ctx.fillRect(10, 6, 3, 3);
+    ctx.fillStyle = '#111111';
+    ctx.fillRect(4, 7, 1, 2); ctx.fillRect(11, 7, 1, 2);
+    ctx.fillStyle = '#ff8899'; ctx.fillRect(7, 10, 2, 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(1, 10, 4, 1); ctx.fillRect(11, 10, 4, 1);
+  };
+}
+
+function paintCatBody(breed) {
+  return (ctx) => {
+    const baseColor = breed === 'ginger' ? '#e68028' : (breed === 'tuxedo' ? '#222224' : '#ffffff');
+    ctx.fillStyle = baseColor; ctx.fillRect(0, 0, 16, 16);
+    if (breed === 'ginger') {
+      ctx.fillStyle = '#ba5a18';
+      ctx.fillRect(0, 4, 16, 2); ctx.fillRect(0, 9, 16, 2); ctx.fillRect(0, 14, 16, 2);
+    } else if (breed === 'tuxedo') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(5, 0, 6, 16);
+    } else {
+      ctx.fillStyle = '#e68028'; ctx.fillRect(1, 2, 6, 6); ctx.fillRect(9, 8, 6, 6);
+      ctx.fillStyle = '#222224'; ctx.fillRect(8, 1, 5, 5); ctx.fillRect(2, 9, 5, 5);
+    }
+  };
+}
+
+function playCatMeow() {
+  tone(650, 880, 0.18, 'sine', 0.20);
+  setTimeout(() => tone(880, 600, 0.22, 'triangle', 0.16), 120);
+}
+function playCatPurr() {
+  tone(180, 220, 0.08, 'triangle', 0.12);
+  setTimeout(() => tone(200, 160, 0.10, 'triangle', 0.12), 70);
+}
+
+function spawnCat(x, z, breed = 'ginger', tamed = false) {
+  const g = new THREE.Group();
+
+  const faceMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [220, 130, 40], 951 + (breed === 'tuxedo' ? 1 : breed === 'calico' ? 2 : 0), paintCatFace(breed)) });
+  const bodyMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [220, 130, 40], 954 + (breed === 'tuxedo' ? 1 : breed === 'calico' ? 2 : 0), paintCatBody(breed)) });
+  const headMats = [bodyMat, bodyMat, bodyMat, bodyMat, bodyMat, faceMat];
+
+  const body = new THREE.Mesh(catBodyGeo, bodyMat);
+  body.position.set(0, 0.26, 0); body.castShadow = true; body.receiveShadow = true; g.add(body);
+
+  const head = new THREE.Mesh(catHeadGeo, headMats);
+  head.position.set(0, 0.42, -0.32); head.castShadow = true; head.receiveShadow = true; g.add(head);
+
+  const earL = new THREE.Mesh(catEarGeo, bodyMat);
+  earL.position.set(-0.08, 0.14, 0.02); earL.rotation.z = -0.15; head.add(earL);
+  const earR = new THREE.Mesh(catEarGeo, bodyMat);
+  earR.position.set(0.08, 0.14, 0.02); earR.rotation.z = 0.15; head.add(earR);
+
+  const collarGeo = new THREE.BoxGeometry(0.28, 0.06, 0.28);
+  const collarMat = new THREE.MeshLambertMaterial({ color: 0xd43828 });
+  const collar = new THREE.Mesh(collarGeo, collarMat);
+  collar.position.set(0, 0.32, -0.22);
+  collar.visible = tamed;
+  g.add(collar);
+
+  const legs = [];
+  for (const [dx, dz] of [[0.09, 0.20], [-0.09, 0.20], [0.09, -0.20], [-0.09, -0.20]]) {
+    const leg = new THREE.Mesh(catLegGeo, bodyMat);
+    leg.position.set(dx, 0.12, dz); leg.castShadow = true; leg.receiveShadow = true;
+    g.add(leg); legs.push(leg);
+  }
+
+  const tail = new THREE.Mesh(catTailGeo, bodyMat);
+  tail.position.set(0, 0.34, 0.28);
+  tail.rotation.x = 0.65;
+  g.add(tail);
+
+  const gy = findGround(Math.floor(x), Math.floor(z));
+  g.position.set(x, gy, z);
+  scene.add(g);
+
+  cats.push({
+    g, head, body, legs, tail, collar,
+    x, y: gy, z,
+    breed,
+    tamed,
+    hp: 10,
+    heading: Math.random() * Math.PI * 2,
+    timer: 2 + Math.random() * 3,
+    speed: 1.2,
+    phase: 0,
+    isIdle: true
+  });
+}
+
+function updateCats(dt) {
+  for (let i = cats.length - 1; i >= 0; i--) {
+    const c = cats[i];
+    const gy = findGround(Math.floor(c.x), Math.floor(c.z));
+    c.y = gy;
+
+    if (c.tamed) {
+      const pDist = Math.hypot(player.pos.x - c.x, player.pos.z - c.z);
+      if (pDist > 16) {
+        c.x = player.pos.x + (Math.random() - 0.5) * 2;
+        c.z = player.pos.z + (Math.random() - 0.5) * 2;
+      } else if (pDist > 2.5) {
+        c.heading = Math.atan2(player.pos.x - c.x, player.pos.z - c.z);
+        c.x += Math.sin(c.heading) * 2.2 * dt;
+        c.z += Math.cos(c.heading) * 2.2 * dt;
+        c.isIdle = false;
+      } else {
+        c.isIdle = true;
+      }
+    } else {
+      c.timer -= dt;
+      if (c.timer <= 0) {
+        c.isIdle = Math.random() < 0.6;
+        c.timer = c.isIdle ? (3 + Math.random() * 4) : (2 + Math.random() * 3);
+        if (!c.isIdle) c.heading = Math.random() * Math.PI * 2;
+        if (Math.random() < 0.2) playCatMeow();
+      }
+      if (!c.isIdle) {
+        const nx = c.x + Math.sin(c.heading) * c.speed * dt;
+        const nz = c.z + Math.cos(c.heading) * c.speed * dt;
+        const tg = findGround(Math.floor(nx), Math.floor(nz));
+        if (Math.abs(tg - c.y) <= 1 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
+          c.x = nx; c.z = nz;
+        } else {
+          c.isIdle = true;
+        }
+      }
+    }
+
+    c.g.position.set(c.x, c.y, c.z);
+    c.g.rotation.y = c.heading + Math.PI;
+
+    c.phase += dt * (c.isIdle ? 2.0 : 6.0);
+    const swing = Math.sin(c.phase) * (c.isIdle ? 0.05 : 0.4);
+    c.legs.forEach((leg, idx) => {
+      leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
+    });
+    c.tail.rotation.z = Math.sin(c.phase * 1.2) * 0.25;
+  }
+}
+
+/* ============================ 🔔 村庄之钟警戒机制 (Village Bell) ============================ */
+function ringVillageBell(bx, by, bz) {
+  tone(440, 440, 0.6, 'sine', 0.35);
+  setTimeout(() => tone(330, 330, 0.8, 'sine', 0.30), 140);
+  burst(0.2, 0.1, 800);
+  spawnParticles(bx + 0.5, by + 0.5, bz + 0.5, 0xffd700, 25);
+  toast('🔔 鸣响了村庄之钟！警报拉响，村民紧急避险');
+  highlightMonstersNear(bx, by, bz, 36);
+  for (const v of villagers) {
+    if (Math.hypot(v.x - bx, v.z - bz) < 36) {
+      v.fleeing = true;
+      v.timer = 10.0;
+    }
+  }
+}
+
+function highlightMonstersNear(bx, by, bz, radius) {
+  let count = 0;
+  for (const z of zombies) {
+    if (Math.hypot(z.x - bx, z.z - bz) < radius) {
+      spawnParticles(z.x, z.g.position.y + 1.2, z.z, 0xffd700, 18); count++;
+    }
+  }
+  for (const sk of skeletons) {
+    if (Math.hypot(sk.x - bx, sk.z - bz) < radius) {
+      spawnParticles(sk.x, sk.g.position.y + 1.2, sk.z, 0xffd700, 18); count++;
+    }
+  }
+  for (const sp of spiders) {
+    if (Math.hypot(sp.x - bx, sp.z - bz) < radius) {
+      spawnParticles(sp.x, sp.g.position.y + 0.8, sp.z, 0xffd700, 18); count++;
+    }
+  }
+  for (const cr of creepers) {
+    if (Math.hypot(cr.x - bx, cr.z - bz) < radius) {
+      spawnParticles(cr.x, cr.g.position.y + 1.0, cr.z, 0xffd700, 18); count++;
+    }
+  }
+  if (count > 0) {
+    toast(`⚠️ 钟声警报照亮了周围 ${count} 只游荡的敌对怪物！`);
   }
 }
 
@@ -6061,6 +6315,20 @@ function meleeAttack() {
         scene.remove(v.g);
         villagers.splice(i, 1);
         toast('💀 村民倒下了…');
+      }
+    }
+  }
+  for (let i = cats.length - 1; i >= 0; i--) {
+    const c = cats[i];
+    if (meleeHitMob(c, dir)) {
+      c.hp -= dmg;
+      hitAny = true;
+      playCatMeow();
+      spawnParticles(c.x, c.y + 0.3, c.z, 0xd43828, 6);
+      if (c.hp <= 0) {
+        scene.remove(c.g);
+        cats.splice(i, 1);
+        dropItem(B.STRING, Math.floor(c.x), Math.floor(c.y), Math.floor(c.z));
       }
     }
   }
@@ -6276,6 +6544,15 @@ function explodeTnt(ex, ey, ez) {
     if (dist < radius + 2) {
       scene.remove(v.g);
       villagers.splice(i, 1);
+    }
+  }
+
+  for (let i = cats.length - 1; i >= 0; i--) {
+    const c = cats[i];
+    const dist = Math.hypot(c.x - ex, c.y - ey, c.z - ez);
+    if (dist < radius + 2) {
+      scene.remove(c.g);
+      cats.splice(i, 1);
     }
   }
 
@@ -8581,6 +8858,7 @@ function buildChestUI() {
 
 function openChest(x, y, z) {
   if (!started) return;
+  if (tradeOpen) closeTradeUI();
   currentChestKey = `${x},${y},${z}`;
   if (!chestStorages.has(currentChestKey)) {
     chestStorages.set(currentChestKey, new Array(27).fill(null));
@@ -8617,7 +8895,15 @@ function requestLock() {
 }
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === canvas;
-  if (locked) { started = true; inventoryOpen = false; furnaceOpen = false; chestOpen = false; }
+  if (locked) {
+    started = true;
+    inventoryOpen = false;
+    furnaceOpen = false;
+    chestOpen = false;
+    tradeOpen = false;
+    const tui = document.getElementById('tradeUI');
+    if (tui) tui.style.display = 'none';
+  }
   refreshOverlays();
 });
 menuEl.addEventListener('click', () => { playClick(); requestLock(); });
@@ -8953,28 +9239,6 @@ function onMousedown(btn) {
       toast('🛡️ 举盾防御中（可格挡攻击）');
       return;
     }
-    // 手持骨头右键驯服灰狼
-    if (sel && sel.id === B.BONE) {
-      for (const m of animals) {
-        if (m.kind && m.kind.name === 'wolf' && !m.tamed) {
-          const dist = Math.hypot(m.x - origin.x, (m.g.position.y + 0.5) - origin.y, m.z - origin.z);
-          if (dist < 4.2) {
-            if (!player.fly) removeItem(B.BONE, 1);
-            if (Math.random() < 0.45) {
-              m.tamed = true;
-              if (m.collar) m.collar.visible = true;
-              tone(480, 720, 0.25, 'triangle', 0.20);
-              spawnParticles(m.x, m.g.position.y + 0.9, m.z, 0xff3b56, 16);
-              toast('🐕 成功驯服灰狼！它将成为护卫你的忠诚爱犬');
-            } else {
-              tone(220, 160, 0.15, 'sawtooth', 0.12);
-              spawnParticles(m.x, m.g.position.y + 0.8, m.z, 0xaaaaaa, 6);
-            }
-            return;
-          }
-        }
-      }
-    }
     // 手持雪球右键投掷
     if (sel && sel.id === B.SNOWBALL) {
       throwSnowball();
@@ -8990,108 +9254,176 @@ function onMousedown(btn) {
       castFishingRod();
       return;
     }
-    // 手持铁锭右键修复铁傀儡
-    if (sel && sel.id === B.IRON_INGOT) {
-      for (const g of ironGolems) {
-        const dist = Math.hypot(g.x - origin.x, (g.y + 1.2) - origin.y, g.z - origin.z);
-        if (dist < 4.5 && g.hp < g.maxHp) {
-          if (!player.fly) removeItem(B.IRON_INGOT, 1);
-          g.hp = Math.min(g.maxHp, g.hp + 15);
-          tone(600, 850, 0.16, 'triangle', 0.22);
-          spawnParticles(g.x, g.y + 1.2, g.z, 0xffd700, 16);
-          toast(`🔧 修复了铁傀儡 · 当前生命值：${g.hp}/${g.maxHp}`);
+
+    // 1. 进行方块视线检测
+    const hit = raycast(origin, dir, 6);
+    const blockDist = hit ? Math.hypot(hit.x + 0.5 - origin.x, hit.y + 0.5 - origin.y, hit.z + 0.5 - origin.z) : 999;
+
+    // 2. 交互型方块优先判定（储物箱、门、熔炉、床、村庄之钟、营火、TNT 等）
+    if (hit) {
+      // 右键储物箱 → 打开箱子（最高优先级，绝不被周围村民误抢）
+      if (hit.id === B.CHEST) {
+        if (tradeOpen) closeTradeUI();
+        openChest(hit.x, hit.y, hit.z);
+        return;
+      }
+      // 右键木门 → 开关门
+      if (hit.id === B.DOOR) {
+        toggleDoor(hit.x, hit.y, hit.z);
+        return;
+      }
+      // 右键熔炉 → 打开冶炼界面
+      if (hit.id === B.FURNACE) {
+        if (tradeOpen) closeTradeUI();
+        openFurnace();
+        return;
+      }
+      // 右键村庄之钟（水井顶端的金块或村落集结钟）
+      if (hit.id === B.GOLD_BLOCK) {
+        ringVillageBell(hit.x, hit.y, hit.z);
+        return;
+      }
+      // 右键红床 → 睡觉
+      if (hit.id === B.BED) {
+        const isNight = timeOfDay >= 0.48 || timeOfDay < 0.20;
+        if (!isNight) { toast('☀️ 只能在夜间入睡'); return; }
+        for (const z of zombies) {
+          if (Math.hypot(z.x - player.pos.x, z.z - player.pos.z) < 8) {
+            toast('⚠️ 附近有怪物游荡，无法入睡！');
+            return;
+          }
+        }
+        startSleeping();
+        return;
+      }
+      // 右键已放置的 TNT → 点燃引信
+      if (hit.id === B.TNT) {
+        primeTnt(hit.x, hit.y, hit.z);
+        return;
+      }
+      // 右键营火 → 烘烤生肉/生鱼
+      if (hit.id === B.CAMPFIRE) {
+        if (sel && (sel.id === B.RAW_MEAT || sel.id === B.RAW_FISH)) {
+          const cooked = sel.id === B.RAW_MEAT ? B.COOKED_MEAT : B.COOKED_FISH;
+          sel.count--;
+          if (sel.count <= 0) hotbar[selected] = null;
+          addItem(cooked, 1);
+          refreshHotbar();
+          playSizzle();
+          spawnParticles(hit.x, hit.y + 0.6, hit.z, 0xff7a22, 14);
+          toast(`🔥 在营火上烘烤出了香气四溢的${itemName(cooked)}！`);
           return;
         }
       }
-    }
-    // 手持食物右键喂食动物（进入求偶或促进幼崽成长）
-    if (sel && (sel.id === B.WHEAT || sel.id === B.APPLE || sel.id === B.RAW_MEAT || sel.id === B.COOKED_MEAT)) {
-      for (const a of animals) {
-        const dist = Math.hypot(a.x - origin.x, (a.g.position.y + 0.5) - origin.y, a.z - origin.z);
-        if (dist < 4.2) {
-          const kind = a.kind.name;
-          const likesWheat = (kind === 'cow' || kind === 'sheep' || kind === 'chicken') && sel.id === B.WHEAT;
-          const likesApple = kind === 'pig' && sel.id === B.APPLE;
-          const likesMeat = kind === 'wolf' && a.tamed && (sel.id === B.RAW_MEAT || sel.id === B.COOKED_MEAT);
-
-          if (likesWheat || likesApple || likesMeat) {
-            if (a.isBaby) {
-              if (!player.fly) removeItem(sel.id, 1);
-              a.growTimer = Math.max(0, a.growTimer - 15);
-              spawnParticles(a.x, a.g.position.y + 0.6, a.z, 0x44dd44, 10);
-              playGrow();
-              toast('🌱 喂食幼崽加速成长！');
-              return;
-            } else if (a.breedCooldown <= 0 && a.love <= 0) {
-              if (!player.fly) removeItem(sel.id, 1);
-              a.love = 30;
-              spawnParticles(a.x, a.g.position.y + 0.8, a.z, 0xff2255, 14);
-              playGrow();
-              toast('💖 动物进入求偶状态！喂食两只同类即可繁殖');
-              return;
-            }
+      // 小麦：右键草/土种植（优先于进食）
+      if (sel && sel.id === B.WHEAT) {
+        const px = hit.x + hit.n[0], py = hit.y + hit.n[1], pz = hit.z + hit.n[2];
+        if (py >= 0 && py < HEIGHT) {
+          const below = world.getBlock(px, py - 1, pz);
+          if ((below === B.GRASS || below === B.DIRT) && world.getBlock(px, py, pz) === B.AIR && world.getWater(px, py, pz) === 0) {
+            plantWheat(px, py, pz, sel);
+            return;
           }
         }
       }
     }
+
+    // 3. 准星精准射线检测活体生物交互（要求准星正对实体，且前方无方块遮挡）
     // 右键点击村民开启贸易集市
-    for (const v of villagers) {
-      const dist = Math.hypot(v.x - origin.x, (v.y + 0.9) - origin.y, v.z - origin.z);
-      if (dist < 4.5) {
-        openTradeUI(v);
-        return;
-      }
-    }
-    const hit = raycast(origin, dir, 6);
-    // 右键点击床 → 上床入睡并跳过黑夜
-    if (hit && hit.id === B.BED) {
-      const isNight = timeOfDay >= 0.48 || timeOfDay < 0.20;
-      if (!isNight) {
-        toast('☀️ 只能在夜间入睡');
-        return;
-      }
-      for (const z of zombies) {
-        if (Math.hypot(z.x - player.pos.x, z.z - player.pos.z) < 8) {
-          toast('⚠️ 附近有怪物游荡，无法入睡！');
-          return;
-        }
-      }
-      startSleeping();
+    const targetVillager = raycastTargetEntity(origin, dir, villagers, 4.5, blockDist, 0.45, 1.95);
+    if (targetVillager) {
+      if (chestOpen) closeChest();
+      openTradeUI(targetVillager);
       return;
     }
-    // 右键点击已放置的 TNT 方块 → 点燃引信
-    if (hit && hit.id === B.TNT) {
-      primeTnt(hit.x, hit.y, hit.z);
-      return;
-    }
-    // 小麦：右键草/土 → 种植（优先于进食）
-    if (sel && sel.id === B.WHEAT && hit) {
-      const px = hit.x + hit.n[0], py = hit.y + hit.n[1], pz = hit.z + hit.n[2];
-      if (py >= 0 && py < HEIGHT) {
-        const below = world.getBlock(px, py - 1, pz);
-        if ((below === B.GRASS || below === B.DIRT) && world.getBlock(px, py, pz) === B.AIR && world.getWater(px, py, pz) === 0) {
-          plantWheat(px, py, pz, sel);
-          return;
+
+    // 右键流浪猫喂鱼驯服 / 抚摸
+    const targetCat = raycastTargetEntity(origin, dir, cats, 4.2, blockDist, 0.4, 0.8);
+    if (targetCat) {
+      if (sel && (sel.id === B.RAW_FISH || sel.id === B.COOKED_FISH)) {
+        if (!player.fly) removeItem(sel.id, 1);
+        if (!targetCat.tamed) {
+          if (Math.random() < 0.5) {
+            targetCat.tamed = true;
+            if (targetCat.collar) targetCat.collar.visible = true;
+            spawnParticles(targetCat.x, targetCat.y + 0.5, targetCat.z, 0xff3b56, 16);
+            playCatMeow();
+            toast('🐱 成功驯服了流浪猫！它会永远为你驱赶走可怕的苦力怕');
+          } else {
+            spawnParticles(targetCat.x, targetCat.y + 0.5, targetCat.z, 0xaaaaaa, 6);
+            playCatPurr();
+          }
+        } else {
+          spawnParticles(targetCat.x, targetCat.y + 0.5, targetCat.z, 0xff3b56, 8);
+          playCatPurr();
         }
-      }
-    }
-    if (sel && isFood(sel.id)) { eat(sel); return; }   // 右键进食
-    if (hit && hit.id === B.FURNACE) { openFurnace(); return; }   // 右键熔炉 → 打开冶炼界面
-    if (hit && hit.id === B.CHEST) { openChest(hit.x, hit.y, hit.z); return; }   // 右键储物箱 → 打开储物界面
-    if (hit && hit.id === B.DOOR) { toggleDoor(hit.x, hit.y, hit.z); return; }   // 右键木门 → 开关门
-    if (hit && hit.id === B.CAMPFIRE) {
-      if (sel && (sel.id === B.RAW_MEAT || sel.id === B.RAW_FISH)) {
-        const cooked = sel.id === B.RAW_MEAT ? B.COOKED_MEAT : B.COOKED_FISH;
-        sel.count--;
-        if (sel.count <= 0) hotbar[selected] = null;
-        addItem(cooked, 1);
-        refreshHotbar();
-        playSizzle();
-        spawnParticles(hit.x, hit.y + 0.6, hit.z, 0xff7a22, 14);
-        toast(`🔥 在营火上烘烤出了香气四溢的${itemName(cooked)}！`);
         return;
       }
     }
+
+    // 准星右键牲畜（灰狼骨头驯服 / 饲养繁育）
+    const targetAnimal = raycastTargetEntity(origin, dir, animals, 4.2, blockDist, 0.55, 1.2);
+    if (targetAnimal) {
+      // 骨头驯狼
+      if (sel && sel.id === B.BONE && targetAnimal.kind && targetAnimal.kind.name === 'wolf' && !targetAnimal.tamed) {
+        if (!player.fly) removeItem(B.BONE, 1);
+        if (Math.random() < 0.45) {
+          targetAnimal.tamed = true;
+          if (targetAnimal.collar) targetAnimal.collar.visible = true;
+          tone(480, 720, 0.25, 'triangle', 0.20);
+          spawnParticles(targetAnimal.x, targetAnimal.g.position.y + 0.9, targetAnimal.z, 0xff3b56, 16);
+          toast('🐕 成功驯服灰狼！它将成为护卫你的忠诚爱犬');
+        } else {
+          tone(220, 160, 0.15, 'sawtooth', 0.12);
+          spawnParticles(targetAnimal.x, targetAnimal.g.position.y + 0.8, targetAnimal.z, 0xaaaaaa, 6);
+        }
+        return;
+      }
+      // 喂食繁育 / 幼崽成长加速
+      if (sel && (sel.id === B.WHEAT || sel.id === B.APPLE || sel.id === B.RAW_MEAT || sel.id === B.COOKED_MEAT)) {
+        const kind = targetAnimal.kind.name;
+        const likesWheat = (kind === 'cow' || kind === 'sheep' || kind === 'chicken') && sel.id === B.WHEAT;
+        const likesApple = kind === 'pig' && sel.id === B.APPLE;
+        const likesMeat = kind === 'wolf' && targetAnimal.tamed && (sel.id === B.RAW_MEAT || sel.id === B.COOKED_MEAT);
+        if (likesWheat || likesApple || likesMeat) {
+          if (targetAnimal.isBaby) {
+            if (!player.fly) removeItem(sel.id, 1);
+            targetAnimal.growTimer = Math.max(0, targetAnimal.growTimer - 15);
+            spawnParticles(targetAnimal.x, targetAnimal.g.position.y + 0.6, targetAnimal.z, 0x44dd44, 10);
+            playGrow();
+            toast('🌱 喂食幼崽加速成长！');
+            return;
+          } else if (targetAnimal.breedCooldown <= 0 && targetAnimal.love <= 0) {
+            if (!player.fly) removeItem(sel.id, 1);
+            targetAnimal.love = 30;
+            spawnParticles(targetAnimal.x, targetAnimal.g.position.y + 0.8, targetAnimal.z, 0xff2255, 14);
+            playGrow();
+            toast('💖 动物进入求偶状态！喂食两只同类即可繁殖');
+            return;
+          }
+        }
+      }
+    }
+
+    // 准星右键铁傀儡用铁锭维修
+    if (sel && sel.id === B.IRON_INGOT) {
+      const targetGolem = raycastTargetEntity(origin, dir, ironGolems, 4.5, blockDist, 0.9, 2.4);
+      if (targetGolem && targetGolem.hp < targetGolem.maxHp) {
+        if (!player.fly) removeItem(B.IRON_INGOT, 1);
+        targetGolem.hp = Math.min(targetGolem.maxHp, targetGolem.hp + 15);
+        tone(600, 850, 0.16, 'triangle', 0.22);
+        spawnParticles(targetGolem.x, targetGolem.y + 1.2, targetGolem.z, 0xffd700, 16);
+        toast(`🔧 修复了铁傀儡 · 当前生命值：${targetGolem.hp}/${targetGolem.maxHp}`);
+        return;
+      }
+    }
+
+    // 4. 手持食物进食（未对准任何交互方块与实体时）
+    if (sel && isFood(sel.id)) {
+      eat(sel);
+      return;
+    }
+
     if (!sel) return;
     const sid = sel.id;
     // 睡莲：放置在水面格
@@ -9255,6 +9587,7 @@ function animate() {
     updateSpiders(dt);
     updateIronGolems(dt);
     updateVillagers(dt);
+    updateCats(dt);
     updatePrimedTnt(dt);
     updateSnowballs(dt);
     updateEnderPearls(dt);
