@@ -205,6 +205,19 @@
   #furnaceBar { height: 100%; width: 0%; background: linear-gradient(90deg, #ff9d3c, #ffd479); transition: width .1s linear; }
   #furnaceGrid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; justify-items: center; margin-top: 12px; }
   #furnaceHotbar { display: flex; gap: 6px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+
+  /* ---- 储物箱 ---- */
+  #chestUI {
+    position: fixed; inset: 0; z-index: 23; display: none; align-items: center; justify-content: center;
+    background: rgba(8, 12, 18, 0.74); color: #e8f0f6; text-align: center;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  #chestUI .box { padding: 18px 24px; max-width: 660px; max-height: 90vh; overflow-y: auto; }
+  #chestUI h1 { font-size: 22px; letter-spacing: 1px; margin-bottom: 4px; }
+  #chestUI .sub { color: #9fc3d8; font-size: 12px; margin-bottom: 12px; }
+  #chestSlotsGrid { display: grid; grid-template-columns: repeat(9, 48px); gap: 6px; justify-content: center; margin-bottom: 6px; }
+  #chestInvGrid { display: grid; grid-template-columns: repeat(7, 48px); gap: 6px; justify-content: center; margin-top: 6px; }
+  #chestHotbar { display: flex; gap: 6px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -299,6 +312,18 @@
   </div>
 </div>
 
+<div id="chestUI">
+  <div class="box">
+    <h1>📦 储物箱</h1>
+    <div class="sub">点击箱内物品取出至手持 · 点击背包物品存入箱内 · 按 Esc 或 E 关闭</div>
+    <div class="craft-title" style="margin-top:0">箱内储物 (27格)</div>
+    <div id="chestSlotsGrid"></div>
+    <div class="craft-title" style="margin-top:14px">背包</div>
+    <div id="chestInvGrid"></div>
+    <div id="chestHotbar"></div>
+  </div>
+</div>
+
 <!-- ============ 纯噪声与地形生成（无 DOM / 无依赖） ============ -->
 <script>
 const HEIGHT = 96;      // 世界高度
@@ -329,7 +354,8 @@ const B = {
   TNT:89, SNOWBALL:90,
   BOW:91, ARROW:92, COOKED_MEAT:93, RAW_FISH:94, COOKED_FISH:95,
   LADDER:96, GOLDEN_APPLE:97, BONE:98,
-  WOOL:99, BED:100, SHIELD:101, CHERRY_LOG:102
+  WOOL:99, BED:100, SHIELD:101, CHERRY_LOG:102,
+  CHEST:103, GUNPOWDER:104
 };
 
 function mulberry32(a) {
@@ -582,7 +608,7 @@ const { HEIGHT, SEA, B, mulberry32, surfaceHeight, isCave, oreFor, oreNoise, bio
 /* ============================ 常量 ============================ */
 const CHUNK = 16;
 const TILE = 16;
-const ATLAS_TILES = 84;
+const ATLAS_TILES = 87;
 const ATLAS_W = ATLAS_TILES * TILE;
 const AO_LEVELS = [0.55, 0.7, 0.85, 1.0];
 const VIEW_R = 10;        // 视距（chunk 半径，每格 16 块）
@@ -621,6 +647,7 @@ function makeAtlas() {
   T.ladder = i++;
   T.wool = i++; T.bedTop = i++; T.bedSide = i++; T.bedHead = i++; T.bedFoot = i++;
   T.cactusTop = i++; T.cherryLogSide = i++; T.cherryLogTop = i++;
+  T.chestTop = i++; T.chestSide = i++; T.chestFront = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -1588,6 +1615,36 @@ function makeAtlas() {
   }
   put(T.cherryLogTop, 7, 7, 160, 118, 110); put(T.cherryLogTop, 8, 8, 160, 118, 110);
 
+  // —— 储物箱（经典橡木嵌黑铁包边与银白锁扣）——
+  // 顶面：中心暖色橡木板 + 1 格宽铸铁包角边
+  fill(T.chestTop, [168, 116, 60], 10, 130);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    if (x === 0 || x === 15 || y === 0 || y === 15) put(T.chestTop, x, y, 46, 32, 18);
+    else if (x === 1 || x === 14 || y === 1 || y === 14) put(T.chestTop, x, y, 62, 44, 26);
+    else if (y === 5 || y === 10) put(T.chestTop, x, y, 138, 92, 46);
+  }
+  // 侧面：中心橡木板 + 顶盖水平开合缝 + 包边
+  fill(T.chestSide, [168, 116, 60], 10, 131);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    if (x === 0 || x === 15 || y === 0 || y === 15) put(T.chestSide, x, y, 46, 32, 18);
+    else if (x === 1 || x === 14 || y === 1 || y === 14) put(T.chestSide, x, y, 62, 44, 26);
+    else if (y === 5) put(T.chestSide, x, y, 32, 20, 12);
+    else if (y === 4 || y === 6) put(T.chestSide, x, y, 138, 92, 46);
+  }
+  // 正面：在侧面基础上，中心镶嵌经典银白色锁扣 (Latch)
+  fill(T.chestFront, [168, 116, 60], 10, 132);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    if (x === 0 || x === 15 || y === 0 || y === 15) put(T.chestFront, x, y, 46, 32, 18);
+    else if (x === 1 || x === 14 || y === 1 || y === 14) put(T.chestFront, x, y, 62, 44, 26);
+    else if (y === 5) put(T.chestFront, x, y, 32, 20, 12);
+    else if (y === 4 || y === 6) put(T.chestFront, x, y, 138, 92, 46);
+  }
+  for (let y = 4; y <= 8; y++) for (let x = 7; x <= 8; x++) {
+    put(T.chestFront, x, y, 225, 225, 230);
+  }
+  put(T.chestFront, 7, 8, 130, 130, 135); put(T.chestFront, 8, 8, 130, 130, 135);
+  put(T.chestFront, 7, 5, 255, 255, 255);
+
   ctx.putImageData(img, 0, 0);
   // 3D 渲染改用 2D 纹理数组（每 tile 独立一层，配合 RepeatWrapping 可让单个 tile 跨大四边形循环）
   const layers = ATLAS_TILES;
@@ -1682,6 +1739,7 @@ function tileOf(id) {
     case B.WOOL: return { top: atlas.T.wool, side: atlas.T.wool, bottom: atlas.T.wool };
     case B.BED: return { top: atlas.T.bedTop, side: atlas.T.bedSide, bottom: atlas.T.planks };
     case B.FURNACE: return { top: atlas.T.furnace, side: atlas.T.furnace, bottom: atlas.T.furnace };
+    case B.CHEST: return { top: atlas.T.chestTop, side: atlas.T.chestSide, bottom: atlas.T.chestTop };
     case B.WHEAT_CROP: return { top: atlas.T.wheatCrop, side: atlas.T.wheatCrop, bottom: atlas.T.wheatCrop };
     case B.WHEAT_CROP_MATURE: return { top: atlas.T.wheatMature, side: atlas.T.wheatMature, bottom: atlas.T.wheatMature };
     default: return { top: atlas.T.stone, side: atlas.T.stone, bottom: atlas.T.stone };
@@ -2193,7 +2251,45 @@ const key = (cx, cz) => cx + ',' + cz;
 /* 恶地地表：砂岩/红砖/沙交替成层（用现有方块做出"台地"条纹） */
 const badBand = (y) => (y % 8 < 2 ? B.BRICK : (y % 8 < 5 ? B.SANDSTONE : B.SAND));
 /* 群系名（HUD 与调试用） */
-const BIOME_NAMES = { 1: '平原', 2: '森林', 3: '沙漠', 4: '雪地', 5: '沼泽', 6: '热带草原', 7: '白桦林', 8: '丛林', 9: '恶地', 10: '蘑菇岛', 11: '花海', 12: '砾石平原', 13: '白沙丘', 14: '冰刺平原', 15: '针叶林', 16: '沙漠绿洲', 17: '黑森林', 18: '樱花林', 19: '竹林', 20: '熔岩火山', 21: '枫树林', 22: '极地冰川', 23: '田园麦原' };
+const BIOME_NAMES = { 1: '🌿 平原', 2: '🌲 森林', 3: '🏜️ 沙漠', 4: '❄️ 雪原', 5: '🐸 沼泽湿地', 6: '🌾 热带草原', 7: '🌳 白桦林', 8: '🌴 丛林', 9: '🏜️ 恶地', 10: '🍄 蘑菇岛', 11: '🌷 花海', 12: '🪨 砾石平原', 13: '🏖️ 白沙丘', 14: '🧊 冰刺平原', 15: '🌲 针叶林', 16: '🌴 沙漠绿洲', 17: '🌲 黑森林', 18: '🌸 樱花林', 19: '🎋 竹林', 20: '🌋 熔岩火山', 21: '🍁 枫树林', 22: '🏔️ 极地冰川', 23: '🌾 田园麦原' };
+
+// —— 储物箱数据存储与地牢宝箱生成 ——
+const chestStorages = new Map();
+function populateDungeonChest(x, y, z) {
+  const ck = `${x},${y},${z}`;
+  if (chestStorages.has(ck)) return;
+  const slots = new Array(27).fill(null);
+  const rnd = mulberry32(x * 10007 + y * 313 + z);
+  const possibleLoot = [
+    { id: B.DIAMOND, count: 1 + Math.floor(rnd() * 2), prob: 0.35 },
+    { id: B.GOLDEN_APPLE, count: 1, prob: 0.30 },
+    { id: B.IRON_INGOT, count: 2 + Math.floor(rnd() * 4), prob: 0.70 },
+    { id: B.GOLD_INGOT, count: 1 + Math.floor(rnd() * 3), prob: 0.55 },
+    { id: B.BREAD, count: 2 + Math.floor(rnd() * 3), prob: 0.75 },
+    { id: B.ARROW, count: 4 + Math.floor(rnd() * 8), prob: 0.65 },
+    { id: B.GUNPOWDER, count: 2 + Math.floor(rnd() * 4), prob: 0.60 },
+    { id: B.TNT, count: 1, prob: 0.25 },
+  ];
+  let slotIdx = 0;
+  for (const item of possibleLoot) {
+    if (rnd() < item.prob && slotIdx < 27) {
+      slots[slotIdx++] = { id: item.id, count: item.count };
+    }
+  }
+  chestStorages.set(ck, slots);
+}
+function dropChestItems(x, y, z) {
+  const ck = `${x},${y},${z}`;
+  const slots = chestStorages.get(ck);
+  if (slots) {
+    for (const s of slots) {
+      if (s && s.count > 0) {
+        for (let k = 0; k < s.count; k++) dropItem(s.id, x, y, z);
+      }
+    }
+    chestStorages.delete(ck);
+  }
+}
 /* 每根立柱"站上去的高度"缓存：实体每帧都要问一次，直接扫 96 格太贵。
    方块改动时按列失效（见 markDirtyBlock）；纯粹是缓存，清空也不会算错。 */
 const groundCache = new Map();
@@ -2291,48 +2387,48 @@ class World {
         if (oasis && surf >= SEA && surf <= SEA + 2 && surf + 1 < HEIGHT) {
           if (plantHash(wx * 7 + 1, wz * 11 + 3) < 0.15) c.blocks[surf * 256 + lz * 16 + lx] = B.SAND;
         }
-        // 针叶林地表植被：大量高蕨与密草
+        // 针叶林地表植被：蕨与高草（密度减半）
         if (taiga && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const pr = plantHash(wx * 11 + 3, wz * 17 + 7);
-          if (pr < 0.08) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.045 ? B.FERN : B.GRASS_TALL);
+          if (pr < 0.04) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.022 ? B.FERN : B.GRASS_TALL);
         }
-        // 黑森林林下菌类
+        // 黑森林林下菌类（密度减半）
         if (darkForest && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const pr = plantHash(wx * 7 + 5, wz * 13 + 3);
-          if (pr < 0.04) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.02 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
-          else if (pr < 0.08) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.GRASS_TALL;
+          if (pr < 0.02) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.01 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
+          else if (pr < 0.04) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.GRASS_TALL;
         }
-        // 沙漠仙人掌（仅长在沙子上，降低密度）
+        // 沙漠仙人掌（仅长在沙子上，密度减半）
         if (desert && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.SAND) {
           const pr = plantHash(wx, wz);
-          if (pr < 0.005) {
+          if (pr < 0.0025) {
             const h = 1 + ((plantHash(wx + 7, wz) * 3) | 0);
             for (let k = 1; k <= h && surf + k < HEIGHT; k++)
               c.blocks[(surf + k) * 256 + lz * 16 + lx] = B.CACTUS;
           }
         }
-        // 花海：成片花毯（适度降低密度，开阔浪漫）
+        // 花海：成片花毯（密度减半，开阔浪漫）
         if (flowerField && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const pr = plantHash(wx * 5 + 3, wz * 9 + 1);
-          if (pr < 0.22) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.11 ? B.FLOWER_YELLOW : B.FLOWER_RED);
+          if (pr < 0.11) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.055 ? B.FLOWER_YELLOW : B.FLOWER_RED);
         }
-        // 樱花林：地表落英花毯与粉色花簇（轻盈优雅）
+        // 樱花林：地表落英花毯与粉色花簇（密度减半）
         if (cherryGrove && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const pr = plantHash(wx * 7 + 3, wz * 11 + 5);
-          if (pr < 0.14) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.10 ? B.CHERRY_PETALS : B.FLOWER_RED);
+          if (pr < 0.07) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.05 ? B.CHERRY_PETALS : B.FLOWER_RED);
         }
-        // 竹林：挺拔青竹群落（降低密度，且绝不生长在沙子上，仅限草地/泥土）
+        // 竹林：挺拔青竹群落（密度减半，仅限草地/泥土）
         if (bambooJungle && surf > SEA && surf + 1 < HEIGHT) {
           const groundB = c.blocks[surf * 256 + lz * 16 + lx];
           if (groundB === B.GRASS || groundB === B.DIRT) {
             const pr = plantHash(wx * 5 + 7, wz * 7 + 11);
-            if (pr < 0.065) {
+            if (pr < 0.032) {
               const bh = 5 + Math.floor(plantHash(wx * 3 + 1, wz * 3 + 2) * 7);
               for (let k = 1; k <= bh && surf + k < HEIGHT; k++) {
                 c.blocks[(surf + k) * 256 + lz * 16 + lx] = B.BAMBOO;
               }
-            } else if (pr < 0.16) {
-              c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.10 ? B.FERN : B.GRASS_TALL);
+            } else if (pr < 0.08) {
+              c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.05 ? B.FERN : B.GRASS_TALL);
             }
           }
         }
@@ -2342,23 +2438,23 @@ class World {
             c.blocks[surf * 256 + lz * 16 + lx] = B.MAGMA;
           }
         }
-        // 田园麦原：成片金黄野生小麦、捆扎干草垛与雏菊
+        // 田园麦原：成片金黄野生小麦、捆扎干草垛与雏菊（密度减半）
         if (meadow && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const pr = plantHash(wx * 11 + 7, wz * 13 + 1);
-          if (pr < 0.016) {
+          if (pr < 0.008) {
             c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.HAY_BALE; // 自然干草垛
-          } else if (pr < 0.18) {
-            c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.12 ? B.WHEAT_CROP_MATURE : B.FLOWER_YELLOW);
-          } else if (pr < 0.26) {
+          } else if (pr < 0.09) {
+            c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.06 ? B.WHEAT_CROP_MATURE : B.FLOWER_YELLOW);
+          } else if (pr < 0.13) {
             c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.GRASS_TALL;
           }
         }
-        // 枫树林地表：秋花、高草与丰收南瓜
+        // 枫树林地表：秋花、高草与丰收南瓜（密度减半）
         if (mapleForest && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const pr = plantHash(wx * 7 + 2, wz * 9 + 4);
-          if (pr < 0.16) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.08 ? B.FLOWER_RED : B.FLOWER_YELLOW);
-          else if (pr < 0.24) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.GRASS_TALL;
-          else if (pr < 0.26) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.PUMPKIN;
+          if (pr < 0.08) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.04 ? B.FLOWER_RED : B.FLOWER_YELLOW);
+          else if (pr < 0.12) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.GRASS_TALL;
+          else if (pr < 0.13) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.PUMPKIN;
         }
         // 极地冰川：海冰封冻（水面冻结成厚冰块）
         if (frozenGlacier && surf <= SEA) {
@@ -2369,31 +2465,30 @@ class World {
             }
           }
         }
-        // 丛林与竹林：野生西瓜群落
+        // 丛林与竹林：野生西瓜群落（密度减半）
         if ((bm === 8 || bm === 19) && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const prMelon = plantHash(wx * 13 + 7, wz * 17 + 3);
-          if (prMelon < 0.016) {
+          if (prMelon < 0.008) {
             c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.MELON;
           }
         }
-        // 地表花草/蕨/南瓜（仅草地；花海、樱花林、竹林、枫树林、田园麦原走专用规则）
+        // 地表花草/蕨/南瓜（仅草地；花海、樱花林、竹林、枫树林、田园麦原走专用规则，密度减半）
         if (!flowerField && !cherryGrove && !bambooJungle && !mapleForest && !meadow && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const lush = bm === 8 ? 2.4 : (bm === 6 ? 1.8 : 1);   // 丛林/热带草原植被更密
           const pr = plantHash(wx, wz);
           const pr2 = plantHash(wx + 9, wz + 4);
-          if (pr2 < 0.005 * lush) {
+          if (pr2 < 0.0025 * lush) {
             c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.PUMPKIN;
-          } else if (pr < 0.05 * lush) {
-            // 普通草地花草生成概率减半（从 0.09 降至 0.05，草坪更加开阔自然）
-            const fern = bm === 8 ? 0.045 : 0.025;
-            const kind = pr < 0.02 * lush ? B.GRASS_TALL : (pr < fern ? B.FERN : (pr < 0.038 * lush ? B.FLOWER_YELLOW : B.FLOWER_RED));
+          } else if (pr < 0.025 * lush) {
+            const fern = bm === 8 ? 0.022 : 0.012;
+            const kind = pr < 0.01 * lush ? B.GRASS_TALL : (pr < fern ? B.FERN : (pr < 0.019 * lush ? B.FLOWER_YELLOW : B.FLOWER_RED));
             c.blocks[(surf + 1) * 256 + lz * 16 + lx] = kind;
           }
         }
         // 冰刺平原：雪原上立起石英"冰刺"（3~9 格），和冰刺平原一样能当地标
         if (iceSpike && surf > SEA && surf + 1 < HEIGHT) {
           const pr = plantHash(wx * 17 + 5, wz * 19 + 9);
-          if (pr < 0.012) {
+          if (pr < 0.008) {
             const h = 3 + ((plantHash(wx + 13, wz + 3) * 7) | 0);
             for (let k = 1; k <= h && surf + k < HEIGHT; k++) {
               const taper = k > h - 3 ? 1 : 0;                       // 顶部收细
@@ -2402,16 +2497,16 @@ class World {
             }
           }
         }
-        // 蘑菇岛：蘑菇成片生长（低频 hash 划片，簇状而不是均匀撒点）
+        // 蘑菇岛：蘑菇成片生长（密度减半）
         if (mushroom && surf > SEA && surf + 1 < HEIGHT) {
           const gb = c.blocks[surf * 256 + lz * 16 + lx];
           if (gb === B.MOSSY || gb === B.GRASS) {
             const patch = plantHash(Math.floor(wx / 6) * 7 + 1, Math.floor(wz / 6) * 13 + 3);
             const pr = plantHash(wx * 3 + 11, wz * 7 + 5);
-            if (patch < 0.55 && pr < 0.22) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.11 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
+            if (patch < 0.55 && pr < 0.11) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.055 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
           }
         }
-        // 甘蔗（沙/土/草 + 邻水，近海平面）
+        // 甘蔗（沙/土/草 + 邻水，近海平面，密度减半）
         if (surf > SEA && surf <= SEA + 2 && surf + 1 < HEIGHT) {
           const sid = c.blocks[surf * 256 + lz * 16 + lx];
           if (sid === B.SAND || sid === B.DIRT || sid === B.GRASS) {
@@ -2421,7 +2516,7 @@ class World {
             }
             if (nearWater) {
               const pr = plantHash(wx * 7 + 3, wz * 13 + 5);
-              if (pr < 0.04) {
+              if (pr < 0.02) {
                 const h = 2 + ((plantHash(wx + 3, wz) * 3) | 0);
                 for (let k = 1; k <= h && surf + k < HEIGHT; k++)
                   c.blocks[(surf + k) * 256 + lz * 16 + lx] = B.SUGARCANE;
@@ -2448,10 +2543,10 @@ class World {
               if (below === B.GRASS) c.blocks[(y - 1) * 256 + lz * 16 + lx] = B.STONE;
               const above = c.blocks[(y + 1) * 256 + lz * 16 + lx];
               if (above === B.GRASS) c.blocks[(y + 1) * 256 + lz * 16 + lx] = B.STONE;
-              // 洞穴地板放蘑菇
+              // 洞穴地板放蘑菇（密度减半）
               if (below !== B.AIR && below !== B.WATER) {
                 const pr = plantHash(wx * 11 + y, wz * 17);
-                if (pr < 0.018) c.blocks[y * 256 + lz * 16 + lx] = (pr < 0.009 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
+                if (pr < 0.009) c.blocks[y * 256 + lz * 16 + lx] = (pr < 0.0045 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
               }
             }
           }
@@ -2468,7 +2563,7 @@ class World {
             }
             if (nearLand) {
               const lp = plantHash(wx * 13 + 7, wz * 17 + 3);
-              if (lp < 0.025) c.blocks[SEA * 256 + lz * 16 + lx] = B.LILY_PAD;
+              if (lp < 0.0125) c.blocks[SEA * 256 + lz * 16 + lx] = B.LILY_PAD;
             }
           }
         }
@@ -2481,6 +2576,27 @@ class World {
               c.blocks[idx] = B.DIRT;
             }
           }
+        }
+      }
+    }
+    // 地下洞穴地牢遗迹与藏宝箱生成
+    const dungeonRnd = plantHash(c.cx * 43 + 7, c.cz * 61 + 13);
+    if (dungeonRnd < 0.065) {
+      const dungeonY = 16 + Math.floor(plantHash(c.cx * 19, c.cz * 31) * 14); // y: 16 ~ 29
+      const cx8 = baseX + 8, cz8 = baseZ + 8;
+      if (isCave(cx8, dungeonY, cz8)) {
+        let floorY = dungeonY;
+        while (floorY > 4 && isCave(cx8, floorY - 1, cz8)) floorY--;
+        if (floorY > 4 && floorY < HEIGHT - 6) {
+          for (let dz = -1; dz <= 1; dz++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              c.blocks[(floorY - 1) * 256 + (8 + dz) * 16 + (8 + dx)] = (dx === 0 && dz === 0 ? B.MOSSY : (plantHash(cx8 + dx, cz8 + dz) < 0.5 ? B.MOSSY : B.COBBLE));
+              c.blocks[floorY * 256 + (8 + dz) * 16 + (8 + dx)] = B.AIR;
+              c.blocks[(floorY + 1) * 256 + (8 + dz) * 16 + (8 + dx)] = B.AIR;
+            }
+          }
+          c.blocks[floorY * 256 + 8 * 16 + 8] = B.CHEST;
+          populateDungeonChest(cx8, floorY, cz8);
         }
       }
     }
@@ -2654,6 +2770,10 @@ function saveWorld() {
         progress: furnace.progress,
         burn: furnace.burn,
       },
+      chests: Array.from(chestStorages.entries()).map(([k, slots]) => [
+        k,
+        slots.map((s) => (s ? [s.id, s.count, s.dur || 0] : null))
+      ]),
     };
     localStorage.setItem('mc_inv_v1', JSON.stringify(invData));
   } catch (e) { console.warn('[save] 存档失败:', e && e.message); }
@@ -2694,6 +2814,12 @@ function loadWorld() {
         if (typeof d.furnace.progress === 'number') furnace.progress = d.furnace.progress;
         if (typeof d.furnace.burn === 'number') furnace.burn = d.furnace.burn;
       }
+      if (Array.isArray(d.chests)) {
+        chestStorages.clear();
+        d.chests.forEach(([k, slots]) => {
+          chestStorages.set(k, slots.map((s) => restore(s)));
+        });
+      }
       restoredInv = true;
     }
   } catch (e) { console.warn('[load] 读取存档失败:', e && e.message); }
@@ -2733,26 +2859,26 @@ function plantTrees(c) {
       if (bm === 4) {
         if (ground === B.SNOW && world.getBlock(wx, surf - 1, wz) === B.SNOW) continue;
       }
-      let log = B.LOG, leaf = B.LEAVES, prob = 0.015, spruce = false, cherry = false, maple = false;
-      if (bm === 4) { log = B.SPRUCE_LOG; leaf = B.SPRUCE_LEAVES; prob = 0.008; spruce = true; }   // 雪地：降低云杉长树概率至 0.008
-      else if (bm === 15) { log = B.SPRUCE_LOG; leaf = B.SPRUCE_LEAVES; prob = 0.048; spruce = true; } // 针叶林：高大云杉群
-      else if (bm === 18) { log = B.CHERRY_LOG; leaf = B.CHERRY_LEAVES; prob = 0.021; cherry = true; } // 樱花林：专属樱花树干
-      else if (bm === 21) { log = B.LOG; leaf = B.MAPLE_LEAVES; prob = 0.044; maple = true; }          // 枫树林：秋季火红/金黄枫树
-      else if (bm === 23) { prob = 0.006; }                                                          // 田园麦原：极为开阔，偶有稀疏老橡树
-      else if (bm === 19) { log = B.JUNGLE_LOG; leaf = B.JUNGLE_LEAVES; prob = 0.012; }             // 竹林：伴生稀疏丛林大树
-      else if (bm === 16) { log = B.JUNGLE_LOG; leaf = B.JUNGLE_LEAVES; prob = 0.026; }             // 沙漠绿洲：热带棕榈树感
-      else if (bm === 17) { prob = 0.065; }                                                          // 黑森林：高密大树冠
-      else if (bm === 8) { log = B.JUNGLE_LOG; leaf = B.JUNGLE_LEAVES; prob = 0.055; }             // 丛林：密林
-      else if (bm === 7) { log = B.BIRCH_LOG; leaf = B.BIRCH_LEAVES; prob = 0.045; }               // 白桦林：纯白桦
-      else if (bm === 6) { log = B.ACACIA_LOG; leaf = B.ACACIA_LEAVES; prob = 0.012; }             // 热带草原：稀疏金合欢
-      else if (bm === 5) { prob = 0.012; }                                                          // 沼泽：稀疏橡树
+      let log = B.LOG, leaf = B.LEAVES, prob = 0.0075, spruce = false, cherry = false, maple = false;
+      if (bm === 4) { log = B.SPRUCE_LOG; leaf = B.SPRUCE_LEAVES; prob = 0.004; spruce = true; }   // 雪地：降低云杉长树概率至 0.004
+      else if (bm === 15) { log = B.SPRUCE_LOG; leaf = B.SPRUCE_LEAVES; prob = 0.024; spruce = true; } // 针叶林：高大云杉群
+      else if (bm === 18) { log = B.CHERRY_LOG; leaf = B.CHERRY_LEAVES; prob = 0.0105; cherry = true; } // 樱花林：专属樱花树干
+      else if (bm === 21) { log = B.LOG; leaf = B.MAPLE_LEAVES; prob = 0.022; maple = true; }          // 枫树林：秋季火红/金黄枫树
+      else if (bm === 23) { prob = 0.003; }                                                          // 田园麦原：极为开阔，偶有稀疏老橡树
+      else if (bm === 19) { log = B.JUNGLE_LOG; leaf = B.JUNGLE_LEAVES; prob = 0.006; }             // 竹林：伴生稀疏丛林大树
+      else if (bm === 16) { log = B.JUNGLE_LOG; leaf = B.JUNGLE_LEAVES; prob = 0.013; }             // 沙漠绿洲：热带棕榈树感
+      else if (bm === 17) { prob = 0.032; }                                                          // 黑森林：高密大树冠
+      else if (bm === 8) { log = B.JUNGLE_LOG; leaf = B.JUNGLE_LEAVES; prob = 0.028; }             // 丛林：密林
+      else if (bm === 7) { log = B.BIRCH_LOG; leaf = B.BIRCH_LEAVES; prob = 0.022; }               // 白桦林：纯白桦
+      else if (bm === 6) { log = B.ACACIA_LOG; leaf = B.ACACIA_LEAVES; prob = 0.006; }             // 热带草原：稀疏金合欢
+      else if (bm === 5) { prob = 0.006; }                                                          // 沼泽：稀疏橡树
       else if (bm === 2) {
-        prob = 0.03;
+        prob = 0.015;
         const r = rnd();
         if (r < 0.12) { log = B.JUNGLE_LOG; leaf = B.JUNGLE_LEAVES; }
         else if (r < 0.5) { log = B.BIRCH_LOG; leaf = B.BIRCH_LEAVES; }
       }
-      else if (bm === 1) { if (rnd() < 0.2) { log = B.ACACIA_LOG; leaf = B.ACACIA_LEAVES; } }
+      else if (bm === 1) { if (rnd() < 0.1) { log = B.ACACIA_LOG; leaf = B.ACACIA_LEAVES; } }
       if (rnd() > prob) continue;
       /* 确认长树后，仅把树干底下这唯一一格雪换成泥土，其余大片雪原完整保留薄雪覆盖 */
       if (ground === B.SNOW) world.setRaw(wx, surf, wz, B.DIRT);
@@ -2930,7 +3056,8 @@ function buildOpaqueGreedy(c, A, baseX, baseZ, yMax, colTop, getB, solid) {
         if (isSeeThrough(id)) continue;   // 空气/水/玻璃/植物/火把/睡莲
         const bx = baseX + lx, bz = baseZ + lz;
         if (!isSeeThrough(getB(bx + f.dir[0], ly + f.dir[1], bz + f.dir[2]))) continue;
-        const tile = tileOf(id)[f.face];
+        let tile = tileOf(id)[f.face];
+        if (id === B.CHEST && f.face === 'side' && f.dir[2] === 1) tile = atlas.T.chestFront;
         const under = undergroundFactor(colTop, lx, lz, ly);
         if (aoAllOne(bx, ly, bz, f, solid)) {
           mask[t2 * 16 + t1] = 1;
@@ -3378,6 +3505,7 @@ const BLOCK_COLORS = {
   [B.BOW]: 0x8a5228, [B.ARROW]: 0x9c7a4e, [B.COOKED_MEAT]: 0x6d2e1c, [B.RAW_FISH]: 0x4c86a8, [B.COOKED_FISH]: 0xc8762e,
   [B.LADDER]: 0x9e6732, [B.GOLDEN_APPLE]: 0xffd700, [B.BONE]: 0xf0ece1,
   [B.WOOL]: 0xeae6df, [B.BED]: 0xb82820, [B.SHIELD]: 0x8a9298,
+  [B.CHEST]: 0x9b6c3c, [B.GUNPOWDER]: 0x4a4a4a,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -3716,6 +3844,33 @@ function paintZombieLeg(ctx) {
   ctx.fillStyle = '#42346e'; ctx.fillRect(2, 4, 4, 3); ctx.fillRect(10, 4, 4, 3); // 膝盖磨白
   ctx.fillStyle = '#1e1828'; ctx.fillRect(0, 12, 16, 4); // 污黑工装靴
   ctx.fillStyle = '#120e18'; ctx.fillRect(7, 0, 2, 16); // 裤腿中缝
+}
+
+// —— 🧨 苦力怕 (Creeper) ——
+function paintCreeperFace(ctx) {
+  // 经典苦力怕悲伤皱眉面孔：双眼 (4x4) + 倒U/T型愁苦嘴
+  ctx.fillStyle = '#080c08';
+  ctx.fillRect(2, 3, 4, 4); // 左眼
+  ctx.fillRect(10, 3, 4, 4); // 右眼
+  ctx.fillRect(6, 6, 4, 3); // 鼻连接部
+  ctx.fillRect(4, 9, 8, 3); // 上唇
+  ctx.fillRect(4, 12, 3, 4); // 左下嘴角
+  ctx.fillRect(9, 12, 3, 4); // 右下嘴角
+  ctx.fillStyle = '#152015';
+  ctx.fillRect(6, 9, 4, 2);
+}
+function paintCreeperBody(ctx) {
+  // 苔绿与青绿色相间的斑驳像素迷彩
+  const r = mulberry32(777);
+  for (let k = 0; k < 24; k++) {
+    const x = Math.floor(r() * 14), y = Math.floor(r() * 14);
+    ctx.fillStyle = r() < 0.45 ? '#1e4c22' : (r() < 0.75 ? '#4da244' : '#7ad46e');
+    ctx.fillRect(x, y, 2, 2);
+  }
+}
+function paintCreeperLeg(ctx) {
+  ctx.fillStyle = '#142c16';
+  ctx.fillRect(0, 12, 16, 4); // 四足灰黑爪部
 }
 
 const MOB_KINDS = [
@@ -4161,6 +4316,134 @@ function updateZombies(dt) {
     z.legs.forEach((leg, i2) => { leg.rotation.x = swing * (i2 % 2 === 0 ? 1 : -1); });
   }
 }
+
+/* ============================ 苦力怕（Creeper） ============================ */
+const MAX_CREEPERS = 3;
+const creepers = [];
+let creeperSpawnTimer = 10;
+const creeperTorsoGeo = new THREE.BoxGeometry(0.38, 0.65, 0.22);
+const creeperHeadGeo = new THREE.BoxGeometry(0.44, 0.44, 0.44);
+const creeperLegGeo = new THREE.BoxGeometry(0.18, 0.32, 0.18);
+
+const creeperFaceMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [72, 162, 70], 85, paintCreeperFace) });
+const creeperSkinMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [72, 162, 70], 86, paintCreeperBody) });
+const creeperHeadMats = [creeperSkinMat, creeperSkinMat, creeperSkinMat, creeperSkinMat, creeperSkinMat, creeperFaceMat];
+const creeperBodyMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [72, 162, 70], 87, paintCreeperBody) });
+const creeperLegMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [72, 162, 70], 88, paintCreeperLeg) });
+
+function spawnCreeper(x, z) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(creeperTorsoGeo, creeperBodyMat);
+  body.position.y = 0.64; body.castShadow = true; body.receiveShadow = true; g.add(body);
+  const head = new THREE.Mesh(creeperHeadGeo, creeperHeadMats);
+  head.position.set(0, 1.18, 0); head.castShadow = true; head.receiveShadow = true; g.add(head);
+  const legs = [];
+  for (const [dx, dz] of [[0.11, 0.13], [-0.11, 0.13], [0.11, -0.13], [-0.11, -0.13]]) {
+    const leg = new THREE.Mesh(creeperLegGeo, creeperLegMat);
+    leg.position.set(dx, 0.16, dz); leg.castShadow = true; leg.receiveShadow = true;
+    g.add(leg); legs.push(leg);
+  }
+  g.position.set(x, findGround(Math.floor(x), Math.floor(z)), z);
+  scene.add(g);
+  creepers.push({ g, head, body, legs, x, z, hp: 4, heading: 0, fuse: 0, fuseSoundT: 0, hurtT: 0, phase: Math.random() * 6 });
+}
+
+function killCreeper(i) {
+  const c = creepers[i];
+  const bx = Math.floor(c.x), bz = Math.floor(c.z);
+  const by = findGround(bx, bz) - 1;
+  scene.remove(c.g);
+  spawnParticles(bx, by, bz, 0x4e9a46, 16);
+  // 击败苦力怕掉落火药
+  const n = 1 + ((Math.random() * 2) | 0);
+  for (let k = 0; k < n; k++) dropItem(B.GUNPOWDER, bx, by, bz);
+  if (Math.random() < 0.15) dropItem(B.TNT, bx, by, bz);
+  creepers.splice(i, 1);
+  playZombieDeath();
+}
+
+function updateCreepers(dt) {
+  const night = timeOfDay >= 0.5;
+  creeperSpawnTimer -= dt;
+  if (night && creepers.length < MAX_CREEPERS && creeperSpawnTimer <= 0) {
+    creeperSpawnTimer = 8 + Math.random() * 6;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const ang = Math.random() * Math.PI * 2, dist = 24 + Math.random() * 18;
+      const x = Math.floor(player.pos.x + Math.cos(ang) * dist);
+      const z = Math.floor(player.pos.z + Math.sin(ang) * dist);
+      const gy = findGround(x, z);
+      if (isDryGround(x, gy, z)) {
+        spawnCreeper(x + 0.5, z + 0.5);
+        break;
+      }
+    }
+  }
+
+  for (let i = creepers.length - 1; i >= 0; i--) {
+    const c = creepers[i];
+    c.hurtT -= dt;
+    const dxp = player.pos.x - c.x, dzp = player.pos.z - c.z;
+    const dist = Math.hypot(dxp, dzp);
+    const cy = findGround(Math.floor(c.x), Math.floor(c.z));
+    const dy3 = player.pos.y - cy;
+    const dist3 = Math.hypot(dxp, dy3, dzp);
+
+    if (dist > 80) {
+      scene.remove(c.g);
+      creepers.splice(i, 1);
+      continue;
+    }
+
+    const playerTooHigh = dy3 > 5;
+    if (!playerTooHigh && dist3 < 3.2) {
+      // 进入引爆倒计时
+      c.fuse += dt;
+      c.fuseSoundT -= dt;
+      if (c.fuseSoundT <= 0) {
+        c.fuseSoundT = 0.35;
+        playFuseSound();
+      }
+      // 膨胀呼吸动画
+      const swell = 1.0 + (c.fuse / 1.4) * 0.28;
+      c.g.scale.set(swell, swell, swell);
+
+      if (c.fuse >= 1.4) {
+        // 苦力怕引爆！
+        explodeTnt(c.x, cy + 0.6, c.z);
+        scene.remove(c.g);
+        creepers.splice(i, 1);
+        continue;
+      }
+    } else {
+      // 玩家远离时引线平息
+      if (c.fuse > 0) {
+        c.fuse = Math.max(0, c.fuse - dt * 2.0);
+        const swell = 1.0 + (c.fuse / 1.4) * 0.28;
+        c.g.scale.set(swell, swell, swell);
+      }
+      // 追击玩家
+      if (!playerTooHigh && dist3 < 24) {
+        c.heading = Math.atan2(dxp, dzp);
+        const speed = c.hurtT > 0 ? 0.3 : 1.35;
+        const nx = c.x + Math.sin(c.heading) * speed * dt;
+        const nz = c.z + Math.cos(c.heading) * speed * dt;
+        const ti = Math.floor(nx), tz = Math.floor(nz);
+        const tg = findGround(ti, tz);
+        if (world.getWater(ti, cy, tz) === 0 && tg <= cy + 1 && tg >= cy - 2) {
+          c.x = nx; c.z = nz;
+        }
+      }
+    }
+
+    c.g.position.set(c.x, cy, c.z);
+    c.g.rotation.y = c.heading + Math.PI;
+    c.phase += dt * (playerTooHigh || dist3 < 3.2 ? 0 : 5);
+    const swing = Math.sin(c.phase) * 0.4;
+    c.legs.forEach((leg, idx) => {
+      leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
+    });
+  }
+}
 // 攻击伤害（剑 / 徒手）
 function meleeDamage() {
   const s = hotbar[selected];
@@ -4197,6 +4480,10 @@ function meleeAttack() {
   for (let i = zombies.length - 1; i >= 0; i--) {
     const m = zombies[i];
     if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; playZombieHit(); if (m.hp <= 0) killZombie(i); }
+  }
+  for (let i = creepers.length - 1; i >= 0; i--) {
+    const m = creepers[i];
+    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; playZombieHit(); if (m.hp <= 0) killCreeper(i); }
   }
   for (let i = animals.length - 1; i >= 0; i--) {
     const m = animals[i];
@@ -4364,6 +4651,12 @@ function explodeTnt(ex, ey, ez) {
     const z = zombies[i];
     const dist = Math.hypot(z.x - ex, z.g.position.y - ey, z.z - ez);
     if (dist < radius + 2) killZombie(i);
+  }
+
+  for (let i = creepers.length - 1; i >= 0; i--) {
+    const c = creepers[i];
+    const dist = Math.hypot(c.x - ex, c.g.position.y - ey, c.z - ez);
+    if (dist < radius + 2) killCreeper(i);
   }
 
   for (let i = animals.length - 1; i >= 0; i--) {
@@ -4563,6 +4856,24 @@ function updateArrows(dt) {
         spawnParticles(a.pos.x, a.pos.y, a.pos.z, 0x609654, 8);
         if (z.hp <= 0) killZombie(zi);
         break;
+      }
+    }
+
+    if (!hitMob) {
+      for (let ci = creepers.length - 1; ci >= 0; ci--) {
+        const c = creepers[ci];
+        const dist = Math.hypot(c.x - a.pos.x, (c.g.position.y + 0.6) - a.pos.y, c.z - a.pos.z);
+        if (dist < 0.75) {
+          hitMob = true;
+          c.hp -= a.dmg;
+          c.hurtT = 0.25;
+          c.x += vDir.x * 0.8;
+          c.z += vDir.z * 0.8;
+          playZombieHit();
+          spawnParticles(a.pos.x, a.pos.y, a.pos.z, 0x4e9a46, 8);
+          if (c.hp <= 0) killCreeper(ci);
+          break;
+        }
       }
     }
 
@@ -4777,7 +5088,7 @@ const TOOL_DURABILITY = {
 };
 // 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌不可放置）
 function isPlaceable(id) {
-  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD) return false;
+  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER) return false;
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.MELON_SLICE) return false;
   if (isFood(id)) return false;   // 食物不可放置
   return true;
@@ -5153,6 +5464,14 @@ function playZombieHit() { burst(0.07, 0.1, 620); tone(150, 90, 0.1, 'triangle',
 function playZombieDeath() { tone(140, 40, 0.3, 'sawtooth', 0.14); burst(0.2, 0.08, 520); }
 function playGrow() { tone(430, 760, 0.16, 'sine', 0.05); }
 function playClick() { tone(640, 520, 0.05, 'sine', 0.05); }
+function playChestOpen() {
+  tone(160, 240, 0.16, 'triangle', 0.14);
+  setTimeout(() => tone(240, 310, 0.14, 'triangle', 0.12), 80);
+}
+function playChestClose() {
+  tone(260, 150, 0.15, 'triangle', 0.14);
+  burst(0.04, 0.05, 340, 'lowpass');
+}
 
 /* ============================ 热键栏 + 背包 + 物品 ============================ */
 const HOTBAR_SIZE = 9;
@@ -5250,6 +5569,7 @@ const NAMES = {
   [B.BOW]: '木弓', [B.ARROW]: '箭矢', [B.COOKED_MEAT]: '熟肉排', [B.RAW_FISH]: '生鱼', [B.COOKED_FISH]: '熟鱼排',
   [B.LADDER]: '木梯', [B.GOLDEN_APPLE]: '金苹果', [B.BONE]: '骨头',
   [B.WOOL]: '羊毛', [B.BED]: '红色床', [B.SHIELD]: '铁盾牌',
+  [B.CHEST]: '储物箱', [B.GUNPOWDER]: '火药',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 // —— 食物：恢复饥饿值 ——
@@ -5304,10 +5624,12 @@ const RECIPES = [
   { out: B.GOLD_INGOT, n: 9, need: [[B.GOLD_BLOCK, 1]] },
   { out: B.DIAMOND_BLOCK, n: 1, need: [[B.DIAMOND, 9]] },
   { out: B.DIAMOND, n: 9, need: [[B.DIAMOND_BLOCK, 1]] },
+  { out: B.TNT, n: 1, need: [[B.GUNPOWDER, 5], [B.SAND, 4]] },
   { out: B.TNT, n: 1, need: [[B.SAND, 4], [B.COAL, 5]] },
   { out: B.SNOW, n: 1, need: [[B.SNOWBALL, 4]] },
   { out: B.BED, n: 1, need: [[B.WOOL, 3], [B.PLANKS, 3]] },
   { out: B.SHIELD, n: 1, need: [[B.PLANKS, 6], [B.IRON_INGOT, 1]] },
+  { out: B.CHEST, n: 1, need: [[B.PLANKS, 8]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -5645,12 +5967,18 @@ function makeItemIcon(id) {
     ctx.fillRect(10, 12, 12, 4);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(15, 10, 2, 2);
+  } else if (id === B.GUNPOWDER) {
+    // 火药图标：深灰黑色粉末堆 + 细密颗粒感与明暗层次
+    ctx.fillStyle = '#444648'; ctx.fillRect(10, 14, 12, 10);
+    ctx.fillRect(8, 17, 16, 7); ctx.fillRect(12, 11, 8, 4);
+    ctx.fillStyle = '#646668'; ctx.fillRect(11, 13, 4, 3); ctx.fillRect(16, 16, 5, 2);
+    ctx.fillStyle = '#26282a'; ctx.fillRect(9, 21, 14, 3);
   }
   return cv;
 }
 function makeIcon(id) {
   if (id === B.STICK || (isTool(id) && id !== B.SHIELD)) return makeToolIcon(id);
-  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD) return makeItemIcon(id);
+  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
   return makeIconCanvas(id);
 }
@@ -5797,6 +6125,8 @@ let locked = false;
 let started = false;
 let inventoryOpen = false;
 let furnaceOpen = false;
+let chestOpen = false;
+let currentChestKey = null;
 let furnaceSel = 0;                    // 0 输入 / 1 燃料 / 2 输出
 let furnaceRefreshT = 0;
 const menuEl = document.getElementById('menu');
@@ -5811,15 +6141,20 @@ const furnaceSlots = document.getElementById('furnaceSlots');
 const furnaceBar = document.getElementById('furnaceBar');
 const furnaceGrid = document.getElementById('furnaceGrid');
 const furnaceHotbar = document.getElementById('furnaceHotbar');
+const chestEl = document.getElementById('chestUI');
+const chestSlotsGrid = document.getElementById('chestSlotsGrid');
+const chestInvGrid = document.getElementById('chestInvGrid');
+const chestHotbar = document.getElementById('chestHotbar');
 const underwaterEl = document.getElementById('underwater');
 const hudMeta = document.getElementById('hudMeta');
 
 function refreshOverlays() {
-  const uiOpen = inventoryOpen || furnaceOpen;
+  const uiOpen = inventoryOpen || furnaceOpen || chestOpen;
   menuEl.style.display = (!locked && !started && !uiOpen) ? 'flex' : 'none';
   pauseEl.style.display = (!locked && started && !uiOpen) ? 'flex' : 'none';
   inventoryEl.style.display = inventoryOpen ? 'flex' : 'none';
   furnaceEl.style.display = furnaceOpen ? 'flex' : 'none';
+  chestEl.style.display = chestOpen ? 'flex' : 'none';
 }
 function buildInventory() {
   invGrid.innerHTML = '';
@@ -5993,13 +6328,156 @@ function openFurnace() {
   if (!started) return;
   furnaceOpen = true;
   inventoryOpen = false;
+  chestOpen = false;
   buildFurnaceUI();
   refreshOverlays();
-  document.exitPointerLock();
+  document.exitPointerLock?.();
 }
 function closeFurnace() {
   furnaceOpen = false;
   refreshOverlays();
+  requestLock();
+}
+
+function buildChestUI() {
+  if (!currentChestKey) return;
+  let slots = chestStorages.get(currentChestKey);
+  if (!slots) {
+    slots = new Array(27).fill(null);
+    chestStorages.set(currentChestKey, slots);
+  }
+
+  // 1) 绘制箱内 27 格
+  chestSlotsGrid.innerHTML = '';
+  for (let i = 0; i < 27; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'inv-slot';
+    const s = slots[i];
+    if (s) {
+      slot.appendChild(makeSlotIcon(s));
+      if (s.count > 1) {
+        const c = document.createElement('span');
+        c.className = 'inv-count';
+        c.textContent = s.count;
+        slot.appendChild(c);
+      }
+      slot.title = s.count + '× ' + itemName(s.id);
+    }
+    slot.addEventListener('click', () => {
+      const curHand = hotbar[selected];
+      if (curHand) {
+        if (!s) {
+          slots[i] = { id: curHand.id, count: curHand.count, dur: curHand.dur };
+          hotbar[selected] = null;
+        } else if (s.id === curHand.id && !isTool(s.id)) {
+          const canAdd = Math.min(curHand.count, 64 - s.count);
+          s.count += canAdd;
+          curHand.count -= canAdd;
+          if (curHand.count <= 0) hotbar[selected] = null;
+        } else {
+          const tmp = slots[i];
+          slots[i] = curHand;
+          hotbar[selected] = tmp;
+        }
+      } else if (s) {
+        hotbar[selected] = s;
+        slots[i] = null;
+      }
+      playPop();
+      refreshHotbar();
+      buildChestUI();
+    });
+    chestSlotsGrid.appendChild(slot);
+  }
+
+  // 2) 绘制下方背包 27 格
+  chestInvGrid.innerHTML = '';
+  for (let i = 0; i < INV_SIZE; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'inv-slot';
+    const s = inv[i];
+    if (s) {
+      slot.appendChild(makeSlotIcon(s));
+      if (s.count > 1) {
+        const c = document.createElement('span');
+        c.className = 'inv-count';
+        c.textContent = s.count;
+        slot.appendChild(c);
+      }
+      slot.title = s.count + '× ' + itemName(s.id) + ' (点击存入箱子)';
+      slot.addEventListener('click', () => {
+        let deposited = false;
+        if (!isTool(s.id)) {
+          for (let ci = 0; ci < 27; ci++) {
+            if (slots[ci] && slots[ci].id === s.id && slots[ci].count < 64) {
+              const add = Math.min(s.count, 64 - slots[ci].count);
+              slots[ci].count += add;
+              s.count -= add;
+              if (s.count <= 0) { inv[i] = null; deposited = true; break; }
+            }
+          }
+        }
+        if (!deposited && s.count > 0) {
+          for (let ci = 0; ci < 27; ci++) {
+            if (!slots[ci]) {
+              slots[ci] = s;
+              inv[i] = null;
+              deposited = true;
+              break;
+            }
+          }
+        }
+        playPop();
+        buildChestUI();
+      });
+    }
+    chestInvGrid.appendChild(slot);
+  }
+
+  // 3) 快捷栏 9 格
+  chestHotbar.innerHTML = '';
+  for (let i = 0; i < HOTBAR_SIZE; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'slot' + (i === selected ? ' active' : '');
+    const s = hotbar[i];
+    if (s) {
+      slot.appendChild(makeSlotIcon(s));
+      if (s.count > 1) {
+        const c = document.createElement('span');
+        c.className = 'cnt';
+        c.textContent = s.count;
+        slot.appendChild(c);
+      }
+      slot.title = s.count + '× ' + itemName(s.id);
+    }
+    slot.addEventListener('click', () => {
+      select(i);
+      buildChestUI();
+    });
+    chestHotbar.appendChild(slot);
+  }
+}
+
+function openChest(x, y, z) {
+  if (!started) return;
+  currentChestKey = `${x},${y},${z}`;
+  if (!chestStorages.has(currentChestKey)) {
+    chestStorages.set(currentChestKey, new Array(27).fill(null));
+  }
+  chestOpen = true;
+  furnaceOpen = false;
+  inventoryOpen = false;
+  buildChestUI();
+  refreshOverlays();
+  playChestOpen();
+  document.exitPointerLock?.();
+}
+function closeChest() {
+  if (!chestOpen) return;
+  chestOpen = false;
+  currentChestKey = null;
+  refreshOverlays();
+  playChestClose();
   requestLock();
 }
 function toggleDayNight() { timeOfDay = (timeOfDay < 0.5) ? 0.74 : 0.24; }   // 0 键快速切换昼夜
@@ -6018,7 +6496,7 @@ function requestLock() {
 }
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === canvas;
-  if (locked) { started = true; inventoryOpen = false; furnaceOpen = false; }
+  if (locked) { started = true; inventoryOpen = false; furnaceOpen = false; chestOpen = false; }
   refreshOverlays();
 });
 menuEl.addEventListener('click', () => { playClick(); requestLock(); });
@@ -6104,7 +6582,7 @@ const HARDNESS = {
   [B.MELON]: 0.6, [B.JACK_O_LANTERN]: 0.6, [B.BOOKSHELF]: 1.0, [B.HAY_BALE]: 0.5, [B.MAPLE_LEAVES]: 0.2, [B.ICE]: 0.4,
   [B.GLOWSTONE]: 0.3, [B.EGG]: 0.1,
   [B.COAL_BLOCK]: 2.0, [B.IRON_BLOCK]: 3.0, [B.GOLD_BLOCK]: 2.5, [B.DIAMOND_BLOCK]: 3.5,
-  [B.TNT]: 0, [B.SNOWBALL]: 0.1,
+  [B.TNT]: 0, [B.SNOWBALL]: 0.1, [B.CHEST]: 1.5,
 };
 function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
 // 破坏掉落物
@@ -6137,7 +6615,7 @@ function effSpeed(id) {
     return 1.15;
   }
   if (isAxe(t)) {
-    if (isLog(id) || id === B.PLANKS || id === B.BAMBOO || id === B.BOOKSHELF || id === B.PUMPKIN || id === B.JACK_O_LANTERN || id === B.MELON) return tierOf(t);
+    if (isLog(id) || id === B.PLANKS || id === B.CHEST || id === B.BAMBOO || id === B.BOOKSHELF || id === B.PUMPKIN || id === B.JACK_O_LANTERN || id === B.MELON) return tierOf(t);
     return 1.15;
   }
   if (isShovel(t)) {
@@ -6194,6 +6672,7 @@ function updateBreaking(dt) {
     const bx = breaking.x, by = breaking.y, bz = breaking.z, bid = breaking.id;
     stopBreaking();
     if (bid === B.TORCH || bid === B.JACK_O_LANTERN || bid === B.GLOWSTONE) removeTorchLight(bx, by, bz);
+    if (bid === B.CHEST) dropChestItems(bx, by, bz);
     world.setBlock(bx, by, bz, B.AIR);
     // 竹子、仙人掌、甘蔗连锁向上坍塌掉落
     if (bid === B.BAMBOO || bid === B.CACTUS || bid === B.SUGARCANE) {
@@ -6272,7 +6751,10 @@ document.addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (e.code === 'KeyF') { player.fly = !player.fly; player.vel.y = 0; }
   if (e.code === 'KeyN') { timeOfDay = 0.24; }                 // 跳到白天
-  if (e.code === 'KeyE') { toggleInventory(); }                 // 背包
+  if (e.code === 'KeyE') {
+    if (chestOpen) { closeChest(); return; }
+    toggleInventory();
+  }
   if (e.code === 'KeyQ') {
     // Q 键丢出手持物品
     const sel = hotbar[selected];
@@ -6303,6 +6785,7 @@ document.addEventListener('keydown', (e) => {
     toast('🔄 场景与方块网格已全部重新渲染');
   }
   if (e.code === 'Escape') {
+    if (chestOpen) { closeChest(); return; }
     if (inventoryOpen) { closeInventory(); return; }
     if (furnaceOpen) { closeFurnace(); return; }
   }
@@ -6404,6 +6887,7 @@ function onMousedown(btn) {
     }
     if (sel && isFood(sel.id)) { eat(sel); return; }   // 右键进食
     if (hit && hit.id === B.FURNACE) { openFurnace(); return; }   // 右键熔炉 → 打开冶炼界面
+    if (hit && hit.id === B.CHEST) { openChest(hit.x, hit.y, hit.z); return; }   // 右键储物箱 → 打开储物界面
     if (!sel) return;
     const sid = sel.id;
     // 睡莲：放置在水面格
@@ -6555,6 +7039,7 @@ function animate() {
     updateAnimals(dt);
     updateAnimalSpawning(dt);
     updateZombies(dt);
+    updateCreepers(dt);
     updatePrimedTnt(dt);
     updateSnowballs(dt);
     updateArrows(dt);
@@ -6640,7 +7125,10 @@ function animate() {
     const hh = Math.floor(hour), mm = Math.floor((hour - hh) * 60);
     const clockStr = String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
     const biomeName = BIOME_NAMES[biomeOf(Math.floor(player.pos.x), Math.floor(player.pos.z))] || '';
-    hudMeta.textContent = `FPS ${fps} · XYZ ${Math.round(player.pos.x)} ${Math.round(player.pos.y)} ${Math.round(player.pos.z)} · 时间 ${clockStr} · 区块 ${chunks} · ${biomeName} · ${player.fly ? '飞行' : '行走'} · ${submerged ? '水下' : ''}`;
+    const facingNames = ['南', '西南', '西', '西北', '北', '东北', '东', '东南'];
+    const facingIdx = Math.floor((((player.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4) + 0.5) % 8;
+    const facingStr = facingNames[facingIdx];
+    hudMeta.textContent = `FPS ${fps} · 坐标 ${Math.round(player.pos.x)}, ${Math.round(player.pos.y)}, ${Math.round(player.pos.z)} · 朝向 ${facingStr} · ${biomeName} · 时间 ${clockStr} · ${player.fly ? '🚀 飞行' : '🚶 行走'}${submerged ? ' · 🫧 水下' : ''}`;
     fpsAcc = 0; fpsFrames = 0;
   }
 
