@@ -218,6 +218,29 @@
   #chestSlotsGrid { display: grid; grid-template-columns: repeat(9, 48px); gap: 6px; justify-content: center; margin-bottom: 6px; }
   #chestInvGrid { display: grid; grid-template-columns: repeat(7, 48px); gap: 6px; justify-content: center; margin-top: 6px; }
   #chestHotbar { display: flex; gap: 6px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+
+  /* ---- 村民交易 ---- */
+  #tradeUI {
+    position: fixed; inset: 0; z-index: 24; display: none; align-items: center; justify-content: center;
+    background: rgba(8, 12, 18, 0.76); color: #e8f0f6; text-align: center;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  #tradeUI .box { padding: 18px 24px; max-width: 580px; max-height: 90vh; }
+  .trade-row {
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(22, 32, 44, 0.85); border: 1px solid rgba(85, 120, 155, 0.35);
+    border-radius: 6px; padding: 8px 12px; gap: 10px;
+  }
+  .trade-item-box { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .trade-btn {
+    background: #1cb55c; border: 1px solid #32e078; color: #fff;
+    font-weight: bold; border-radius: 4px; padding: 5px 14px; cursor: pointer;
+    font-size: 12px; transition: background 0.15s;
+  }
+  .trade-btn:disabled {
+    background: #34424c; border-color: #4a5c68; color: #7f92a0; cursor: not-allowed;
+  }
+  .trade-btn:not(:disabled):hover { background: #24d16c; }
 </style>
 </head>
 <body>
@@ -242,7 +265,7 @@
 <div id="menu">
   <div class="box">
     <h1>⛏️ 我的世界 <span class="tag">Web 复刻</span></h1>
-    <div class="sub">铁傀儡守护者 · 动物喂食繁殖 · 蜘蛛攀爬飞扑 · 浮漂垂钓 · 营火烘烤 · 储物箱 · 瞬移传送</div>
+    <div class="sub">自然村庄生态 · 村民集市交易 · 绿宝石货币 · 铁傀儡守护者 · 动物繁育 · 浮漂垂钓 · 营火烘烤</div>
     <div class="keys">
       <span><b>W A S D</b> 移动</span>
       <span><b>鼠标</b> 视角</span>
@@ -255,7 +278,7 @@
       <span><b>V</b> 望远镜放大</span>
       <span><b>0</b> 切换昼夜</span>
       <span><b>左键</b> 破坏方块 / 攻击</span>
-      <span><b>右键</b> 放置/举盾/射箭/钓鱼/喂食/瞬移</span>
+      <span><b>右键</b> 放置/交易/举盾/射箭/钓鱼/喂食</span>
       <span><b>中键</b> 选取方块</span>
       <span><b>Esc</b> 暂停菜单</span>
     </div>
@@ -324,6 +347,15 @@
   </div>
 </div>
 
+<div id="tradeUI">
+  <div class="box" style="max-width: 580px;">
+    <h1 id="tradeTitle">👨‍🌾 农夫村民 · 贸易集市</h1>
+    <div class="sub">以物易物，公平交易 · 点击按钮兑换绿宝石与稀有物资 · 按 Esc 或 E 离开</div>
+    <div id="tradeList" style="display:flex; flex-direction:column; gap:8px; margin: 16px 0; max-height: 55vh; overflow-y:auto; padding-right:4px;"></div>
+    <button id="closeTradeBtn" style="background:#2b3a4a; border:1px solid #4a627a; color:#fff; padding:6px 20px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:13px;">关闭贸易</button>
+  </div>
+</div>
+
 <!-- ============ 纯噪声与地形生成（无 DOM / 无依赖） ============ -->
 <script>
 const HEIGHT = 96;      // 世界高度
@@ -358,7 +390,7 @@ const B = {
   CHEST:103, GUNPOWDER:104,
   CAMPFIRE:105, DOOR:106,
   ENDER_PEARL:107, COBWEB:108, STRING:109,
-  FISHING_ROD:110, SPIDER_EYE:111
+  FISHING_ROD:110, SPIDER_EYE:111, EMERALD:112
 };
 
 function mulberry32(a) {
@@ -2362,6 +2394,41 @@ function populateDungeonChest(x, y, z) {
   }
   chestStorages.set(ck, slots);
 }
+function populateVillageChest(x, y, z, type = 'general') {
+  const ck = `${x},${y},${z}`;
+  if (chestStorages.has(ck)) return;
+  const slots = new Array(27).fill(null);
+  const rnd = mulberry32(x * 12345 + y * 789 + z);
+  let possibleLoot = [];
+  if (type === 'blacksmith') {
+    possibleLoot = [
+      { id: B.IRON_INGOT, count: 2 + Math.floor(rnd() * 5), prob: 0.85 },
+      { id: B.GOLD_INGOT, count: 1 + Math.floor(rnd() * 3), prob: 0.50 },
+      { id: B.EMERALD, count: 1 + Math.floor(rnd() * 4), prob: 0.70 },
+      { id: B.IRON_SWORD, count: 1, prob: 0.40 },
+      { id: B.IRON_PICKAXE, count: 1, prob: 0.35 },
+      { id: B.SHIELD, count: 1, prob: 0.30 },
+      { id: B.BREAD, count: 3 + Math.floor(rnd() * 4), prob: 0.80 },
+      { id: B.APPLE, count: 2 + Math.floor(rnd() * 3), prob: 0.65 },
+    ];
+  } else {
+    possibleLoot = [
+      { id: B.BREAD, count: 3 + Math.floor(rnd() * 5), prob: 0.90 },
+      { id: B.APPLE, count: 2 + Math.floor(rnd() * 4), prob: 0.75 },
+      { id: B.WHEAT, count: 4 + Math.floor(rnd() * 8), prob: 0.80 },
+      { id: B.EMERALD, count: 1 + Math.floor(rnd() * 3), prob: 0.65 },
+      { id: B.TORCH, count: 4 + Math.floor(rnd() * 6), prob: 0.60 },
+      { id: B.PLANKS, count: 6 + Math.floor(rnd() * 10), prob: 0.50 },
+    ];
+  }
+  let slotIdx = 0;
+  for (const item of possibleLoot) {
+    if (rnd() < item.prob && slotIdx < 27) {
+      slots[slotIdx++] = { id: item.id, count: item.count };
+    }
+  }
+  chestStorages.set(ck, slots);
+}
 function dropChestItems(x, y, z) {
   const ck = `${x},${y},${z}`;
   const slots = chestStorages.get(ck);
@@ -3605,7 +3672,7 @@ const BLOCK_COLORS = {
   [B.CHEST]: 0x9b6c3c, [B.GUNPOWDER]: 0x4a4a4a,
   [B.CAMPFIRE]: 0xec7828, [B.DOOR]: 0xad7e46,
   [B.ENDER_PEARL]: 0x228b8b, [B.COBWEB]: 0xeeeeee, [B.STRING]: 0xe4e4e4,
-  [B.FISHING_ROD]: 0x8a5228, [B.SPIDER_EYE]: 0xa01828,
+  [B.FISHING_ROD]: 0x8a5228, [B.SPIDER_EYE]: 0xa01828, [B.EMERALD]: 0x17dd62,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -4086,6 +4153,25 @@ function paintIronGolemBody(ctx) {
   ctx.fillRect(2, 4, 3, 8); ctx.fillRect(10, 2, 4, 6);
   ctx.fillStyle = '#6ab04c';
   ctx.fillRect(3, 5, 2, 5); ctx.fillRect(11, 3, 2, 3);
+}
+
+// —— 👨‍🌾 村民 (Villager) 贴图 ——
+function paintVillagerFace(ctx) {
+  ctx.fillStyle = '#c68c62'; ctx.fillRect(0, 0, 16, 16);
+  ctx.fillStyle = '#4a2e16'; ctx.fillRect(3, 5, 10, 2);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(3, 7, 3, 2); ctx.fillRect(10, 7, 3, 2);
+  ctx.fillStyle = '#18aa4c'; ctx.fillRect(4, 7, 2, 2); ctx.fillRect(10, 7, 2, 2);
+  ctx.fillStyle = '#9e6238'; ctx.fillRect(5, 12, 6, 2);
+}
+function paintVillagerRobe(colorHex, patternHex) {
+  return (ctx) => {
+    ctx.fillStyle = colorHex; ctx.fillRect(0, 0, 16, 16);
+    if (patternHex) {
+      ctx.fillStyle = patternHex;
+      ctx.fillRect(0, 7, 16, 2);
+      ctx.fillRect(7, 0, 2, 16);
+    }
+  };
 }
 
 const MOB_KINDS = [
@@ -4574,10 +4660,24 @@ function updateZombies(dt) {
       }
       continue;
     }
-    const playerTooHigh = player.pos.y - zy > 5;   // 玩家在上方 5 格以上（飞行）→ 不追击不攻击
+
+    let targetX = player.pos.x, targetZ = player.pos.z;
+    let targetDist = dist;
+    let targetVillager = null;
+    for (const v of villagers) {
+      const vd = Math.hypot(v.x - z.x, v.z - z.z);
+      if (vd < targetDist && vd < 14) {
+        targetDist = vd;
+        targetX = v.x;
+        targetZ = v.z;
+        targetVillager = v;
+      }
+    }
+
+    const playerTooHigh = !targetVillager && (player.pos.y - zy > 5);   // 玩家在上方 5 格以上（飞行）→ 不追击不攻击
     if (!playerTooHigh) {
-      if (dist3 > 2) {   // 追击（各方向 2 格内才攻击）
-        z.heading = Math.atan2(dxp, dzp);
+      if (targetDist > 1.8) {   // 追击
+        z.heading = Math.atan2(targetX - z.x, targetZ - z.z);
         const speed = z.hurtT > 0 ? 0.3 : 1.1;
         const nx = z.x + Math.sin(z.heading) * speed * dt;
         const nz = z.z + Math.cos(z.heading) * speed * dt;
@@ -4596,7 +4696,24 @@ function updateZombies(dt) {
         }
       } else {   // 攻击
         z.attackTimer -= dt;
-        if (z.attackTimer <= 0) { z.attackTimer = 1.0; damagePlayer(2); }
+        if (z.attackTimer <= 0) {
+          z.attackTimer = 1.0;
+          if (targetVillager) {
+            targetVillager.hp -= 3;
+            playVillagerHmm();
+            spawnParticles(targetVillager.x, targetVillager.y + 0.8, targetVillager.z, 0xc68c62, 6);
+            if (targetVillager.hp <= 0) {
+              const vidx = villagers.indexOf(targetVillager);
+              if (vidx >= 0) {
+                scene.remove(targetVillager.g);
+                villagers.splice(vidx, 1);
+                toast('💀 村民被僵尸击败了！');
+              }
+            }
+          } else {
+            damagePlayer(2);
+          }
+        }
       }
     }
     z.g.position.set(z.x, findGround(Math.floor(z.x), Math.floor(z.z)), z.z);
@@ -5434,6 +5551,429 @@ function updateIronGolems(dt) {
     }
   }
 }
+
+/* ============================ 👨‍🌾 村庄与村民生态系统 (Villages & Villager Trading) ============================ */
+const villagers = [];
+const villageCenters = new Set();
+let tradeOpen = false;
+let currentTradingVillager = null;
+
+const villagerHeadGeo = new THREE.BoxGeometry(0.40, 0.48, 0.40);
+const villagerNoseGeo = new THREE.BoxGeometry(0.10, 0.20, 0.12);
+const villagerRobeGeo = new THREE.BoxGeometry(0.48, 0.82, 0.34);
+const villagerArmsGeo = new THREE.BoxGeometry(0.54, 0.28, 0.26);
+const villagerLegGeo = new THREE.BoxGeometry(0.18, 0.48, 0.18);
+
+function playVillagerHmm() {
+  tone(150, 130, 0.24, 'triangle', 0.22);
+  setTimeout(() => tone(130, 142, 0.20, 'sine', 0.18), 100);
+}
+function playVillagerTrade() {
+  tone(523, 659, 0.14, 'triangle', 0.18);
+  setTimeout(() => tone(659, 784, 0.20, 'sine', 0.22), 90);
+}
+
+const VILLAGER_TRADES = {
+  farmer: {
+    title: '🌾 农夫村民 · 丰收市集',
+    trades: [
+      { need: [B.WHEAT, 12], give: [B.EMERALD, 1] },
+      { need: [B.EMERALD, 1], give: [B.BREAD, 6] },
+      { need: [B.APPLE, 6], give: [B.EMERALD, 1] },
+      { need: [B.EMERALD, 2], give: [B.PUMPKIN_PIE, 3] },
+      { need: [B.MELON_SLICE, 18], give: [B.EMERALD, 1] },
+    ]
+  },
+  blacksmith: {
+    title: '⚒️ 铁匠村民 · 武器防具铺',
+    trades: [
+      { need: [B.COAL, 12], give: [B.EMERALD, 1] },
+      { need: [B.IRON_INGOT, 4], give: [B.EMERALD, 1] },
+      { need: [B.EMERALD, 3], give: [B.SHIELD, 1] },
+      { need: [B.EMERALD, 4], give: [B.IRON_SWORD, 1] },
+      { need: [B.EMERALD, 5], give: [B.IRON_PICKAXE, 1] },
+    ]
+  },
+  librarian: {
+    title: '📚 图书管理员 · 附魔与秘宝',
+    trades: [
+      { need: [B.EMERALD, 2], give: [B.BOOKSHELF, 1] },
+      { need: [B.EMERALD, 4], give: [B.BOW, 1] },
+      { need: [B.EMERALD, 4], give: [B.ENDER_PEARL, 2] },
+      { need: [B.EMERALD, 8], give: [B.GOLDEN_APPLE, 1] },
+    ]
+  },
+  cleric: {
+    title: '🔮 牧师村民 · 炼金神殿',
+    trades: [
+      { need: [B.ROTTEN_FLESH, 16], give: [B.EMERALD, 1] },
+      { need: [B.SPIDER_EYE, 4], give: [B.EMERALD, 1] },
+      { need: [B.BONE, 8], give: [B.EMERALD, 1] },
+      { need: [B.EMERALD, 2], give: [B.GLOWSTONE, 3] },
+    ]
+  }
+};
+
+function spawnVillager(x, z, prof = 'farmer') {
+  const g = new THREE.Group();
+
+  const faceMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [198, 140, 98], 901, paintVillagerFace) });
+  const skinMat = new THREE.MeshLambertMaterial({ color: 0xc68c62 });
+  const headMats = [skinMat, skinMat, skinMat, skinMat, skinMat, faceMat];
+
+  let robeColor = '#8a542e', patColor = null;
+  if (prof === 'blacksmith') { robeColor = '#323438'; patColor = '#8a929a'; }
+  else if (prof === 'librarian') { robeColor = '#b82828'; patColor = '#e8b024'; }
+  else if (prof === 'cleric') { robeColor = '#6c1c82'; patColor = '#f2ce38'; }
+
+  const robeMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [140, 90, 50], 902 + (prof === 'blacksmith' ? 1 : prof === 'librarian' ? 2 : prof === 'cleric' ? 3 : 0), paintVillagerRobe(robeColor, patColor)) });
+
+  // 头部
+  const head = new THREE.Mesh(villagerHeadGeo, headMats);
+  head.position.set(0, 1.45, 0); head.castShadow = true; head.receiveShadow = true; g.add(head);
+
+  // 突出大鼻子
+  const nose = new THREE.Mesh(villagerNoseGeo, skinMat);
+  nose.position.set(0, -0.06, -0.25); head.add(nose);
+
+  // 长袍躯干
+  const robe = new THREE.Mesh(villagerRobeGeo, robeMat);
+  robe.position.set(0, 0.82, 0); robe.castShadow = true; robe.receiveShadow = true; g.add(robe);
+
+  // 抱胸双手
+  const arms = new THREE.Mesh(villagerArmsGeo, robeMat);
+  arms.position.set(0, 0.88, -0.14); arms.rotation.x = 0.35; arms.castShadow = true; arms.receiveShadow = true; g.add(arms);
+
+  // 双腿
+  const legs = [];
+  for (const dx of [-0.12, 0.12]) {
+    const leg = new THREE.Mesh(villagerLegGeo, skinMat);
+    leg.position.set(dx, 0.24, 0); leg.castShadow = true; leg.receiveShadow = true;
+    g.add(leg); legs.push(leg);
+  }
+
+  const gy = findGround(Math.floor(x), Math.floor(z));
+  g.position.set(x, gy, z);
+  scene.add(g);
+
+  villagers.push({
+    g, head, robe, arms, legs,
+    x, y: gy, z,
+    prof,
+    hp: 20,
+    heading: Math.random() * Math.PI * 2,
+    timer: 2 + Math.random() * 4,
+    speed: 1.0,
+    phase: 0,
+    isIdle: true,
+    fleeing: false
+  });
+}
+
+function updateVillagers(dt) {
+  for (let i = villagers.length - 1; i >= 0; i--) {
+    const v = villagers[i];
+    const gy = findGround(Math.floor(v.x), Math.floor(v.z));
+    v.y = gy;
+
+    let threateningZombie = null, minZd = 12;
+    for (const z of zombies) {
+      const zd = Math.hypot(z.x - v.x, z.z - v.z);
+      if (zd < minZd) { minZd = zd; threateningZombie = z; }
+    }
+
+    if (threateningZombie) {
+      v.fleeing = true;
+      v.heading = Math.atan2(v.x - threateningZombie.x, v.z - threateningZombie.z);
+      const spd = 3.2;
+      const nx = v.x + Math.sin(v.heading) * spd * dt;
+      const nz = v.z + Math.cos(v.heading) * spd * dt;
+      const tg = findGround(Math.floor(nx), Math.floor(nz));
+      if (Math.abs(tg - v.y) <= 1 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
+        v.x = nx; v.z = nz;
+      }
+      if (Math.random() < 0.04) playVillagerHmm();
+    } else {
+      v.fleeing = false;
+      v.timer -= dt;
+      if (v.timer <= 0) {
+        v.isIdle = Math.random() < 0.55;
+        v.timer = v.isIdle ? (3 + Math.random() * 4) : (2.5 + Math.random() * 3.5);
+        if (!v.isIdle) v.heading = Math.random() * Math.PI * 2;
+        if (Math.random() < 0.25) playVillagerHmm();
+      }
+
+      if (!v.isIdle) {
+        const nx = v.x + Math.sin(v.heading) * v.speed * dt;
+        const nz = v.z + Math.cos(v.heading) * v.speed * dt;
+        const tg = findGround(Math.floor(nx), Math.floor(nz));
+        if (Math.abs(tg - v.y) <= 1 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
+          v.x = nx; v.z = nz;
+        } else {
+          v.isIdle = true;
+        }
+      }
+    }
+
+    v.g.position.set(v.x, v.y, v.z);
+    v.g.rotation.y = v.heading + Math.PI;
+
+    if (!v.isIdle || v.fleeing) {
+      v.phase += dt * (v.fleeing ? 8.0 : 4.0);
+      const swing = Math.sin(v.phase) * 0.35;
+      v.legs.forEach((leg, idx) => {
+        leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
+      });
+      v.head.rotation.y = Math.sin(v.phase * 0.5) * 0.12;
+    } else {
+      v.legs.forEach((leg) => { leg.rotation.x *= 0.8; });
+      v.head.rotation.y = 0;
+    }
+  }
+}
+
+function openTradeUI(v) {
+  currentTradingVillager = v;
+  tradeOpen = true;
+  document.exitPointerLock();
+  buildTradeUI();
+  document.getElementById('tradeUI').style.display = 'flex';
+  playVillagerHmm();
+}
+
+function closeTradeUI() {
+  tradeOpen = false;
+  currentTradingVillager = null;
+  document.getElementById('tradeUI').style.display = 'none';
+  const game = document.getElementById('game');
+  game.requestPointerLock();
+}
+document.getElementById('closeTradeBtn').onclick = closeTradeUI;
+
+function buildTradeUI() {
+  if (!currentTradingVillager) return;
+  const cfg = VILLAGER_TRADES[currentTradingVillager.prof];
+  if (!cfg) return;
+
+  document.getElementById('tradeTitle').textContent = cfg.title;
+  const listEl = document.getElementById('tradeList');
+  listEl.innerHTML = '';
+
+  cfg.trades.forEach((t, idx) => {
+    const [needId, needCount] = t.need;
+    const [giveId, giveCount] = t.give;
+    const haveCount = countItem(needId);
+    const canTrade = haveCount >= needCount;
+
+    const row = document.createElement('div');
+    row.className = 'trade-row';
+
+    const leftBox = document.createElement('div');
+    leftBox.className = 'trade-item-box';
+    const needIcon = makeSlotIcon({ id: needId });
+    needIcon.style.width = '32px'; needIcon.style.height = '32px';
+    leftBox.appendChild(needIcon);
+    const needTxt = document.createElement('span');
+    needTxt.innerHTML = `<b>${itemName(needId)}</b> x${needCount} <span style="font-size:11px;color:${canTrade ? '#5bd94a' : '#d95a5a'}">(现有:${haveCount})</span>`;
+    leftBox.appendChild(needTxt);
+
+    const arrow = document.createElement('span');
+    arrow.style.color = '#8fa3b8';
+    arrow.style.fontSize = '16px';
+    arrow.textContent = ' ➜ ';
+
+    const rightBox = document.createElement('div');
+    rightBox.className = 'trade-item-box';
+    const giveIcon = makeSlotIcon({ id: giveId });
+    giveIcon.style.width = '32px'; giveIcon.style.height = '32px';
+    rightBox.appendChild(giveIcon);
+    const giveTxt = document.createElement('span');
+    giveTxt.innerHTML = `<b style="color:#17dd62">${itemName(giveId)}</b> x${giveCount}`;
+    rightBox.appendChild(giveTxt);
+
+    const btn = document.createElement('button');
+    btn.className = 'trade-btn';
+    btn.textContent = '兑换';
+    btn.disabled = !canTrade;
+    btn.onclick = () => executeTrade(idx);
+
+    row.appendChild(leftBox);
+    row.appendChild(arrow);
+    row.appendChild(rightBox);
+    row.appendChild(btn);
+
+    listEl.appendChild(row);
+  });
+}
+
+function executeTrade(tradeIdx) {
+  if (!currentTradingVillager) return;
+  const cfg = VILLAGER_TRADES[currentTradingVillager.prof];
+  if (!cfg || !cfg.trades[tradeIdx]) return;
+  const t = cfg.trades[tradeIdx];
+  const [needId, needCount] = t.need;
+  const [giveId, giveCount] = t.give;
+
+  if (countItem(needId) < needCount) {
+    toast(`⚠️ 缺少 ${itemName(needId)} x${needCount}`);
+    return;
+  }
+
+  removeItem(needId, needCount);
+  addItem(giveId, giveCount);
+
+  playVillagerTrade();
+  spawnParticles(player.pos.x, player.pos.y + 0.8, player.pos.z, 0x17dd62, 16);
+  toast(`🤝 交易成功！获得了 ${itemName(giveId)} x${giveCount}`);
+  buildTradeUI();
+  refreshHotbar();
+}
+
+function isVillageChunk(cx, cz) {
+  if (cx === 3 && cz === 3) return true;
+  const REGION = 16;
+  const rx = Math.floor(cx / REGION), rz = Math.floor(cz / REGION);
+  const targetCx = rx * REGION + Math.floor(plantHash(rx * 317 + 11, rz * 571 + 19) * (REGION - 6)) + 3;
+  const targetCz = rz * REGION + Math.floor(plantHash(rx * 823 + 23, rz * 139 + 7) * (REGION - 6)) + 3;
+  return (cx === targetCx && cz === targetCz);
+}
+
+function buildVillage(c) {
+  if (c.villageBuilt) return;
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    if (!world.chunkLoaded(c.cx + dx, c.cz + dz)) return;
+  }
+  c.villageBuilt = true;
+
+  const cx8 = c.cx * 16 + 8, cz8 = c.cz * 16 + 8;
+  const gy = Math.floor(surfaceHeight(cx8, cz8));
+  if (gy <= SEA + 1) return;
+
+  const vk = `${c.cx},${c.cz}`;
+  if (villageCenters.has(vk)) return;
+  villageCenters.add(vk);
+
+  // 1. 中央水井 (Central Well, 4x4)
+  for (let dz = -1; dz <= 2; dz++) {
+    for (let dx = -1; dx <= 2; dx++) {
+      const isEdge = (dx === -1 || dx === 2 || dz === -1 || dz === 2);
+      for (let y = gy - 3; y <= gy; y++) {
+        world.setBlock(cx8 + dx, y, cz8 + dz, isEdge ? B.COBBLE : B.AIR);
+        if (!isEdge && y <= gy - 1) world.setWater(cx8 + dx, y, cz8 + dz, 8);
+      }
+      if (isEdge) {
+        world.setBlock(cx8 + dx, gy + 1, cz8 + dz, B.COBBLE);
+      }
+    }
+  }
+  for (const [px, pz] of [[-1, -1], [-1, 2], [2, -1], [2, 2]]) {
+    world.setBlock(cx8 + px, gy + 2, cz8 + pz, B.LOG);
+    world.setBlock(cx8 + px, gy + 3, cz8 + pz, B.LOG);
+    world.setBlock(cx8 + px, gy + 4, cz8 + pz, B.TORCH);
+  }
+  for (let dz = -1; dz <= 2; dz++) {
+    for (let dx = -1; dx <= 2; dx++) {
+      world.setBlock(cx8 + dx, gy + 4, cz8 + dz, B.COBBLE);
+    }
+  }
+
+  // 2. 农田 (Crop Farm, 7x5) 在南侧
+  const farmX = cx8, farmZ = cz8 - 9;
+  for (let dz = -2; dz <= 2; dz++) {
+    for (let dx = -3; dx <= 3; dx++) {
+      const isBorder = (Math.abs(dx) === 3 || Math.abs(dz) === 2);
+      world.setBlock(farmX + dx, gy - 1, farmZ + dz, B.DIRT);
+      if (isBorder) {
+        world.setBlock(farmX + dx, gy, farmZ + dz, B.LOG);
+      } else if (dx === 0) {
+        world.setBlock(farmX + dx, gy, farmZ + dz, B.WATER);
+        world.setWater(farmX + dx, gy, farmZ + dz, 8);
+      } else {
+        world.setBlock(farmX + dx, gy, farmZ + dz, B.DIRT);
+        const cropR = plantHash(farmX + dx, farmZ + dz);
+        if (cropR < 0.6) world.setBlock(farmX + dx, gy + 1, farmZ + dz, B.WHEAT_CROP_MATURE);
+        else if (cropR < 0.8) world.setBlock(farmX + dx, gy + 1, farmZ + dz, B.MELON);
+        else world.setBlock(farmX + dx, gy + 1, farmZ + dz, B.PUMPKIN);
+      }
+    }
+  }
+
+  // 3. 铁匠铺 (Blacksmith Forge, 6x5) 在东侧
+  const smithX = cx8 + 9, smithZ = cz8;
+  for (let dz = -2; dz <= 2; dz++) {
+    for (let dx = -2; dx <= 3; dx++) {
+      world.setBlock(smithX + dx, gy - 1, smithZ + dz, B.COBBLE);
+      for (let y = gy; y <= gy + 3; y++) world.setBlock(smithX + dx, y, smithZ + dz, B.AIR);
+      const isWall = (dx === -2 || dx === 3 || dz === -2 || dz === 2);
+      if (isWall) {
+        for (let y = gy; y <= gy + 2; y++) world.setBlock(smithX + dx, y, smithZ + dz, B.COBBLE);
+      }
+      world.setBlock(smithX + dx, gy + 3, smithZ + dz, B.STONE_BRICK);
+    }
+  }
+  world.setBlock(smithX - 2, gy, smithZ, B.DOOR);
+  world.setBlock(smithX + 3, gy + 1, smithZ, B.GLASS);
+  world.setBlock(smithX + 2, gy, smithZ + 1, B.FURNACE);
+  world.setBlock(smithX + 2, gy, smithZ - 1, B.CHEST);
+  populateVillageChest(smithX + 2, gy, smithZ - 1, 'blacksmith');
+  world.setBlock(smithX + 2, gy + 1, smithZ - 1, B.TORCH);
+
+  // 4. 村民居所木屋 (Cottage, 5x5) 在西侧
+  const cotX = cx8 - 9, cotZ = cz8;
+  for (let dz = -2; dz <= 2; dz++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      world.setBlock(cotX + dx, gy - 1, cotZ + dz, B.COBBLE);
+      for (let y = gy; y <= gy + 3; y++) world.setBlock(cotX + dx, y, cotZ + dz, B.AIR);
+      const isCorner = (Math.abs(dx) === 2 && Math.abs(dz) === 2);
+      const isWall = (Math.abs(dx) === 2 || Math.abs(dz) === 2);
+      if (isCorner) {
+        for (let y = gy; y <= gy + 2; y++) world.setBlock(cotX + dx, y, cotZ + dz, B.LOG);
+      } else if (isWall) {
+        for (let y = gy; y <= gy + 2; y++) world.setBlock(cotX + dx, y, cotZ + dz, B.PLANKS);
+      }
+      world.setBlock(cotX + dx, gy + 3, cotZ + dz, B.PLANKS);
+    }
+  }
+  world.setBlock(cotX + 2, gy, cotZ, B.DOOR);
+  world.setBlock(cotX - 2, gy + 1, cotZ, B.GLASS);
+  world.setBlock(cotX - 1, gy, cotZ - 1, B.BED);
+  world.setBlock(cotX + 1, gy, cotZ - 1, B.BOOKSHELF);
+  world.setBlock(cotX - 1, gy, cotZ + 1, B.CHEST);
+  populateVillageChest(cotX - 1, gy, cotZ + 1, 'general');
+  world.setBlock(cotX - 1, gy + 1, cotZ + 1, B.TORCH);
+
+  // 5. 铺设碎石村庄小道
+  for (let dx = -10; dx <= 10; dx++) {
+    const px = cx8 + dx, pz = cz8;
+    const sy = findGround(px, pz) - 1;
+    if (world.getBlock(px, sy, pz) !== B.AIR && world.getBlock(px, sy, pz) !== B.WATER) {
+      world.setBlock(px, sy, pz, B.GRAVEL);
+    }
+  }
+  for (let dz = -10; dz <= 6; dz++) {
+    const px = cx8, pz = cz8 + dz;
+    const sy = findGround(px, pz) - 1;
+    if (world.getBlock(px, sy, pz) !== B.AIR && world.getBlock(px, sy, pz) !== B.WATER) {
+      world.setBlock(px, sy, pz, B.GRAVEL);
+    }
+  }
+
+  // 6. 生成驻村铁傀儡
+  spawnIronGolem(cx8 + 2.5, gy + 1, cz8 + 2.5);
+
+  // 7. 生成 4 位不同职业的村民
+  spawnVillager(farmX + 1.5, farmZ + 2.5, 'farmer');
+  spawnVillager(smithX - 0.5, smithZ + 0.5, 'blacksmith');
+  spawnVillager(cotX + 0.5, cotZ + 0.5, 'librarian');
+  spawnVillager(cx8 - 2.5, cz8 + 1.5, 'cleric');
+
+  // 标记 dirty 重新渲染区块网格
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    const ck = world.chunks.get(key(c.cx + dx, c.cz + dz));
+    if (ck) ck.dirty = true;
+  }
+}
+
 // 攻击伤害（剑 / 徒手）
 function meleeDamage() {
   const s = hotbar[selected];
@@ -5508,6 +6048,20 @@ function meleeAttack() {
       tone(120, 200, 0.12, 'sawtooth', 0.18);
       spawnParticles(m.x, m.y + 1.2, m.z, 0xd8dcde, 8);
       if (m.hp <= 0) killIronGolem(i);
+    }
+  }
+  for (let i = villagers.length - 1; i >= 0; i--) {
+    const v = villagers[i];
+    if (meleeHitMob(v, dir)) {
+      v.hp -= dmg;
+      hitAny = true;
+      playVillagerHmm();
+      spawnParticles(v.x, v.y + 0.8, v.z, 0xc68c62, 8);
+      if (v.hp <= 0) {
+        scene.remove(v.g);
+        villagers.splice(i, 1);
+        toast('💀 村民倒下了…');
+      }
     }
   }
   for (let i = animals.length - 1; i >= 0; i--) {
@@ -5713,6 +6267,15 @@ function explodeTnt(ex, ey, ez) {
     if (dist < radius + 2) {
       g.hp -= 20;
       if (g.hp <= 0) killIronGolem(i);
+    }
+  }
+
+  for (let i = villagers.length - 1; i >= 0; i--) {
+    const v = villagers[i];
+    const dist = Math.hypot(v.x - ex, v.y - ey, v.z - ez);
+    if (dist < radius + 2) {
+      scene.remove(v.g);
+      villagers.splice(i, 1);
     }
   }
 
@@ -6485,7 +7048,7 @@ const TOOL_DURABILITY = {
 };
 // 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌不可放置）
 function isPlaceable(id) {
-  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE) return false;
+  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD) return false;
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.MELON_SLICE) return false;
   if (isFood(id)) return false;   // 食物不可放置
   return true;
@@ -7040,6 +7603,7 @@ const NAMES = {
   [B.CAMPFIRE]: '营火', [B.DOOR]: '木门',
   [B.ENDER_PEARL]: '末影珍珠', [B.COBWEB]: '蜘蛛网', [B.STRING]: '线',
   [B.FISHING_ROD]: '钓鱼竿', [B.SPIDER_EYE]: '蜘蛛眼',
+  [B.EMERALD]: '绿宝石',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 // —— 食物：恢复饥饿值 ——
@@ -7122,6 +7686,7 @@ const furnace = { input: null, fuel: null, output: null, progress: 0, burn: 0 };
 function smeltOut(id) {
   if (id === B.IRON) return B.IRON_INGOT;
   if (id === B.GOLD) return B.GOLD_INGOT;
+  if (id === B.EMERALD_ORE) return B.EMERALD;
   if (isLog(id)) return B.CHARCOAL;
   if (id === B.SAND) return B.GLASS;
   if (id === B.COBBLE) return B.STONE;
@@ -7514,12 +8079,27 @@ function makeItemIcon(id) {
     ctx.fillRect(13, 11, 2, 2);
     ctx.fillStyle = '#30040c';
     ctx.fillRect(10, 19, 4, 2); ctx.fillRect(18, 17, 3, 2);
+  } else if (id === B.EMERALD) {
+    // 绿宝石图标：八角切割晶莹翠绿宝石 + 内部刻面反光高光
+    ctx.fillStyle = '#064e24';
+    ctx.fillRect(11, 7, 10, 18); ctx.fillRect(7, 11, 18, 10);
+    ctx.fillRect(9, 9, 14, 14);
+    ctx.fillStyle = '#109b4c';
+    ctx.fillRect(10, 10, 12, 12);
+    ctx.fillStyle = '#17dd62';
+    ctx.fillRect(11, 11, 10, 10);
+    ctx.fillStyle = '#85f6aa';
+    ctx.fillRect(12, 12, 4, 4);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(13, 11, 2, 2);
+    ctx.fillStyle = '#0a6332';
+    ctx.fillRect(11, 18, 8, 3); ctx.fillRect(18, 12, 3, 7);
   }
   return cv;
 }
 function makeIcon(id) {
   if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD)) return makeToolIcon(id);
-  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE) return makeItemIcon(id);
+  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
   return makeIconCanvas(id);
 }
@@ -8138,8 +8718,9 @@ function dropOf(id) {
   if (id === B.CAMPFIRE) return B.CAMPFIRE;
   if (id === B.DOOR) return B.DOOR;
   if (id === B.COBWEB) return B.STRING;
+  if (id === B.EMERALD_ORE) return B.EMERALD;
   if (isLeaf(id)) return null;               // 树叶不掉落（苹果单独判定）
-  if (isTool(id) || id === B.STICK || id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.EGG || id === B.SNOWBALL || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING) return null;
+  if (isTool(id) || id === B.STICK || id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.EGG || id === B.SNOWBALL || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.EMERALD) return null;
   return id;
 }
 // 工具等级挖掘倍率
@@ -8297,6 +8878,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') { player.fly = !player.fly; player.vel.y = 0; }
   if (e.code === 'KeyN') { timeOfDay = 0.24; }                 // 跳到白天
   if (e.code === 'KeyE') {
+    if (tradeOpen) { closeTradeUI(); return; }
     if (chestOpen) { closeChest(); return; }
     toggleInventory();
   }
@@ -8330,6 +8912,7 @@ document.addEventListener('keydown', (e) => {
     toast('🔄 场景与方块网格已全部重新渲染');
   }
   if (e.code === 'Escape') {
+    if (tradeOpen) { closeTradeUI(); return; }
     if (chestOpen) { closeChest(); return; }
     if (inventoryOpen) { closeInventory(); return; }
     if (furnaceOpen) { closeFurnace(); return; }
@@ -8449,6 +9032,14 @@ function onMousedown(btn) {
             }
           }
         }
+      }
+    }
+    // 右键点击村民开启贸易集市
+    for (const v of villagers) {
+      const dist = Math.hypot(v.x - origin.x, (v.y + 0.9) - origin.y, v.z - origin.z);
+      if (dist < 4.5) {
+        openTradeUI(v);
+        return;
       }
     }
     const hit = raycast(origin, dir, 6);
@@ -8571,10 +9162,13 @@ function updateStreaming() {
   }
   genLastFrame = gen;
   if (gen > genMaxFrame) genMaxFrame = gen;
-  // 植树
+  // 植树与自然村庄生成
   let trees = 0;
   for (const c of world.chunks.values()) {
-    if (trees >= MAXTREE) break;
+    if (isVillageChunk(c.cx, c.cz) && !c.villageBuilt) {
+      buildVillage(c);
+    }
+    if (trees >= MAXTREE) continue;
     if (!c.treesPlanted) { plantTrees(c); if (c.treesPlanted) trees++; }
   }
   // 网格（邻居齐全才构建，避免边缘接缝；优先构建距离玩家最近的 dirty 区块，避免挖掘破坏时延迟闪烁）
@@ -8660,6 +9254,7 @@ function animate() {
     updateEndermen(dt);
     updateSpiders(dt);
     updateIronGolems(dt);
+    updateVillagers(dt);
     updatePrimedTnt(dt);
     updateSnowballs(dt);
     updateEnderPearls(dt);
