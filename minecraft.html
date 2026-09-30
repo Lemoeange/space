@@ -205,6 +205,7 @@
 
 <div id="vignette"></div>
 <div id="underwater"></div>
+<div id="sleepFade" style="position:fixed;inset:0;background:#060814;opacity:0;pointer-events:none;transition:opacity 0.65s cubic-bezier(0.4, 0, 0.2, 1);z-index:9999;"></div>
 <div id="crosshair"></div>
 
 <div id="hud">
@@ -320,7 +321,8 @@ const B = {
   COAL_BLOCK:85, IRON_BLOCK:86, GOLD_BLOCK:87, DIAMOND_BLOCK:88,
   TNT:89, SNOWBALL:90,
   BOW:91, ARROW:92, COOKED_MEAT:93, RAW_FISH:94, COOKED_FISH:95,
-  LADDER:96, GOLDEN_APPLE:97, BONE:98
+  LADDER:96, GOLDEN_APPLE:97, BONE:98,
+  WOOL:99, BED:100, SHIELD:101
 };
 
 function mulberry32(a) {
@@ -543,7 +545,7 @@ const { HEIGHT, SEA, B, mulberry32, surfaceHeight, isCave, oreFor, oreNoise, bio
 /* ============================ 常量 ============================ */
 const CHUNK = 16;
 const TILE = 16;
-const ATLAS_TILES = 76;
+const ATLAS_TILES = 81;
 const ATLAS_W = ATLAS_TILES * TILE;
 const AO_LEVELS = [0.55, 0.7, 0.85, 1.0];
 const VIEW_R = 10;        // 视距（chunk 半径，每格 16 块）
@@ -580,6 +582,7 @@ function makeAtlas() {
   T.coalBlock = i++; T.ironBlock = i++; T.goldBlock = i++; T.diamondBlock = i++;
   T.tntSide = i++; T.tntTop = i++; T.tntBottom = i++;
   T.ladder = i++;
+  T.wool = i++; T.bedTop = i++; T.bedSide = i++; T.bedHead = i++; T.bedFoot = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -1401,6 +1404,58 @@ function makeAtlas() {
     }
   }
 
+  // —— 羊毛（纯白温暖卷曲羊毛团簇）——
+  fill(T.wool, [238, 236, 230], 12, 101);
+  speck(T.wool, [252, 250, 246], 24, 102);
+  speck(T.wool, [218, 214, 206], 20, 103);
+
+  // —— 床顶面（纯白饱满枕头 + 鲜红毛毯被褥 + 边缘折痕滚边）——
+  for (let y = 0; y < 5; y++) {
+    for (let x = 0; x < TILE; x++) {
+      const isEdge = (y === 0 || y === 4 || x === 0 || x === 15);
+      put(T.bedTop, x, y, isEdge ? 224 : 246, isEdge ? 224 : 246, isEdge ? 228 : 250);
+    }
+  }
+  for (let x = 0; x < TILE; x++) put(T.bedTop, x, 5, 232, 215, 175); // 折缝滚边
+  for (let y = 6; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      const j = ((x + y) % 2 === 0 ? 8 : -8);
+      put(T.bedTop, x, y, clamp(188 + j), clamp(36 + j * 0.3), clamp(30 + j * 0.3));
+    }
+  }
+
+  // —— 床侧面（上部红色毛毯/白色枕头侧垂 + 下部橡木床架与深木床脚）——
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < TILE; x++) {
+      if (x < 5 && y < 5) {
+        put(T.bedSide, x, y, 242, 242, 246); // 枕头侧垂
+      } else {
+        put(T.bedSide, x, y, 185, 35, 30);   // 红色毛毯侧垂
+      }
+    }
+  }
+  for (let y = 8; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      const isLeg = (x <= 2 || x >= 13);
+      if (isLeg) put(T.bedSide, x, y, 110, 72, 38); // 实木深色床脚
+      else put(T.bedSide, x, y, 155, 110, 60);      // 橡木横梁框架
+    }
+  }
+
+  // —— 床头面（纯白枕头 + 橡木床架与床脚）——
+  for (let y = 0; y < 8; y++) for (let x = 0; x < TILE; x++) put(T.bedHead, x, y, 242, 242, 246);
+  for (let y = 8; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const isLeg = (x <= 2 || x >= 13);
+    put(T.bedHead, x, y, isLeg ? 110 : 155, isLeg ? 72 : 110, isLeg ? 38 : 60);
+  }
+
+  // —— 床尾面（鲜红被褥 + 橡木床架与床脚）——
+  for (let y = 0; y < 8; y++) for (let x = 0; x < TILE; x++) put(T.bedFoot, x, y, 185, 35, 30);
+  for (let y = 8; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const isLeg = (x <= 2 || x >= 13);
+    put(T.bedFoot, x, y, isLeg ? 110 : 155, isLeg ? 72 : 110, isLeg ? 38 : 60);
+  }
+
   ctx.putImageData(img, 0, 0);
   // 3D 渲染改用 2D 纹理数组（每 tile 独立一层，配合 RepeatWrapping 可让单个 tile 跨大四边形循环）
   const layers = ATLAS_TILES;
@@ -1491,6 +1546,8 @@ function tileOf(id) {
     case B.FERN: return { top: atlas.T.fern, side: atlas.T.fern, bottom: atlas.T.fern };
     case B.LILY_PAD: return { top: atlas.T.lilyPad, side: atlas.T.lilyPad, bottom: atlas.T.lilyPad };
     case B.LADDER: return { top: atlas.T.ladder, side: atlas.T.ladder, bottom: atlas.T.ladder };
+    case B.WOOL: return { top: atlas.T.wool, side: atlas.T.wool, bottom: atlas.T.wool };
+    case B.BED: return { top: atlas.T.bedTop, side: atlas.T.bedSide, bottom: atlas.T.planks };
     case B.FURNACE: return { top: atlas.T.furnace, side: atlas.T.furnace, bottom: atlas.T.furnace };
     case B.WHEAT_CROP: return { top: atlas.T.wheatCrop, side: atlas.T.wheatCrop, bottom: atlas.T.wheatCrop };
     case B.WHEAT_CROP_MATURE: return { top: atlas.T.wheatMature, side: atlas.T.wheatMature, bottom: atlas.T.wheatMature };
@@ -1790,24 +1847,34 @@ function snapShadowToTexel(p, dir) {
   };
 }
 
-// —— 经典体素方块云（一块块清晰分明的离散方块云，背景 100% 透明，杜绝天空雾蒙蒙）——
+// —— 经典体素大尺度方块云（多变种、低密度、轻盈半透明，背景 100% 纯净透明绝无雾蒙蒙）——
 function makeVoxelCloudTexture() {
-  const W = 64, H = 64;
+  const W = 256, H = 256;
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d');
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, W, H);
 
-  // 用确定性算法生成一块块经典的体素云簇
-  const rnd = mulberry32(20240901);
   const grid = new Uint8Array(W * H);
-  for (let i = 0; i < 22; i++) {
-    const cx = Math.floor(rnd() * W), cy = Math.floor(rnd() * H);
-    const rw = 2 + Math.floor(rnd() * 5), rh = 2 + Math.floor(rnd() * 4);
+  const rnd = mulberry32(20241029);
+
+  // 盖印多样化云簇（模式 0:椭圆多峰, 1:长条风剪, 2:阶梯台阶, 3:蓬松小团）
+  function stamp(cx, cy, rw, rh, mode) {
     for (let dy = -rh; dy <= rh; dy++) {
       for (let dx = -rw; dx <= rw; dx++) {
-        if ((dx * dx) / (rw * rw) + (dy * dy) / (rh * rh) <= 0.82 + rnd() * 0.28) {
+        let hit = false;
+        const nx = dx / rw, ny = dy / rh;
+        if (mode === 0) { // 椭圆多峰
+          hit = (nx * nx + ny * ny) <= (0.88 + (rnd() - 0.5) * 0.22);
+        } else if (mode === 1) { // 扁平长条层云
+          hit = Math.abs(ny) <= 0.48 && Math.abs(nx) <= (0.92 + (rnd() - 0.5) * 0.16);
+        } else if (mode === 2) { // 阶梯多层台阶
+          hit = (Math.abs(nx) + Math.abs(ny) * 0.75) <= (0.95 + (rnd() - 0.5) * 0.18);
+        } else if (mode === 3) { // 蓬松轻盈小团
+          hit = (nx * nx + ny * ny) <= (0.75 + (rnd() - 0.5) * 0.28);
+        }
+        if (hit) {
           const x = (cx + dx + W) % W, y = (cy + dy + H) % H;
           grid[y * W + x] = 1;
         }
@@ -1815,12 +1882,52 @@ function makeVoxelCloudTexture() {
     }
   }
 
-  // 绘制锐利方块云：纯白云顶 + 底部微阴影，非云区完全透明（alpha=0）
+  // 1. 宏大复合积云群（左上区域）：多层体素凸起与厚实云基
+  stamp(42, 50, 32, 16, 0);
+  stamp(60, 42, 22, 18, 2);
+  stamp(28, 56, 18, 11, 3);
+  stamp(52, 60, 16, 9, 0);
+
+  // 2. 细长水平风剪层积云带（右上区域）：流线型飘逸横带
+  stamp(180, 42, 42, 9, 1);
+  stamp(198, 48, 24, 7, 1);
+  stamp(160, 38, 14, 6, 3);
+
+  // 3. 错落复合积云山（中央偏南）：错落有致的多峰山形云
+  stamp(125, 130, 28, 15, 2);
+  stamp(142, 138, 20, 12, 0);
+  stamp(108, 124, 15, 9, 3);
+
+  // 4. 游弋宽幅云朵（右下区域）：宽大起伏云岛
+  stamp(210, 175, 34, 14, 0);
+  stamp(226, 182, 18, 10, 2);
+  stamp(190, 170, 16, 8, 3);
+
+  // 5. 飘浮中型阶梯云（左下区域）：不对称多台阶
+  stamp(55, 190, 22, 13, 2);
+  stamp(72, 198, 15, 9, 0);
+
+  // 6. 散落棉花糖孤云（点缀在广袤天幕空间）：错落自然不重复
+  stamp(110, 52, 14, 7, 3);
+  stamp(240, 105, 15, 8, 3);
+  stamp(15, 128, 13, 7, 0);
+  stamp(120, 220, 16, 8, 1);
+  stamp(168, 225, 12, 6, 3);
+  stamp(85, 240, 10, 5, 0);
+
+  // 绘制锐利体素云：纯白向阳顶面 + 柔和半透明云体 + 底部微阴影，非云区完全透明
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       if (grid[y * W + x]) {
+        const hasAbove = grid[((y - 1 + H) % H) * W + x];
         const hasBelow = grid[((y + 1) % H) * W + x];
-        ctx.fillStyle = !hasBelow ? 'rgba(224, 232, 244, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+        if (!hasAbove) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.78)'; // 顶部受光高光（半透明）
+        } else if (!hasBelow) {
+          ctx.fillStyle = 'rgba(210, 222, 242, 0.52)'; // 底部微阴影
+        } else {
+          ctx.fillStyle = 'rgba(242, 246, 255, 0.65)'; // 云体主质感（轻盈通透）
+        }
         ctx.fillRect(x, y, 1, 1);
       }
     }
@@ -1828,10 +1935,10 @@ function makeVoxelCloudTexture() {
 
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.magFilter = THREE.NearestFilter; // 保证像素级方块边缘
+  tex.magFilter = THREE.NearestFilter; // 保证像素级体素方块感
   tex.minFilter = THREE.NearestFilter;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(16, 16);
+  tex.repeat.set(2, 2); // 广阔大尺度，单周期 1600 格，视野内几乎绝不出现同款重复
   return tex;
 }
 
@@ -1839,15 +1946,16 @@ const cloudTex = makeVoxelCloudTexture();
 const cloudMat = new THREE.MeshLambertMaterial({
   map: cloudTex,
   transparent: true,
-  alphaTest: 0.15, // 核心：低于阈值直接丢弃像素，绝无半透明泛白雾气，边缘干净利落！
+  opacity: 0.88,
+  alphaTest: 0.05, // 仅丢弃全透像素，让半透明像素柔和融入天空，清澈透明无雾蒙蒙
   depthWrite: false,
   side: THREE.DoubleSide,
 });
 
-const cloudGeo = new THREE.PlaneGeometry(1600, 1600);
+const cloudGeo = new THREE.PlaneGeometry(3200, 3200);
 cloudGeo.rotateX(-Math.PI / 2);
 const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
-cloudMesh.position.y = 136; // 136 格高空，开阔且具空间感
+cloudMesh.position.y = 138; // 138 格高空，开阔宏伟
 cloudMesh.frustumCulled = false;
 scene.add(cloudMesh);
 
@@ -2704,6 +2812,41 @@ function pushLadder(A, bx, by, bz, tile, getB) {
   A.idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
 }
 
+// 床：半格高的立体家具（高 0.56 格，含红被褥、纯白枕头、橡木床架与 4 只床脚）
+function pushBed(A, bx, by, bz, tTop, tSide, tHead, tFoot) {
+  const h = 0.56;
+  // 1. 顶面（枕头 + 红被褥）
+  const viT = A.pos.length / 3;
+  const qT = [[0, h, 0], [1, h, 0], [1, h, 1], [0, h, 1]];
+  for (let k = 0; k < 4; k++) {
+    A.pos.push(bx + qT[k][0], by + qT[k][1], bz + qT[k][2]);
+    A.nor.push(0, 1, 0);
+    A.uv.push(UV_CORNER[k][0], UV_CORNER[k][1]);
+    A.layer.push(tTop);
+    A.col.push(1, 1, 1);
+  }
+  A.idx.push(viT, viT + 1, viT + 2, viT, viT + 2, viT + 3);
+
+  // 2. 四周侧面
+  const sides = [
+    { n: [0, 0, -1], q: [[1, 0, 0], [0, 0, 0], [0, h, 0], [1, h, 0]], layer: tHead }, // 北(床头)
+    { n: [0, 0, 1],  q: [[0, 0, 1], [1, 0, 1], [1, h, 1], [0, h, 1]], layer: tFoot }, // 南(床尾)
+    { n: [1, 0, 0],  q: [[1, 0, 1], [1, 0, 0], [1, h, 0], [1, h, 1]], layer: tSide }, // 东(侧面)
+    { n: [-1, 0, 0], q: [[0, 0, 0], [0, 0, 1], [0, h, 1], [0, h, 0]], layer: tSide }  // 西(侧面)
+  ];
+  for (const s of sides) {
+    const vi = A.pos.length / 3;
+    for (let k = 0; k < 4; k++) {
+      A.pos.push(bx + s.q[k][0], by + s.q[k][1], bz + s.q[k][2]);
+      A.nor.push(s.n[0], s.n[1], s.n[2]);
+      A.uv.push(UV_CORNER[k][0], UV_CORNER[k][1]);
+      A.layer.push(s.layer);
+      A.col.push(0.92, 0.92, 0.92);
+    }
+    A.idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+  }
+}
+
 // 落樱花瓣：贴近地表的扁平花瓣地毯（只占一格靠下极扁平部分，高度仅 0.02~0.12）
 function pushPetals(A, bx, by, bz, tile) {
   // 1) 贴地水平面片（微抬 0.02 防止与草地方块顶面重叠 Z 冲突）
@@ -2827,6 +2970,7 @@ function buildChunkGeometry(c) {
         if (isPetals(id)) { pushPetals(C, wx, y, wz, tileOf(id).top); continue; }
         if (isCrossPlant(id)) { pushCrossPlant(C, wx, y, wz, tileOf(id).top); continue; }
         if (isLadder(id)) { pushLadder(C, wx, y, wz, tileOf(id).side, getB); continue; }
+        if (isBed(id)) { pushBed(C, wx, y, wz, atlas.T.bedTop, atlas.T.bedSide, atlas.T.bedHead, atlas.T.bedFoot); continue; }
         if (id === B.GLASS) {                     // 玻璃：cutout，逐面（不参与贪心）
           const t = tileOf(id);
           const under = undergroundFactor(colTop, lx, lz, y);
@@ -3001,6 +3145,7 @@ const BLOCK_COLORS = {
   [B.TNT]: 0xd43828, [B.SNOWBALL]: 0xf2f8fa,
   [B.BOW]: 0x8a5228, [B.ARROW]: 0x9c7a4e, [B.COOKED_MEAT]: 0x6d2e1c, [B.RAW_FISH]: 0x4c86a8, [B.COOKED_FISH]: 0xc8762e,
   [B.LADDER]: 0x9e6732, [B.GOLDEN_APPLE]: 0xffd700, [B.BONE]: 0xf0ece1,
+  [B.WOOL]: 0xeae6df, [B.BED]: 0xb82820, [B.SHIELD]: 0x8a9298,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -3606,10 +3751,15 @@ function killAnimal(i) {
   scene.remove(a.g);
   const isWolf = a.kind && a.kind.name === 'wolf';
   const isChicken = a.kind && a.kind.name === 'chicken';
-  spawnParticles(bx, by, bz, isWolf ? 0x9898a0 : (isChicken ? 0xf0f0e8 : 0xc88a8a), 12);
+  const isSheep = a.kind && a.kind.name === 'sheep';
+  spawnParticles(bx, by, bz, isWolf ? 0x9898a0 : (isChicken ? 0xf0f0e8 : (isSheep ? 0xf4f0ea : 0xc88a8a)), 12);
   const n = 1 + ((Math.random() * 2) | 0);
   for (let k = 0; k < n; k++) dropItem(B.RAW_MEAT, bx, by, bz);
   if (isChicken && Math.random() < 0.6) dropItem(B.EGG, bx, by, bz);   // 小鸡大概率掉落鸡蛋
+  if (isSheep) {
+    const nw = 1 + ((Math.random() * 2) | 0);
+    for (let k = 0; k < nw; k++) dropItem(B.WOOL, bx, by, bz);        // 羊掉落羊毛
+  }
   animals.splice(i, 1);
   playPop();
 }
@@ -4165,7 +4315,7 @@ const player = {
   pos: new THREE.Vector3(8.5, 60, 8.5),
   vel: new THREE.Vector3(),
   yaw: 0, pitch: 0,
-  onGround: false, fly: false, sprint: false,
+  onGround: false, fly: false, sprint: false, blocking: false,
   halfW: 0.3, height: 1.8, eye: 1.62,
   hp: 20,
   hunger: 20,
@@ -4194,6 +4344,21 @@ function updateHungerBar() {
 }
 function damagePlayer(dmg) {
   if (player.fly) return;               // 飞行模式不受伤害
+  const sel = hotbar[selected];
+  if (player.blocking && sel && sel.id === B.SHIELD) {
+    // 举盾格挡防守成功：完全免受伤害，消耗盾牌耐久
+    playShieldBlock();
+    spawnParticles(player.pos.x, player.pos.y + 1, player.pos.z, 0xffd700, 10);
+    toast('🛡️ 盾牌格挡！免受本次伤害');
+    sel.dur = (sel.dur !== undefined ? sel.dur : TOOL_DURABILITY[B.SHIELD]) - 1;
+    if (sel.dur <= 0) {
+      hotbar[selected] = null;
+      playBreak();
+      toast('🛡️ 盾牌已损坏！');
+    }
+    refreshHotbar();
+    return;
+  }
   if (hurtCooldown > 0) return;         // 无敌帧：多只僵尸围攻时不会在一瞬间被叠加秒杀
   hurtCooldown = 0.5;
   player.hp -= dmg;
@@ -4223,6 +4388,31 @@ function toast(msg) {
   el.classList.add('show');
   clearTimeout(itemNameTimer);
   itemNameTimer = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+// —— 上床安睡跳过黑夜 ——
+let sleeping = false;
+function startSleeping() {
+  if (sleeping) return;
+  sleeping = true;
+  tone(329.63, 392.00, 0.45, 'sine', 0.16);
+  setTimeout(() => tone(392.00, 523.25, 0.55, 'sine', 0.18), 240);
+  const fadeEl = document.getElementById('sleepFade');
+  if (fadeEl) fadeEl.style.opacity = '1';
+
+  setTimeout(() => {
+    // 时间推进到清晨 06:00
+    timeOfDay = 0.24;
+    player.hp = 20;
+    player.hunger = Math.max(player.hunger, 16);
+    updateHearts();
+    updateHungerBar();
+    if (fadeEl) fadeEl.style.opacity = '0';
+    setTimeout(() => {
+      sleeping = false;
+      toast('🌅 清晨已至，生命值已完全恢复！');
+    }, 700);
+  }, 1000);
 }
 // —— 饥饿值：随时间消耗，满则回血，空则扣血 ——
 let hungerAcc = 0, regenAcc = 0, starveAcc = 0, eatCooldown = 0;
@@ -4290,27 +4480,30 @@ function isAxe(id) { return id === B.WOOD_AXE || id === B.STONE_AXE || id === B.
 function isShovel(id) { return id === B.WOOD_SHOVEL || id === B.STONE_SHOVEL || id === B.IRON_SHOVEL; }
 function isSword(id) { return id === B.WOOD_SWORD || id === B.STONE_SWORD || id === B.IRON_SWORD; }
 function isBow(id) { return id === B.BOW; }
-function isTool(id) { return isPickaxe(id) || isAxe(id) || isShovel(id) || isSword(id) || id === B.BOW; }
+function isShield(id) { return id === B.SHIELD; }
+function isBed(id) { return id === B.BED; }
+function isWool(id) { return id === B.WOOL; }
+function isTool(id) { return isPickaxe(id) || isAxe(id) || isShovel(id) || isSword(id) || id === B.BOW || isShield(id); }
 function isWoodTier(id) { return id === B.WOOD_PICKAXE || id === B.WOOD_AXE || id === B.WOOD_SHOVEL || id === B.WOOD_SWORD; }
 function isStoneTier(id) { return id === B.STONE_PICKAXE || id === B.STONE_AXE || id === B.STONE_SHOVEL || id === B.STONE_SWORD; }
 function isIronTier(id) { return id === B.IRON_PICKAXE || id === B.IRON_AXE || id === B.IRON_SHOVEL || id === B.IRON_SWORD; }
-// 工具耐久上限（木 60 / 石 130 / 铁 250 / 弓 100）
+// 工具耐久上限（木 60 / 石 130 / 铁 250 / 弓 100 / 盾 180）
 const TOOL_DURABILITY = {
   [B.WOOD_PICKAXE]: 60, [B.WOOD_AXE]: 60, [B.WOOD_SHOVEL]: 60, [B.WOOD_SWORD]: 60,
   [B.STONE_PICKAXE]: 130, [B.STONE_AXE]: 130, [B.STONE_SHOVEL]: 130, [B.STONE_SWORD]: 130,
   [B.IRON_PICKAXE]: 250, [B.IRON_AXE]: 250, [B.IRON_SHOVEL]: 250, [B.IRON_SWORD]: 250,
-  [B.BOW]: 100,
+  [B.BOW]: 100, [B.SHIELD]: 180,
 };
-// 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头不可放置）
+// 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌不可放置）
 function isPlaceable(id) {
-  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE) return false;
+  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD) return false;
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.MELON_SLICE) return false;
   if (isFood(id)) return false;   // 食物不可放置
   return true;
 }
 function isOre(id) { return id === B.COAL || id === B.IRON || id === B.GOLD || id === B.DIAMOND || id === B.EMERALD_ORE || id === B.LAPIS_ORE || id === B.REDSTONE_ORE || id === B.COPPER_ORE; }
 // 透明/可透视（用于面剔除与 AO）
-function isSeeThrough(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || isCrossPlant(id) || isTorch(id) || isLilyPad(id) || isPetals(id) || isLadder(id); }
+function isSeeThrough(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || isCrossPlant(id) || isTorch(id) || isLilyPad(id) || isPetals(id) || isLadder(id) || isBed(id); }
 // 确定性的列哈希（用于花草摆放）
 function plantHash(x, z) {
   let h = (x * 374761393 + z * 668265263) ^ 0x9e3779b9;
@@ -4392,6 +4585,7 @@ function updatePlayer(dt) {
 
   const water = feetInWater();   // 游泳物理按脚部是否在水中判断
   let speed = player.fly ? 16 : (player.sprint ? 7.5 : 4.5);
+  if (player.blocking) speed *= 0.6; // 举盾格挡时稳步防守减速
   if (keys['ShiftLeft'] || keys['ShiftRight']) speed = player.fly ? 10 : 2.2;
   if (water) speed *= 0.6;
   const accel = player.onGround || player.fly ? 14 : 4;
@@ -4660,6 +4854,10 @@ function playGoldenApple() {
   setTimeout(() => tone(659.25, 783.99, 0.18, 'triangle', 0.16), 110);
   setTimeout(() => tone(783.99, 1046.5, 0.35, 'sine', 0.22), 220);
 }
+function playShieldBlock() {
+  burst(0.08, 0.05, 1600, 'bandpass');
+  tone(880, 440, 0.15, 'triangle', 0.22);
+}
 function playHurt() { tone(210, 85, 0.22, 'sawtooth', 0.16); }
 function playZombieHit() { burst(0.07, 0.1, 620); tone(150, 90, 0.1, 'triangle', 0.08); }
 function playZombieDeath() { tone(140, 40, 0.3, 'sawtooth', 0.14); burst(0.2, 0.08, 520); }
@@ -4761,6 +4959,7 @@ const NAMES = {
   [B.TNT]: 'TNT炸药', [B.SNOWBALL]: '雪球',
   [B.BOW]: '木弓', [B.ARROW]: '箭矢', [B.COOKED_MEAT]: '熟肉排', [B.RAW_FISH]: '生鱼', [B.COOKED_FISH]: '熟鱼排',
   [B.LADDER]: '木梯', [B.GOLDEN_APPLE]: '金苹果', [B.BONE]: '骨头',
+  [B.WOOL]: '羊毛', [B.BED]: '红色床', [B.SHIELD]: '铁盾牌',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 // —— 食物：恢复饥饿值 ——
@@ -4816,6 +5015,8 @@ const RECIPES = [
   { out: B.DIAMOND, n: 9, need: [[B.DIAMOND_BLOCK, 1]] },
   { out: B.TNT, n: 1, need: [[B.SAND, 4], [B.COAL, 5]] },
   { out: B.SNOW, n: 1, need: [[B.SNOWBALL, 4]] },
+  { out: B.BED, n: 1, need: [[B.WOOL, 3], [B.PLANKS, 3]] },
+  { out: B.SHIELD, n: 1, need: [[B.PLANKS, 6], [B.IRON_INGOT, 1]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -5134,12 +5335,31 @@ function makeItemIcon(id) {
     ctx.fillStyle = '#d8d0be';
     ctx.fillRect(7, 12, 4, 4); ctx.fillRect(7, 16, 4, 4);
     ctx.fillRect(21, 12, 4, 4); ctx.fillRect(21, 16, 4, 4);
+  } else if (id === B.SHIELD) {
+    // 铁盾牌图标：经典骑士盾形 + 橡木底板 + 银白铁包边与中心铁十字
+    ctx.fillStyle = '#8a5c36'; // 橡木底板
+    ctx.fillRect(8, 5, 16, 15);
+    ctx.fillRect(10, 20, 12, 5);
+    ctx.fillRect(12, 25, 8, 3);
+    ctx.fillStyle = '#b08252';
+    ctx.fillRect(10, 7, 12, 12);
+    // 银白铁包边
+    ctx.fillStyle = '#c5ccd6';
+    ctx.fillRect(7, 4, 18, 2);
+    ctx.fillRect(7, 4, 2, 16);
+    ctx.fillRect(23, 4, 2, 16);
+    // 中心铁十字浮雕
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(14, 9, 4, 11);
+    ctx.fillRect(10, 12, 12, 4);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(15, 10, 2, 2);
   }
   return cv;
 }
 function makeIcon(id) {
-  if (id === B.STICK || isTool(id)) return makeToolIcon(id);
-  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE) return makeItemIcon(id);
+  if (id === B.STICK || (isTool(id) && id !== B.SHIELD)) return makeToolIcon(id);
+  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
   return makeIconCanvas(id);
 }
@@ -5709,11 +5929,14 @@ document.addEventListener('mousedown', (e) => {
 document.addEventListener('mouseup', (e) => {
   mouse.down[e.button] = false;
   if (e.button === 0) stopBreaking();
-  if (e.button === 2 && bowCharging) {
-    bowCharging = false;
-    const power = Math.min(1.0, bowChargeTime / 0.85);
-    shootArrow(power);
-    bowChargeTime = 0;
+  if (e.button === 2) {
+    player.blocking = false;
+    if (bowCharging) {
+      bowCharging = false;
+      const power = Math.min(1.0, bowChargeTime / 0.85);
+      shootArrow(power);
+      bowChargeTime = 0;
+    }
   }
 });
 /* 鼠标移出窗口/切走时可能收不到 mouseup，兜一下，免得一直"按住"连挖或卡蓄力 */
@@ -5721,6 +5944,7 @@ addEventListener('blur', () => {
   mouse.down[0] = mouse.down[1] = mouse.down[2] = false;
   bowCharging = false;
   bowChargeTime = 0;
+  player.blocking = false;
   stopBreaking();
 });
 document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -5761,6 +5985,13 @@ function onMousedown(btn) {
       playBowDraw();
       return;
     }
+    // 手持铁盾牌右键举盾防守格挡
+    if (sel && sel.id === B.SHIELD) {
+      player.blocking = true;
+      tone(440, 520, 0.08, 'triangle', 0.12);
+      toast('🛡️ 举盾防御中（可格挡攻击）');
+      return;
+    }
     // 手持骨头右键驯服灰狼
     if (sel && sel.id === B.BONE) {
       for (const m of animals) {
@@ -5789,6 +6020,22 @@ function onMousedown(btn) {
       return;
     }
     const hit = raycast(origin, dir, 6);
+    // 右键点击床 → 上床入睡并跳过黑夜
+    if (hit && hit.id === B.BED) {
+      const isNight = timeOfDay >= 0.48 || timeOfDay < 0.20;
+      if (!isNight) {
+        toast('☀️ 只能在夜间入睡');
+        return;
+      }
+      for (const z of zombies) {
+        if (Math.hypot(z.x - player.pos.x, z.z - player.pos.z) < 8) {
+          toast('⚠️ 附近有怪物游荡，无法入睡！');
+          return;
+        }
+      }
+      startSleeping();
+      return;
+    }
     // 右键点击已放置的 TNT 方块 → 点燃引信
     if (hit && hit.id === B.TNT) {
       primeTnt(hit.x, hit.y, hit.z);
@@ -5996,9 +6243,9 @@ function animate() {
   moon.target.updateMatrixWorld();
   sky.position.copy(player.pos);
 
-  // 云层在平流层缓缓漂移（高空纯净离散方块云）
-  cloudTex.offset.x = (clock.elapsedTime * 0.0016) % 1;
-  cloudTex.offset.y = (clock.elapsedTime * 0.0008) % 1;
+  // 云层在平流层缓缓漂移（高空大尺度离散方块云，随风向天际悠然流淌）
+  cloudTex.offset.x = (clock.elapsedTime * 0.0005) % 1;
+  cloudTex.offset.y = (clock.elapsedTime * 0.00025) % 1;
   cloudMesh.position.x = player.pos.x;
   cloudMesh.position.z = player.pos.z;
 
