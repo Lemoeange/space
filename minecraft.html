@@ -5535,8 +5535,7 @@ function updateIronGolems(dt) {
     g.attackCooldown -= dt;
     g.swingTimer = Math.max(0, g.swingTimer - dt * 4);
 
-    const gy = findGround(Math.floor(g.x), Math.floor(g.z));
-    g.y = gy;
+    g.y = findEntityGround(g.x, g.y, g.z);
 
     let target = null, minDist = 18;
     for (const z of zombies) {
@@ -5562,8 +5561,8 @@ function updateIronGolems(dt) {
         const speed = 2.0;
         const nx = g.x + Math.sin(g.heading) * speed * dt;
         const nz = g.z + Math.cos(g.heading) * speed * dt;
-        const tg = findGround(Math.floor(nx), Math.floor(nz));
-        if (Math.abs(tg - g.y) <= 1) { g.x = nx; g.z = nz; }
+        const tg = findEntityGround(nx, g.y, nz);
+        if (Math.abs(tg - g.y) <= 1.2) { g.x = nx; g.z = nz; }
       } else if (g.attackCooldown <= 0) {
         g.attackCooldown = 1.2;
         g.swingTimer = 1.0;
@@ -5587,11 +5586,22 @@ function updateIronGolems(dt) {
     } else {
       if (Math.random() < 0.01) g.heading += (Math.random() - 0.5) * 1.5;
       const dp = Math.hypot(player.pos.x - g.x, player.pos.z - g.z);
+      g.flowerTimer = (g.flowerTimer || 0) + dt;
+      if (dp < 3.5 && g.flowerTimer > 25.0) {
+        g.flowerTimer = 0;
+        g.swingTimer = 1.0;
+        dropItem(B.FLOWER_RED, player.pos.x, player.pos.y + 0.4, player.pos.z);
+        spawnParticles(g.x, g.y + 1.8, g.z, 0xff3b30, 14);
+        tone(523, 659, 0.25, 'triangle', 0.20);
+        setTimeout(() => tone(659, 784, 0.30, 'sine', 0.22), 120);
+        toast('🌹 铁傀儡温和地向你递上了一朵鲜艳的虞美人小红花');
+      }
       if (dp > 20) {
         g.heading = Math.atan2(player.pos.x - g.x, player.pos.z - g.z);
         const nx = g.x + Math.sin(g.heading) * 1.0 * dt;
         const nz = g.z + Math.cos(g.heading) * 1.0 * dt;
-        g.x = nx; g.z = nz;
+        const tg = findEntityGround(nx, g.y, nz);
+        if (Math.abs(tg - g.y) <= 1.2) { g.x = nx; g.z = nz; }
       }
     }
 
@@ -5675,6 +5685,16 @@ const VILLAGER_TRADES = {
       { need: [B.BONE, 8], give: [B.EMERALD, 1] },
       { need: [B.EMERALD, 2], give: [B.GLOWSTONE, 3] },
     ]
+  },
+  shepherd: {
+    title: '🥩 牧场主与屠夫 · 鲜肉与皮革',
+    trades: [
+      { need: [B.RAW_MEAT, 8], give: [B.EMERALD, 1] },
+      { need: [B.EMERALD, 1], give: [B.COOKED_MEAT, 4] },
+      { need: [B.LEATHER, 6], give: [B.EMERALD, 1] },
+      { need: [B.EMERALD, 2], give: [B.SADDLE, 1] },
+      { need: [B.EMERALD, 1], give: [B.SHEARS, 1] },
+    ]
   }
 };
 
@@ -5716,8 +5736,9 @@ function spawnVillager(x, yOrProf, zOrNull = null, prof = 'farmer') {
   if (actualProf === 'blacksmith') { robeColor = '#323438'; patColor = '#8a929a'; }
   else if (actualProf === 'librarian') { robeColor = '#b82828'; patColor = '#e8b024'; }
   else if (actualProf === 'cleric') { robeColor = '#6c1c82'; patColor = '#f2ce38'; }
+  else if (actualProf === 'shepherd') { robeColor = '#eae7dd'; patColor = '#734426'; }
 
-  const robeMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [140, 90, 50], 902 + (actualProf === 'blacksmith' ? 1 : actualProf === 'librarian' ? 2 : actualProf === 'cleric' ? 3 : 0), paintVillagerRobe(robeColor, patColor)) });
+  const robeMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [140, 90, 50], 902 + (actualProf === 'blacksmith' ? 1 : actualProf === 'librarian' ? 2 : actualProf === 'cleric' ? 3 : actualProf === 'shepherd' ? 4 : 0), paintVillagerRobe(robeColor, patColor)) });
 
   // 头部
   const head = new THREE.Mesh(villagerHeadGeo, headMats);
@@ -5953,12 +5974,65 @@ function buildVillage(c) {
   if (villageCenters.has(vk)) return;
   villageCenters.add(vk);
 
-  // 1. 中央集市广场与水井金钟 (Town Plaza & Well)
-  for (let dz = -4; dz <= 4; dz++) {
-    for (let dx = -4; dx <= 4; dx++) {
-      world.setBlock(cx8 + dx, gy - 1, cz8 + dz, ((dx + dz) % 2 === 0) ? B.STONE_BRICK : B.COBBLE);
+  // —— 建筑基底填充函数：彻底根除建筑浮空问题，向下深填实心圆石支撑柱 ——
+  const fillFoundation = (minX, maxX, minZ, maxZ, floorY, floorMat = B.COBBLE) => {
+    for (let z = minZ; z <= maxZ; z++) {
+      for (let x = minX; x <= maxX; x++) {
+        world.setBlock(x, floorY - 1, z, floorMat);
+        for (let y = floorY; y <= floorY + 6; y++) {
+          world.setBlock(x, y, z, B.AIR);
+        }
+        for (let y = floorY - 2; y >= Math.max(1, floorY - 16); y--) {
+          const cur = world.getBlock(x, y, z);
+          if (isSolid(cur) && cur !== B.LOG && cur !== B.PLANKS && cur !== B.DOOR && cur !== B.GLASS) break;
+          world.setBlock(x, y, z, B.COBBLE);
+        }
+      }
     }
-  }
+  };
+
+  // —— 门前通道清理函数：彻底根除泥土与障碍堵门问题，铺设平缓台阶与实心地基 ——
+  const clearDoorway = (doorX, doorZ, floorY, dirX, dirZ, length = 3) => {
+    for (let s = 1; s <= length; s++) {
+      const px = doorX + dirX * s;
+      const pz = doorZ + dirZ * s;
+      const stepY = floorY - (s > 1 ? 1 : 0);
+      for (let perp = -1; perp <= 1; perp++) {
+        const ax = px + (dirZ !== 0 ? perp : 0);
+        const az = pz + (dirX !== 0 ? perp : 0);
+        for (let y = stepY; y <= floorY + 4; y++) {
+          world.setBlock(ax, y, az, B.AIR);
+        }
+        world.setBlock(ax, stepY - 1, az, B.COBBLE);
+        for (let y = stepY - 2; y >= Math.max(1, stepY - 12); y--) {
+          const cur = world.getBlock(ax, y, az);
+          if (isSolid(cur) && cur !== B.LOG && cur !== B.PLANKS && cur !== B.DOOR && cur !== B.GLASS) break;
+          world.setBlock(ax, y, az, B.COBBLE);
+        }
+      }
+    }
+  };
+
+  // —— 道路地表自适应铺设与路基支撑 ——
+  const pavePath = (x, z) => {
+    let sy = 0;
+    for (let y = HEIGHT - 2; y >= 1; y--) {
+      const b = world.getBlock(x, y, z);
+      if (isSolid(b) && b !== B.LOG && b !== B.PLANKS && b !== B.DOOR && b !== B.GLASS) { sy = y; break; }
+    }
+    if (sy < 1) return;
+    world.setBlock(x, sy, z, ((x * 5 + z * 11) % 4 === 0) ? B.COBBLE : B.GRAVEL);
+    world.setBlock(x, sy + 1, z, B.AIR);
+    world.setBlock(x, sy + 2, z, B.AIR);
+    world.setBlock(x, sy + 3, z, B.AIR);
+    for (let y = sy - 1; y >= Math.max(1, sy - 6); y--) {
+      if (isSolid(world.getBlock(x, y, z))) break;
+      world.setBlock(x, y, z, B.COBBLE);
+    }
+  };
+
+  // 1. 中央集市广场与水井金钟 (Town Plaza & Well)
+  fillFoundation(cx8 - 4, cx8 + 4, cz8 - 4, cz8 + 4, gy, B.STONE_BRICK);
   // 水井 (4x4)
   for (let dz = -1; dz <= 2; dz++) {
     for (let dx = -1; dx <= 2; dx++) {
@@ -5980,19 +6054,31 @@ function buildVillage(c) {
       world.setBlock(cx8 + dx, gy + 4, cz8 + dz, B.COBBLE);
     }
   }
-  // 悬挂黄金村庄之钟
+  // 黄金村庄之钟
   world.setBlock(cx8, gy + 3, cz8, B.GOLD_BLOCK);
-  // 广场长椅与小营火
+  // 广场小营火与原木长椅
   world.setBlock(cx8 + 3, gy, cz8 + 2, B.CAMPFIRE);
   world.setBlock(cx8 + 3, gy, cz8 + 3, B.LOG);
   world.setBlock(cx8 + 3, gy, cz8 + 1, B.LOG);
 
+  // 露天集市货摊 1：果蔬粮点摊位
+  world.setBlock(cx8 - 3, gy, cz8 + 2, B.PLANKS);
+  world.setBlock(cx8 - 3, gy + 1, cz8 + 2, B.HAY_BALE);
+  world.setBlock(cx8 - 3, gy, cz8 + 3, B.PLANKS);
+  world.setBlock(cx8 - 3, gy + 1, cz8 + 3, B.PUMPKIN);
+  world.setBlock(cx8 - 3, gy + 2, cz8 + 2, B.TORCH);
+
+  // 露天集市货摊 2：炼金学者摊位
+  world.setBlock(cx8 - 3, gy, cz8 - 2, B.STONE_BRICK);
+  world.setBlock(cx8 - 3, gy + 1, cz8 - 2, B.BOOKSHELF);
+  world.setBlock(cx8 - 3, gy, cz8 - 3, B.STONE_BRICK);
+  world.setBlock(cx8 - 3, gy + 2, cz8 - 2, B.GLOWSTONE);
+
   // 2. 神圣大教堂与牧师圣殿 (Cathedral, 7x9) 在北侧
   const chX = cx8, chZ = cz8 + 13;
+  fillFoundation(chX - 3, chX + 3, chZ - 4, chZ + 4, gy, B.COBBLE);
   for (let dz = -4; dz <= 4; dz++) {
     for (let dx = -3; dx <= 3; dx++) {
-      world.setBlock(chX + dx, gy - 1, chZ + dz, B.COBBLE);
-      for (let y = gy; y <= gy + 5; y++) world.setBlock(chX + dx, y, chZ + dz, B.AIR);
       const isWall = (Math.abs(dx) === 3 || dz === -4 || dz === 4);
       if (isWall) {
         for (let y = gy; y <= gy + 4; y++) {
@@ -6011,21 +6097,21 @@ function buildVillage(c) {
   world.setBlock(chX, gy + 1, chZ + 3, B.GOLD_BLOCK);
   world.setBlock(chX - 1, gy, chZ + 3, B.TORCH);
   world.setBlock(chX + 1, gy, chZ + 3, B.TORCH);
-  // 长椅
+  // 祈祷长椅
   world.setBlock(chX - 1, gy, chZ, B.PLANKS);
   world.setBlock(chX + 1, gy, chZ, B.PLANKS);
   world.setBlock(chX - 1, gy, chZ - 2, B.PLANKS);
   world.setBlock(chX + 1, gy, chZ - 2, B.PLANKS);
-  // 教堂双格高大门
+  // 教堂双格高大门与门前畅通走廊
   world.setBlock(chX, gy, chZ - 4, B.DOOR);
   world.setBlock(chX, gy + 1, chZ - 4, B.DOOR);
+  clearDoorway(chX, chZ - 4, gy, 0, -1, 3);
 
   // 3. 镇立图书馆与学者研习厅 (Library, 7x7) 在西北侧
   const libX = cx8 - 14, libZ = cz8 + 9;
+  fillFoundation(libX - 3, libX + 3, libZ - 3, libZ + 3, gy, B.COBBLE);
   for (let dz = -3; dz <= 3; dz++) {
     for (let dx = -3; dx <= 3; dx++) {
-      world.setBlock(libX + dx, gy - 1, libZ + dz, B.COBBLE);
-      for (let y = gy; y <= gy + 4; y++) world.setBlock(libX + dx, y, libZ + dz, B.AIR);
       const isCorner = (Math.abs(dx) === 3 && Math.abs(dz) === 3);
       const isWall = (Math.abs(dx) === 3 || Math.abs(dz) === 3);
       if (isCorner) {
@@ -6048,16 +6134,16 @@ function buildVillage(c) {
   world.setBlock(libX, gy + 1, libZ, B.TORCH);
   world.setBlock(libX - 1, gy, libZ + 2, B.CHEST);
   populateVillageChest(libX - 1, gy, libZ + 2, 'general');
-  // 图书馆双格木门
+  // 图书馆双格木门与门前畅通走廊
   world.setBlock(libX + 3, gy, libZ, B.DOOR);
   world.setBlock(libX + 3, gy + 1, libZ, B.DOOR);
+  clearDoorway(libX + 3, libZ, gy, 1, 0, 3);
 
   // 4. 重装铁匠工坊与高炉 (Blacksmith Forge, 7x7) 在东南侧
-  const smithX = cx8 + 13, smithZ = cz8 - 5;
+  const smithX = cx8 + 14, smithZ = cz8 - 5;
+  fillFoundation(smithX - 3, smithX + 3, smithZ - 3, smithZ + 3, gy, B.COBBLE);
   for (let dz = -3; dz <= 3; dz++) {
     for (let dx = -3; dx <= 3; dx++) {
-      world.setBlock(smithX + dx, gy - 1, smithZ + dz, B.COBBLE);
-      for (let y = gy; y <= gy + 4; y++) world.setBlock(smithX + dx, y, smithZ + dz, B.AIR);
       const isWall = (Math.abs(dx) === 3 || Math.abs(dz) === 3);
       if (isWall) {
         for (let y = gy; y <= gy + 2; y++) world.setBlock(smithX + dx, y, smithZ + dz, B.COBBLE);
@@ -6072,16 +6158,17 @@ function buildVillage(c) {
   world.setBlock(smithX + 2, gy, smithZ - 2, B.CHEST);
   populateVillageChest(smithX + 2, gy, smithZ - 2, 'blacksmith');
   world.setBlock(smithX + 2, gy + 1, smithZ - 2, B.TORCH);
-  // 铁匠铺双格木门
+  // 铁匠铺双格木门与门前畅通走廊
   world.setBlock(smithX - 3, gy, smithZ, B.DOOR);
   world.setBlock(smithX - 3, gy + 1, smithZ, B.DOOR);
+  clearDoorway(smithX - 3, smithZ, gy, -1, 0, 3);
 
   // 5. 风车磨坊与水渠农田 (Granary & Vast Farmland, 11x9) 在南侧
   const farmX = cx8, farmZ = cz8 - 15;
+  fillFoundation(farmX - 5, farmX + 5, farmZ - 4, farmZ + 4, gy, B.DIRT);
   for (let dz = -4; dz <= 4; dz++) {
     for (let dx = -5; dx <= 5; dx++) {
       const isBorder = (Math.abs(dx) === 5 || Math.abs(dz) === 4);
-      world.setBlock(farmX + dx, gy - 1, farmZ + dz, B.DIRT);
       if (isBorder) {
         world.setBlock(farmX + dx, gy, farmZ + dz, B.LOG);
       } else if (dx === 0) {
@@ -6089,7 +6176,6 @@ function buildVillage(c) {
         world.setWater(farmX + dx, gy, farmZ + dz, 8);
         if (Math.abs(dz) === 2) world.setBlock(farmX + dx, gy + 1, farmZ + dz, B.LILY_PAD);
       } else {
-        world.setBlock(farmX + dx, gy, farmZ + dz, B.DIRT);
         const cropR = plantHash(farmX + dx, farmZ + dz);
         if (cropR < 0.6) world.setBlock(farmX + dx, gy + 1, farmZ + dz, B.WHEAT_CROP_MATURE);
         else if (cropR < 0.8) world.setBlock(farmX + dx, gy + 1, farmZ + dz, B.MELON);
@@ -6105,10 +6191,9 @@ function buildVillage(c) {
 
   // 粮仓塔楼 (4x4)
   const granX = cx8 - 8, granZ = cz8 - 15;
+  fillFoundation(granX - 1, granX + 2, granZ - 1, granZ + 2, gy, B.COBBLE);
   for (let dz = -1; dz <= 2; dz++) {
     for (let dx = -1; dx <= 2; dx++) {
-      world.setBlock(granX + dx, gy - 1, granZ + dz, B.COBBLE);
-      for (let y = gy; y <= gy + 4; y++) world.setBlock(granX + dx, y, granZ + dz, B.AIR);
       const isWall = (dx === -1 || dx === 2 || dz === -1 || dz === 2);
       if (isWall) {
         for (let y = gy; y <= gy + 3; y++) world.setBlock(granX + dx, y, granZ + dz, B.LOG);
@@ -6121,11 +6206,10 @@ function buildVillage(c) {
   }
 
   // 6. 温馨村民木屋 (Cottage, 7x7) 在西南侧
-  const cotX = cx8 - 13, cotZ = cz8 - 6;
+  const cotX = cx8 - 14, cotZ = cz8 - 6;
+  fillFoundation(cotX - 3, cotX + 3, cotZ - 3, cotZ + 3, gy, B.COBBLE);
   for (let dz = -3; dz <= 3; dz++) {
     for (let dx = -3; dx <= 3; dx++) {
-      world.setBlock(cotX + dx, gy - 1, cotZ + dz, B.COBBLE);
-      for (let y = gy; y <= gy + 3; y++) world.setBlock(cotX + dx, y, cotZ + dz, B.AIR);
       const isCorner = (Math.abs(dx) === 3 && Math.abs(dz) === 3);
       const isWall = (Math.abs(dx) === 3 || Math.abs(dz) === 3);
       if (isCorner) {
@@ -6143,16 +6227,16 @@ function buildVillage(c) {
   world.setBlock(cotX - 2, gy, cotZ + 1, B.CHEST);
   populateVillageChest(cotX - 2, gy, cotZ + 1, 'general');
   world.setBlock(cotX - 2, gy + 1, cotZ + 1, B.TORCH);
-  // 木屋双格门
+  // 木屋双格门与门前畅通走廊
   world.setBlock(cotX + 3, gy, cotZ, B.DOOR);
   world.setBlock(cotX + 3, gy + 1, cotZ, B.DOOR);
+  clearDoorway(cotX + 3, cotZ, gy, 1, 0, 3);
 
   // 7. 双层村民洋房 (Two-Story Town House, 7x7) 在东北侧
-  const thX = cx8 + 13, thZ = cz8 + 10;
+  const thX = cx8 + 14, thZ = cz8 + 10;
+  fillFoundation(thX - 3, thX + 3, thZ - 3, thZ + 3, gy, B.COBBLE);
   for (let dz = -3; dz <= 3; dz++) {
     for (let dx = -3; dx <= 3; dx++) {
-      world.setBlock(thX + dx, gy - 1, thZ + dz, B.COBBLE);
-      for (let y = gy; y <= gy + 6; y++) world.setBlock(thX + dx, y, thZ + dz, B.AIR);
       const isCorner = (Math.abs(dx) === 3 && Math.abs(dz) === 3);
       const isWall = (Math.abs(dx) === 3 || Math.abs(dz) === 3);
       if (isCorner) {
@@ -6163,7 +6247,6 @@ function buildVillage(c) {
           else world.setBlock(thX + dx, y, thZ + dz, B.PLANKS);
         }
       }
-      // 二层楼板与屋顶
       world.setBlock(thX + dx, gy + 2, thZ + dz, B.PLANKS);
       world.setBlock(thX + dx, gy + 5, thZ + dz, B.STONE_BRICK);
     }
@@ -6171,33 +6254,50 @@ function buildVillage(c) {
   world.setBlock(thX + 1, gy + 3, thZ - 1, B.BED);
   world.setBlock(thX + 1, gy + 3, thZ + 1, B.CHEST);
   populateVillageChest(thX + 1, gy + 3, thZ + 1, 'general');
-  // 双层洋房双格门
+  // 双层洋房双格门与门前畅通走廊
   world.setBlock(thX - 3, gy, thZ, B.DOOR);
   world.setBlock(thX - 3, gy + 1, thZ, B.DOOR);
+  clearDoorway(thX - 3, thZ, gy, -1, 0, 3);
 
-  // 8. 铺设纵横贯通的碎石大道网络 (Connecting Roads & Street Lanterns)
-  // 南北主干大道
-  for (let dz = -21; dz <= 20; dz++) {
-    for (const dx of [0, -1]) {
-      const px = cx8 + dx, pz = cz8 + dz;
-      const sy = findGround(px, pz) - 1;
-      if (world.getBlock(px, sy, pz) !== B.AIR && world.getBlock(px, sy, pz) !== B.WATER) {
-        world.setBlock(px, sy, pz, B.GRAVEL);
+  // 8. 村庄畜牧场与牧场圈 (Livestock Ranch, 8x8) 在东南侧
+  const ranX = cx8 + 14, ranZ = cz8 - 16;
+  fillFoundation(ranX - 3, ranX + 3, ranZ - 3, ranZ + 3, gy, B.GRASS);
+  for (let dz = -3; dz <= 3; dz++) {
+    for (let dx = -3; dx <= 3; dx++) {
+      const isBorder = (Math.abs(dx) === 3 || Math.abs(dz) === 3);
+      if (isBorder && !(dx === -3 && dz === 0)) { // 门留空
+        world.setBlock(ranX + dx, gy, ranZ + dz, B.LOG);
+        world.setBlock(ranX + dx, gy + 1, ranZ + dz, B.LOG);
       }
     }
   }
-  // 东西主干大道
-  for (let dx = -18; dx <= 17; dx++) {
-    for (const dz of [0, 1]) {
-      const px = cx8 + dx, pz = cz8 + dz;
-      const sy = findGround(px, pz) - 1;
-      if (world.getBlock(px, sy, pz) !== B.AIR && world.getBlock(px, sy, pz) !== B.WATER) {
-        world.setBlock(px, sy, pz, B.GRAVEL);
-      }
-    }
+  // 水槽与草料垛
+  world.setBlock(ranX + 2, gy, ranZ, B.WATER);
+  world.setWater(ranX + 2, gy, ranZ, 8);
+  world.setBlock(ranX - 2, gy, ranZ + 2, B.HAY_BALE);
+  world.setBlock(ranX - 2, gy + 1, ranZ + 2, B.HAY_BALE);
+  clearDoorway(ranX - 3, ranZ, gy, -1, 0, 3);
+
+  // 9. 纵横延申的大道网络 (Extended Roads & Lighting)
+  // 南北主干大道 (-22 到 +22，两格宽)
+  for (let dz = -22; dz <= 22; dz++) {
+    for (const dx of [0, -1]) pavePath(cx8 + dx, cz8 + dz);
   }
-  // 街道火把路灯
-  for (const [lx, lz] of [[-5, -5], [5, -5], [-5, 5], [5, 5]]) {
+  // 东西主干大道 (-22 到 +22，两格宽)
+  for (let dx = -22; dx <= 22; dx++) {
+    for (const dz of [0, 1]) pavePath(cx8 + dx, cz8 + dz);
+  }
+  // 支线延伸小道（直通各建筑大门门前台阶）
+  for (let dz = 4; dz <= 9; dz++) { pavePath(cx8, cz8 + dz); pavePath(cx8 - 1, cz8 + dz); } // 教堂大道
+  for (let dx = -14; dx <= -1; dx++) { pavePath(cx8 + dx, cz8 + 9); }                        // 图书馆支道
+  for (let dx = 0; dx <= 14; dx++) { pavePath(cx8 + dx, cz8 - 5); }                         // 铁匠铺支道
+  for (let dx = -14; dx <= -1; dx++) { pavePath(cx8 + dx, cz8 - 6); }                        // 木屋支道
+  for (let dx = 0; dx <= 14; dx++) { pavePath(cx8 + dx, cz8 + 10); }                        // 洋房支道
+  for (let dx = 0; dx <= 14; dx++) { pavePath(cx8 + dx, cz8 - 16); }                        // 牧场支道
+  for (let dz = -22; dz <= -10; dz++) { pavePath(cx8, cz8 + dz); pavePath(cx8 - 1, cz8 + dz); } // 农田小径
+
+  // 街道火把立柱路灯
+  for (const [lx, lz] of [[-6, -6], [6, -6], [-6, 6], [6, 6], [0, -18], [0, 19], [-18, 0], [18, 0]]) {
     const px = cx8 + lx, pz = cz8 + lz;
     const sy = findGround(px, pz);
     world.setBlock(px, sy, pz, B.LOG);
@@ -6205,19 +6305,26 @@ function buildVillage(c) {
     world.setBlock(px, sy + 2, pz, B.TORCH);
   }
 
-  // 9. 生成驻村守护者铁傀儡与村民（全部精准生成在开阔主干道和广场上，显式指定 gy，绝不出现在屋顶）
+  // 10. 生成驻村守护者铁傀儡与村民（全部精准生成在开阔主干道和广场上，显式指定 gy，绝不出现在屋顶）
   spawnIronGolem(cx8 + 2.5, gy + 1, cz8 + 2.5);
 
   spawnVillager(cx8, gy, cz8 - 10.5, 'farmer');
   spawnVillager(cx8 + 2.5, gy, cz8 - 2.5, 'farmer');
-  spawnVillager(cx8 + 8.5, gy, cz8 - 5.5, 'blacksmith');
+  spawnVillager(cx8 + 9.5, gy, cz8 - 5.5, 'blacksmith');
   spawnVillager(cx8 - 9.5, gy, cz8 + 9.5, 'librarian');
   spawnVillager(cx8, gy, cz8 + 7.5, 'cleric');
+  spawnVillager(cx8 + 9.5, gy, cz8 - 16.5, 'shepherd'); // 牧羊人/屠夫！
 
   // 生成 3 只村庄猫咪（全部生成在露天广场与街道上，绝不出现在屋顶）
   spawnCat(cx8 + 2.0, gy, cz8 + 1.5, 'ginger');
   spawnCat(cx8 - 4.5, gy, cz8 - 3.5, 'calico');
   spawnCat(cx8 + 7.5, gy, cz8 + 8.5, 'tuxedo');
+
+  // 在村庄牧场生成家畜（牛与羊）
+  const cowKind = MOB_KINDS.find(k => k.name === 'cow');
+  const sheepKind = MOB_KINDS.find(k => k.name === 'sheep');
+  if (cowKind) spawnAnimal(ranX + 1.5, ranZ + 1.5, cowKind);
+  if (sheepKind) spawnAnimal(ranX - 1.5, ranZ - 1.5, sheepKind);
 
   // 标记 3x3 区块 dirty 重新渲染
   for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
@@ -6369,6 +6476,14 @@ function updateCats(dt) {
     c.y = findEntityGround(c.x, c.y, c.z);
 
     if (c.tamed) {
+      if (c.sitting) {
+        c.isIdle = true;
+        c.legs.forEach(leg => { leg.rotation.x = 0; });
+        c.tail.rotation.x = 0.25;
+        c.g.position.set(c.x, c.y, c.z);
+        c.g.rotation.y = c.heading + Math.PI;
+        continue;
+      }
       const pDist = Math.hypot(player.pos.x - c.x, player.pos.z - c.z);
       if (pDist > 16) {
         c.x = player.pos.x + (Math.random() - 0.5) * 2;
@@ -9657,6 +9772,18 @@ function onMousedown(btn) {
         } else {
           spawnParticles(targetCat.x, targetCat.y + 0.5, targetCat.z, 0xff3b56, 8);
           playCatPurr();
+        }
+        return;
+      }
+      if (targetCat.tamed) {
+        targetCat.sitting = !targetCat.sitting;
+        if (targetCat.sitting) {
+          playCatPurr();
+          spawnParticles(targetCat.x, targetCat.y + 0.4, targetCat.z, 0xff6688, 12);
+          toast('🐱 猫咪已乖巧坐下守家（留在原地威慑周围苦力怕）');
+        } else {
+          playCatMeow();
+          toast('🐾 猫咪起身跟随主人');
         }
         return;
       }
