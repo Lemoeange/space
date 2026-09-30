@@ -414,17 +414,47 @@ let WX = 0, WZ = 0;
 function setWorldOffset(x, z) { WX = x | 0; WZ = z | 0; }
 function getWorldOffset() { return [WX, WZ]; }
 
-// 地表高度（平原 / 丘陵 / 山脉 / 海洋）
+// 沼泽低洼湿地权重（在连续温湿噪声区间内平滑过渡，确保沼泽地形平滑衔接）
+function swampWeight(x, z) {
+  const moist = P.terrain.fbm2(x * 0.0016 + 900, z * 0.0016 + 900, 3);
+  if (moist < 0.15) return 0;
+  const temp = P.terrain.fbm2(x * 0.0016 + 500, z * 0.0016 + 500, 3);
+  if (temp < -0.16 || temp > 0.22) return 0;
+  const weird = P.terrain.fbm2(x * 0.0009 + 1700, z * 0.0009 + 1700, 2);
+  if (weird > 0.22 || weird < -0.34) return 0;
+  if (temp > 0.04 && weird < -0.08) return 0; // 竹林通道排除
+  if (weird > 0.08 && weird < 0.26 && temp > -0.10 && temp < 0.10 && moist < 0.22) return 0; // 樱花林排除
+
+  const mWeight = Math.min(1, Math.max(0, (moist - 0.15) / 0.11));
+  const tWeight = Math.min(1, Math.max(0, (0.22 - temp) / 0.06));
+  const wWeight = Math.min(1, Math.max(0, (0.22 - weird) / 0.06));
+  const w = mWeight * tWeight * wWeight;
+  return w * w * (3 - 2 * w); // smoothstep 平滑样条过渡
+}
+
+// 地表高度（平原 / 丘陵 / 山脉 / 海洋 / 沼泽低地）
 function surfaceHeight(x, z) {
   x += WX; z += WZ;
-  const hills = P.terrain.fbm2(x * 0.012, z * 0.012, 4);            // ~80 块起伏
-  const mtn = P.terrain.fbm2(x * 0.004 + 60, z * 0.004 + 60, 3);    // ~250 块山体
   const cont = P.terrain.fbm2(x * 0.0022 + 120, z * 0.0022 + 120, 3); // 大陆/海洋
   if (cont < -0.03) {
     return Math.max(2, SEA - 4 + cont * 18);                        // 海洋（近岸浅、远岸深）
   }
+  const hills = P.terrain.fbm2(x * 0.012, z * 0.012, 4);            // ~80 块起伏
+  const mtn = P.terrain.fbm2(x * 0.004 + 60, z * 0.004 + 60, 3);    // ~250 块山体
   const u = Math.max(0, mtn - 0.05);                                // 山体抬升
-  const h = SEA + 2 + hills * 18 + Math.max(0, cont) * 10 + u * 50 + u * u * 40;
+  let h = SEA + 2 + hills * 18 + Math.max(0, cont) * 10 + u * 50 + u * u * 40;
+
+  // 沼泽低洼湿地：地势平缓贴近海平面(地平线)，带有天然浅水塘与泥潭，与周边地形平滑过渡
+  const sw = swampWeight(x, z);
+  if (sw > 0) {
+    // 沼泽内部微地形：温和波动的浅水洼、泥滩与低土丘
+    const poolNoise = P.terrain.fbm2(x * 0.020 + 77, z * 0.020 + 77, 3);
+    // 目标高度：SEA 在 32，poolNoise (-0.5 ~ +0.5) 映射出 30.6 ~ 33.3
+    // 低于 32 即自动生成天然连片浅水坑与蜿蜒水塘，高于 32 为贴水湿泥草地与泥洲
+    const hSwamp = SEA + 0.6 + poolNoise * 2.2;
+    h = h * (1.0 - sw) + hSwamp * sw;
+  }
+
   return Math.max(2, Math.min(HEIGHT - 6, h));
 }
 
@@ -505,7 +535,7 @@ function biomeOf(x, z) {
   if (temp > 0.07 && moist < -0.04) return 6;   // 热带草原
 
   // 湿润区
-  if (moist > 0.25) return 5;                   // 沼泽
+  if (moist > 0.20 && temp < 0.18) return 5;                   // 沼泽低地
   if (moist > 0.10 && weird > 0.05) return 11;  // 花海
   if (moist > 0.09 && temp > -0.05) return 8;   // 丛林
   if (moist > 0.03 && weird < -0.10) return 17; // 黑森林（浓密树冠与地表菌菇）
@@ -2208,23 +2238,49 @@ class World {
         const mapleForest = bm === 21 && !beach;               // 枫树林
         const frozenGlacier = bm === 22 && !beach;             // 极地冰川
         const meadow = bm === 23 && !beach;                    // 田园麦原
+        const patchNoise = P.terrain.fbm2(wx * 0.08, wz * 0.08, 1);
         for (let y = 0; y <= surf; y++) {
           let id;
-          if (y <= 2) id = B.BEDROCK;
-          else if (y < surf - 3) id = B.STONE;
-          else if (y < surf) id = (beach || desert ? (badlands ? badBand(y) : B.SAND) : (gravelly ? B.GRAVEL : B.DIRT));
-          else if (beach || desert) id = badlands ? badBand(y) : B.SAND;
-          else if (whiteSand) id = y === surf ? B.QUARTZ : B.SANDSTONE;   // 白沙丘：石英表层 + 砂岩层
-          const patchNoise = P.terrain.fbm2(wx * 0.08, wz * 0.08, 1);
-          if (volcanic) id = y === surf ? (patchNoise > 0.35 ? B.MAGMA : B.BASALT) : (patchNoise > 0.15 ? B.COBBLE : B.STONE); // 熔岩火山：大块平滑凝灰岩/岩浆脉
-          else if (frozenGlacier) id = y === surf ? (patchNoise > 0.1 ? B.ICE : B.SNOW) : (y > surf - 3 ? B.ICE : B.STONE); // 极地冰川：连续厚浮冰
-          else if (gravelly) id = y === surf ? B.GRAVEL : B.STONE;
-          else if (iceSpike || snowy || surf > 72) id = B.SNOW;
-          else if (taiga) id = (y === surf && patchNoise > 0.38) ? B.MOSSY : (y === surf ? B.GRASS : B.DIRT); // 连贯有机灰化土/苔石斑块
-          else if (oasis) id = (y === surf && patchNoise > 0.25) ? B.SAND : B.GRASS; // 绿洲草坪与沙滩连贯交融
-          else if (swamp) id = patchNoise > 0.3 ? B.MOSSY : B.GRASS;   // 沼泽：自然连贯苔石与湿草地
-          else if (mushroom) id = patchNoise > 0.15 ? B.MOSSY : B.GRASS; // 蘑菇岛：成片连贯菌丝地皮
-          else id = B.GRASS;
+          if (y <= 2) {
+            id = B.BEDROCK;
+          } else if (y < surf - 3) {
+            id = B.STONE;
+          } else if (y < surf) {
+            // 次表层过渡层（1~3格深度，泥土/砂石，绝无草方块）
+            if (beach || desert) id = badlands ? badBand(y) : B.SAND;
+            else if (whiteSand) id = B.SANDSTONE;
+            else if (gravelly) id = B.GRAVEL;
+            else if (frozenGlacier && patchNoise > 0.1) id = B.ICE;
+            else if (volcanic && patchNoise > 0.15) id = B.COBBLE;
+            else id = B.DIRT;
+          } else {
+            // y === surf 露天地表最高层！草方块仅在此层生成
+            if (beach || desert) {
+              id = badlands ? badBand(y) : B.SAND;
+            } else if (whiteSand) {
+              id = B.QUARTZ;
+            } else if (volcanic) {
+              id = patchNoise > 0.35 ? B.MAGMA : B.BASALT;
+            } else if (frozenGlacier) {
+              id = patchNoise > 0.1 ? B.ICE : B.SNOW;
+            } else if (gravelly) {
+              id = B.GRAVEL;
+            } else if (iceSpike || snowy || surf > 72) {
+              id = B.SNOW;
+            } else if (taiga) {
+              id = patchNoise > 0.38 ? B.MOSSY : B.GRASS;
+            } else if (oasis) {
+              id = patchNoise > 0.25 ? B.SAND : B.GRASS;
+            } else if (swamp) {
+              // 沼泽水下浅床为泥土，陆地表层为湿草地、泥土与苔石交融
+              if (surf < SEA) id = B.DIRT;
+              else id = patchNoise > 0.32 ? B.MOSSY : (patchNoise < -0.2 ? B.DIRT : B.GRASS);
+            } else if (mushroom) {
+              id = patchNoise > 0.15 ? B.MOSSY : B.GRASS;
+            } else {
+              id = B.GRASS;
+            }
+          }
           if (id === B.STONE) id = oreFor(y, oreNoise(wx, y, wz));
           c.blocks[y * 256 + lz * 16 + lx] = id;
         }
@@ -2387,8 +2443,12 @@ class World {
                 if (nearWater) continue;
               }
               c.blocks[y * 256 + lz * 16 + lx] = B.AIR;
-              // 洞穴地板放蘑菇
+              // 彻底杜绝洞穴草方块：洞穴上下接触面绝不应为草方块
               const below = c.blocks[(y - 1) * 256 + lz * 16 + lx];
+              if (below === B.GRASS) c.blocks[(y - 1) * 256 + lz * 16 + lx] = B.STONE;
+              const above = c.blocks[(y + 1) * 256 + lz * 16 + lx];
+              if (above === B.GRASS) c.blocks[(y + 1) * 256 + lz * 16 + lx] = B.STONE;
+              // 洞穴地板放蘑菇
               if (below !== B.AIR && below !== B.WATER) {
                 const pr = plantHash(wx * 11 + y, wz * 17);
                 if (pr < 0.018) c.blocks[y * 256 + lz * 16 + lx] = (pr < 0.009 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
@@ -2409,6 +2469,16 @@ class World {
             if (nearLand) {
               const lp = plantHash(wx * 13 + 7, wz * 17 + 3);
               if (lp < 0.025) c.blocks[SEA * 256 + lz * 16 + lx] = B.LILY_PAD;
+            }
+          }
+        }
+        // 彻底根除暗处与地下草方块：草方块上方若有任何不透明方块遮挡光线，自然转为泥土
+        for (let y = 1; y < surf; y++) {
+          const idx = y * 256 + lz * 16 + lx;
+          if (c.blocks[idx] === B.GRASS) {
+            const up = c.blocks[(y + 1) * 256 + lz * 16 + lx];
+            if (up !== B.AIR && !isSeeThrough(up)) {
+              c.blocks[idx] = B.DIRT;
             }
           }
         }
