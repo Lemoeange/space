@@ -242,7 +242,7 @@
 <div id="menu">
   <div class="box">
     <h1>⛏️ 我的世界 <span class="tag">Web 复刻</span></h1>
-    <div class="sub">原版怪物生态 · 营火烘烤 · 储物箱 · 木门穿行 · 瞬移传送 · 合成冶炼 · 昼夜流转</div>
+    <div class="sub">原版怪物生态 · 蜘蛛攀爬飞扑 · 浮漂垂钓 · 营火烘烤 · 储物箱 · 瞬移传送 · 合成冶炼</div>
     <div class="keys">
       <span><b>W A S D</b> 移动</span>
       <span><b>鼠标</b> 视角</span>
@@ -255,7 +255,7 @@
       <span><b>V</b> 望远镜放大</span>
       <span><b>0</b> 切换昼夜</span>
       <span><b>左键</b> 破坏方块 / 攻击</span>
-      <span><b>右键</b> 放置/举盾/射箭/瞬移</span>
+      <span><b>右键</b> 放置/举盾/射箭/钓鱼/瞬移</span>
       <span><b>中键</b> 选取方块</span>
       <span><b>Esc</b> 暂停菜单</span>
     </div>
@@ -357,7 +357,8 @@ const B = {
   WOOL:99, BED:100, SHIELD:101, CHERRY_LOG:102,
   CHEST:103, GUNPOWDER:104,
   CAMPFIRE:105, DOOR:106,
-  ENDER_PEARL:107, COBWEB:108, STRING:109
+  ENDER_PEARL:107, COBWEB:108, STRING:109,
+  FISHING_ROD:110, SPIDER_EYE:111
 };
 
 function mulberry32(a) {
@@ -3604,6 +3605,7 @@ const BLOCK_COLORS = {
   [B.CHEST]: 0x9b6c3c, [B.GUNPOWDER]: 0x4a4a4a,
   [B.CAMPFIRE]: 0xec7828, [B.DOOR]: 0xad7e46,
   [B.ENDER_PEARL]: 0x228b8b, [B.COBWEB]: 0xeeeeee, [B.STRING]: 0xe4e4e4,
+  [B.FISHING_ROD]: 0x8a5228, [B.SPIDER_EYE]: 0xa01828,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -4030,6 +4032,32 @@ function paintEndermanSkin(ctx) {
   for (let k = 0; k < 18; k++) {
     const x = Math.floor(r() * 15), y = Math.floor(r() * 15);
     ctx.fillStyle = r() < 0.5 ? '#060608' : '#1e1c24';
+    ctx.fillRect(x, y, 2, 2);
+  }
+}
+
+// —— 🕷️ 蜘蛛 (Spider) ——
+function paintSpiderFace(ctx) {
+  ctx.fillStyle = '#141216'; ctx.fillRect(0, 0, 16, 16);
+  ctx.fillStyle = '#ff1122';
+  // 前方主眼 2 只
+  ctx.fillRect(4, 9, 3, 2);
+  ctx.fillRect(9, 9, 3, 2);
+  // 旁边小复眼 4 只
+  ctx.fillRect(2, 8, 2, 2);
+  ctx.fillRect(12, 8, 2, 2);
+  ctx.fillRect(1, 11, 2, 2);
+  ctx.fillRect(13, 11, 2, 2);
+  // 口器獠牙
+  ctx.fillStyle = '#22080a'; ctx.fillRect(6, 13, 4, 3);
+  ctx.fillStyle = '#e8dede'; ctx.fillRect(6, 15, 1, 1); ctx.fillRect(9, 15, 1, 1);
+}
+function paintSpiderSkin(ctx) {
+  ctx.fillStyle = '#1e1c22'; ctx.fillRect(0, 0, 16, 16);
+  const r = mulberry32(777);
+  for (let k = 0; k < 20; k++) {
+    const x = Math.floor(r() * 15), y = Math.floor(r() * 15);
+    ctx.fillStyle = r() < 0.5 ? '#100e12' : '#2d2832';
     ctx.fillRect(x, y, 2, 2);
   }
 }
@@ -4950,6 +4978,172 @@ function updateEndermen(dt) {
     });
   }
 }
+
+/* ============================ 🕷️ 蜘蛛（Spider） ============================ */
+const MAX_SPIDERS = 3;
+const spiders = [];
+let spiderSpawnTimer = 10;
+
+const spiderFaceMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [30, 28, 34], 101, paintSpiderFace) });
+const spiderSkinMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [30, 28, 34], 102, paintSpiderSkin) });
+const spiderHeadMats = [spiderSkinMat, spiderSkinMat, spiderSkinMat, spiderSkinMat, spiderSkinMat, spiderFaceMat];
+
+const spiderHeadGeo = new THREE.BoxGeometry(0.50, 0.38, 0.45);
+const spiderAbdomenGeo = new THREE.BoxGeometry(0.70, 0.52, 0.80);
+const spiderLegGeo = new THREE.BoxGeometry(0.08, 0.08, 0.65);
+
+function spawnSpider(x, z) {
+  const g = new THREE.Group();
+  const head = new THREE.Mesh(spiderHeadGeo, spiderHeadMats);
+  head.position.set(0, 0.30, 0.38); head.castShadow = true; head.receiveShadow = true; g.add(head);
+  const abdomen = new THREE.Mesh(spiderAbdomenGeo, spiderSkinMat);
+  abdomen.position.set(0, 0.36, -0.28); abdomen.castShadow = true; abdomen.receiveShadow = true; g.add(abdomen);
+
+  const legs = [];
+  for (let i = 0; i < 4; i++) {
+    const lz = -0.15 + i * 0.18;
+    const lLeg = new THREE.Mesh(spiderLegGeo, spiderSkinMat);
+    lLeg.position.set(-0.35, 0.28, lz);
+    lLeg.rotation.z = Math.PI * 0.22;
+    lLeg.rotation.y = (i - 1.5) * 0.25;
+    lLeg.castShadow = true; lLeg.receiveShadow = true;
+    g.add(lLeg); legs.push(lLeg);
+
+    const rLeg = new THREE.Mesh(spiderLegGeo, spiderSkinMat);
+    rLeg.position.set(0.35, 0.28, lz);
+    rLeg.rotation.z = -Math.PI * 0.22;
+    rLeg.rotation.y = -(i - 1.5) * 0.25;
+    rLeg.castShadow = true; rLeg.receiveShadow = true;
+    g.add(rLeg); legs.push(rLeg);
+  }
+
+  const gy = findGround(Math.floor(x), Math.floor(z));
+  g.position.set(x, gy, z);
+  scene.add(g);
+
+  spiders.push({
+    g, head, abdomen, legs,
+    x, y: gy, z,
+    hp: 8, heading: 0,
+    angry: false, climbing: false,
+    attackCooldown: 0, leapCooldown: 1.0, hurtT: 0,
+    velY: 0, phase: Math.random() * 6
+  });
+}
+
+function killSpider(i) {
+  const s = spiders[i];
+  const bx = Math.floor(s.x), bz = Math.floor(s.z);
+  const by = Math.floor(s.y);
+  scene.remove(s.g);
+  spawnParticles(bx, by + 0.3, bz, 0x1e1c22, 22);
+  const strings = 1 + (Math.random() < 0.65 ? 1 : 0);
+  for (let k = 0; k < strings; k++) dropItem(B.STRING, bx, by + 0.5, bz);
+  if (Math.random() < 0.45) dropItem(B.SPIDER_EYE, bx, by + 0.5, bz);
+  spiders.splice(i, 1);
+  playZombieDeath();
+}
+
+function updateSpiders(dt) {
+  const night = timeOfDay >= 0.5;
+  spiderSpawnTimer -= dt;
+  if (spiders.length < MAX_SPIDERS && spiderSpawnTimer <= 0) {
+    spiderSpawnTimer = 10 + Math.random() * 8;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const ang = Math.random() * Math.PI * 2, dist = 20 + Math.random() * 16;
+      const x = Math.floor(player.pos.x + Math.cos(ang) * dist);
+      const z = Math.floor(player.pos.z + Math.sin(ang) * dist);
+      const gy = findGround(x, z);
+      if (isDryGround(x, gy, z)) {
+        spawnSpider(x + 0.5, z + 0.5);
+        break;
+      }
+    }
+  }
+
+  for (let i = spiders.length - 1; i >= 0; i--) {
+    const s = spiders[i];
+    s.hurtT -= dt;
+    s.attackCooldown -= dt;
+    s.leapCooldown -= dt;
+
+    const dxp = player.pos.x - s.x, dzp = player.pos.z - s.z;
+    const dist = Math.hypot(dxp, dzp);
+    const dyp = (player.pos.y + 0.6) - (s.y + 0.3);
+    const dist3 = Math.hypot(dxp, dyp, dzp);
+
+    if (dist > 80) {
+      scene.remove(s.g);
+      spiders.splice(i, 1);
+      continue;
+    }
+
+    if (night || s.hurtT > 0) s.angry = true;
+    else if (!night && dist > 14) s.angry = false;
+
+    const groundY = findGround(Math.floor(s.x), Math.floor(s.z));
+
+    if (s.angry && dist3 < 24) {
+      s.heading = Math.atan2(dxp, dzp);
+      const speed = 2.4;
+      const nx = s.x + Math.sin(s.heading) * speed * dt;
+      const nz = s.z + Math.cos(s.heading) * speed * dt;
+
+      const frontBlock = world.getBlock(Math.floor(nx), Math.floor(s.y + 0.4), Math.floor(nz));
+      if (isSolid(frontBlock)) {
+        s.y += dt * 3.4;
+        s.climbing = true;
+      } else {
+        s.climbing = false;
+        s.x = nx; s.z = nz;
+      }
+
+      if (dist3 < 5.0 && dist3 > 2.0 && s.leapCooldown <= 0 && !s.climbing && s.y <= groundY + 0.2) {
+        s.velY = 5.0;
+        s.leapCooldown = 3.5;
+        playSpiderHiss();
+      }
+
+      if (dist3 < 1.4 && s.attackCooldown <= 0) {
+        s.attackCooldown = 0.9;
+        playSpiderHiss();
+        damagePlayer(3);
+      }
+    } else {
+      s.climbing = false;
+      if (Math.random() < 0.02) s.heading += (Math.random() - 0.5) * 1.8;
+      const speed = 1.0;
+      const nx = s.x + Math.sin(s.heading) * speed * dt;
+      const nz = s.z + Math.cos(s.heading) * speed * dt;
+      const tg = findGround(Math.floor(nx), Math.floor(nz));
+      if (tg <= s.y + 1 && tg >= s.y - 2 && world.getWater(Math.floor(nx), s.y, Math.floor(nz)) === 0) {
+        s.x = nx; s.z = nz;
+      }
+    }
+
+    if (!s.climbing) {
+      if (s.y > groundY || s.velY > 0) {
+        s.y += s.velY * dt;
+        s.velY -= 18 * dt;
+        if (s.y < groundY) { s.y = groundY; s.velY = 0; }
+      } else {
+        s.y = groundY;
+        s.velY = 0;
+      }
+    }
+
+    s.g.position.set(s.x, s.y, s.z);
+    s.g.rotation.y = s.heading + Math.PI;
+
+    s.phase += dt * (s.angry ? 10.0 : 4.5);
+    s.legs.forEach((leg, idx) => {
+      const dirMult = (idx % 2 === 0 ? 1 : -1);
+      const phaseOffset = Math.floor(idx / 2) * 0.7;
+      const swing = Math.sin(s.phase + phaseOffset) * 0.35 * dirMult;
+      leg.rotation.y = (Math.floor(idx / 2) - 1.5) * 0.25 + swing;
+    });
+  }
+}
 // 攻击伤害（剑 / 徒手）
 function meleeDamage() {
   const s = hotbar[selected];
@@ -5004,6 +5198,16 @@ function meleeAttack() {
       tone(180, 260, 0.1, 'triangle', 0.1);
       if (Math.random() < 0.6 && m.teleCooldown <= 0) teleportEnderman(m);
       if (m.hp <= 0) killEnderman(i);
+    }
+  }
+  for (let i = spiders.length - 1; i >= 0; i--) {
+    const m = spiders[i];
+    if (meleeHitMob(m, dir)) {
+      m.hp -= dmg;
+      m.angry = true;
+      hitAny = true;
+      playSpiderHiss();
+      if (m.hp <= 0) killSpider(i);
     }
   }
   for (let i = animals.length - 1; i >= 0; i--) {
@@ -5197,6 +5401,12 @@ function explodeTnt(ex, ey, ez) {
     }
   }
 
+  for (let i = spiders.length - 1; i >= 0; i--) {
+    const s = spiders[i];
+    const dist = Math.hypot(s.x - ex, s.g.position.y - ey, s.z - ez);
+    if (dist < radius + 2) killSpider(i);
+  }
+
   for (let i = animals.length - 1; i >= 0; i--) {
     const a = animals[i];
     const dist = Math.hypot(a.x - ex, a.g.position.y - ey, a.z - ez);
@@ -5260,6 +5470,24 @@ function updateSnowballs(dt) {
           z.z += (sb.vel.z > 0 ? 0.3 : -0.3);
           playZombieHit();
           if (z.hp <= 0) killZombie(zi);
+          break;
+        }
+      }
+    }
+
+    if (!hit) {
+      for (let si = spiders.length - 1; si >= 0; si--) {
+        const s = spiders[si];
+        const dist = Math.hypot(s.x - sb.pos.x, (s.g.position.y + 0.3) - sb.pos.y, s.z - sb.pos.z);
+        if (dist < 0.75) {
+          hit = true;
+          s.hp -= 1;
+          s.hurtT = 0.25;
+          s.angry = true;
+          s.x += (sb.vel.x > 0 ? 0.35 : -0.35);
+          s.z += (sb.vel.z > 0 ? 0.35 : -0.35);
+          playSpiderHiss();
+          if (s.hp <= 0) killSpider(si);
           break;
         }
       }
@@ -5526,6 +5754,25 @@ function updateArrows(dt) {
       }
 
       if (!hitMob) {
+        for (let si = spiders.length - 1; si >= 0; si--) {
+          const sp = spiders[si];
+          const dist = Math.hypot(sp.x - a.pos.x, (sp.g.position.y + 0.3) - a.pos.y, sp.z - a.pos.z);
+          if (dist < 0.75) {
+            hitMob = true;
+            sp.hp -= a.dmg;
+            sp.hurtT = 0.25;
+            sp.angry = true;
+            sp.x += vDir.x * 0.8;
+            sp.z += vDir.z * 0.8;
+            playSpiderHiss();
+            spawnParticles(a.pos.x, a.pos.y, a.pos.z, 0x1e1c22, 8);
+            if (sp.hp <= 0) killSpider(si);
+            break;
+          }
+        }
+      }
+
+      if (!hitMob) {
         for (let ai = animals.length - 1; ai >= 0; ai--) {
           const m = animals[ai];
           const dist = Math.hypot(m.x - a.pos.x, (m.g.position.y + 0.4) - a.pos.y, m.z - a.pos.z);
@@ -5547,6 +5794,182 @@ function updateArrows(dt) {
         scene.remove(a.mesh);
         arrows.splice(i, 1);
       }
+    }
+  }
+}
+
+/* ============================ 🎣 沉浸式钓鱼系统 (Fishing Rod & Bobber) ============================ */
+let activeBobber = null;
+
+const bobberGeo = new THREE.SphereGeometry(0.09, 8, 8);
+const bobberMat = new THREE.MeshLambertMaterial({ color: 0xd43030 });
+const fishingLineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+const fishingLineMat = new THREE.LineBasicMaterial({ color: 0xe8eef5, transparent: true, opacity: 0.85 });
+const fishingLineMesh = new THREE.Line(fishingLineGeo, fishingLineMat);
+fishingLineMesh.frustumCulled = false;
+scene.add(fishingLineMesh);
+fishingLineMesh.visible = false;
+
+function castFishingRod() {
+  const sel = hotbar[selected];
+  if (!sel || sel.id !== B.FISHING_ROD) return;
+
+  if (activeBobber) {
+    reelFishingRod();
+    return;
+  }
+
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const origin = camera.position.clone().addScaledVector(dir, 0.4);
+
+  const mesh = new THREE.Mesh(bobberGeo, bobberMat);
+  mesh.position.copy(origin);
+  scene.add(mesh);
+
+  tone(260, 480, 0.12, 'triangle', 0.12);
+  toast('🎣 抛出鱼线…静候游鱼咬钩');
+
+  activeBobber = {
+    mesh,
+    pos: origin,
+    vel: dir.clone().multiplyScalar(13).add(new THREE.Vector3(0, 3.2, 0)),
+    state: 'flying',
+    waitTimer: 3.5 + Math.random() * 5.0,
+    approachTimer: 0,
+    biteTimer: 0,
+    rippleTimer: 0,
+    waterY: 0
+  };
+  fishingLineMesh.visible = true;
+}
+
+function reelFishingRod() {
+  if (!activeBobber) return;
+  const sel = hotbar[selected];
+  const b = activeBobber;
+
+  if (b.state === 'bite') {
+    playFishCatch();
+    spawnParticles(b.pos.x, b.pos.y + 0.2, b.pos.z, 0x4c86a8, 20);
+
+    const r = Math.random();
+    let loot = B.RAW_FISH;
+    if (r < 0.65) loot = B.RAW_FISH;
+    else if (r < 0.78) loot = B.STRING;
+    else if (r < 0.88) loot = B.BONE;
+    else if (r < 0.94) loot = B.BOW;
+    else if (r < 0.98) loot = B.GOLDEN_APPLE;
+    else loot = B.ENDER_PEARL;
+
+    dropItem(loot, b.pos.x, b.pos.y + 0.4, b.pos.z);
+    toast('🎉 钓到了！获得了 ' + itemName(loot));
+
+    if (sel && sel.dur !== undefined) {
+      sel.dur--;
+      if (sel.dur <= 0) {
+        hotbar[selected] = null;
+        playBreak();
+        toast('🎣 钓鱼竿已折断！');
+      }
+      refreshHotbar();
+    }
+  } else {
+    tone(380, 220, 0.10, 'triangle', 0.08);
+    toast('🎣 收回了鱼竿');
+  }
+
+  scene.remove(b.mesh);
+  fishingLineMesh.visible = false;
+  activeBobber = null;
+}
+
+function updateFishing(dt) {
+  if (!activeBobber) {
+    fishingLineMesh.visible = false;
+    return;
+  }
+  const b = activeBobber;
+  const sel = hotbar[selected];
+
+  const distPlayer = b.pos.distanceTo(camera.position);
+  if (!sel || sel.id !== B.FISHING_ROD || distPlayer > 32) {
+    scene.remove(b.mesh);
+    fishingLineMesh.visible = false;
+    activeBobber = null;
+    return;
+  }
+
+  const handPos = camera.position.clone();
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+  handPos.addScaledVector(dir, 0.35).addScaledVector(right, 0.22).add(new THREE.Vector3(0, -0.22, 0));
+
+  const posArr = fishingLineGeo.attributes.position.array;
+  posArr[0] = handPos.x; posArr[1] = handPos.y; posArr[2] = handPos.z;
+  posArr[3] = b.pos.x; posArr[4] = b.pos.y; posArr[5] = b.pos.z;
+  fishingLineGeo.attributes.position.needsUpdate = true;
+  fishingLineMesh.visible = true;
+
+  if (b.state === 'flying') {
+    b.vel.y -= 14 * dt;
+    b.pos.addScaledVector(b.vel, dt);
+    b.mesh.position.copy(b.pos);
+
+    const bx = Math.floor(b.pos.x), by = Math.floor(b.pos.y), bz = Math.floor(b.pos.z);
+    if (by >= 0 && by < HEIGHT) {
+      if (world.getWater(bx, by, bz) > 0) {
+        b.state = 'floating';
+        b.waterY = by + 0.85;
+        b.pos.y = b.waterY;
+        b.vel.set(0, 0, 0);
+        playSplash();
+        spawnParticles(b.pos.x, b.pos.y, b.pos.z, 0x4c86a8, 10);
+      } else if (isSolid(world.getBlock(bx, by, bz))) {
+        b.state = 'landed';
+        b.vel.set(0, 0, 0);
+      }
+    }
+  } else if (b.state === 'floating') {
+    b.rippleTimer += dt;
+    b.pos.y = b.waterY + Math.sin(b.rippleTimer * 2.8) * 0.04;
+    b.mesh.position.copy(b.pos);
+
+    if (Math.random() < 0.05) {
+      spawnParticles(b.pos.x, b.waterY, b.pos.z, 0x7eb0c8, 1);
+    }
+
+    b.waitTimer -= dt;
+    if (b.waitTimer <= 0) {
+      b.state = 'approach';
+      b.approachTimer = 1.2;
+    }
+  } else if (b.state === 'approach') {
+    b.approachTimer -= dt;
+    const t = b.approachTimer;
+    spawnParticles(b.pos.x + Math.sin(t * 10) * 0.4, b.waterY, b.pos.z + Math.cos(t * 10) * 0.4, 0x9cd2f2, 2);
+
+    if (b.approachTimer <= 0) {
+      b.state = 'bite';
+      b.biteTimer = 1.4;
+      b.pos.y = b.waterY - 0.28;
+      b.mesh.position.copy(b.pos);
+      playSplash();
+      spawnParticles(b.pos.x, b.waterY, b.pos.z, 0x4c86a8, 14);
+      toast('💥 游鱼咬钩！快右键收杆！');
+    }
+  } else if (b.state === 'bite') {
+    b.biteTimer -= dt;
+    b.pos.y = b.waterY - 0.22 + (Math.random() - 0.5) * 0.08;
+    b.mesh.position.copy(b.pos);
+    if (Math.random() < 0.4) {
+      spawnParticles(b.pos.x, b.waterY, b.pos.z, 0xffffff, 2);
+    }
+    if (b.biteTimer <= 0) {
+      b.state = 'floating';
+      b.waitTimer = 3.5 + Math.random() * 4.0;
+      toast('💨 鱼儿挣脱溜走了…');
     }
   }
 }
@@ -5693,6 +6116,21 @@ function eat(s) {
     toast('✨ 吞服金苹果 · 生命与饱食已完全回复！');
     return;
   }
+  if (s.id === B.SPIDER_EYE) {
+    player.hunger = Math.min(20, player.hunger + 2);
+    player.hp = Math.max(1, player.hp - 3);
+    s.count--;
+    if (s.count <= 0) hotbar[selected] = null;
+    refreshHotbar();
+    updateHearts();
+    updateHungerBar();
+    eatCooldown = 0.5;
+    playEat();
+    playHurt();
+    spawnParticles(player.pos.x, player.pos.y + 0.8, player.pos.z, 0x33aa33, 12);
+    toast('🤢 吞食蜘蛛眼 · 受到剧毒反噬扣血！');
+    return;
+  }
   if (player.hunger >= 20) return;           // 已饱
   player.hunger = Math.min(20, player.hunger + FOOD[s.id]);
   s.count--;
@@ -5722,22 +6160,23 @@ function isShovel(id) { return id === B.WOOD_SHOVEL || id === B.STONE_SHOVEL || 
 function isSword(id) { return id === B.WOOD_SWORD || id === B.STONE_SWORD || id === B.IRON_SWORD; }
 function isBow(id) { return id === B.BOW; }
 function isShield(id) { return id === B.SHIELD; }
+function isFishingRod(id) { return id === B.FISHING_ROD; }
 function isBed(id) { return id === B.BED; }
 function isWool(id) { return id === B.WOOL; }
-function isTool(id) { return isPickaxe(id) || isAxe(id) || isShovel(id) || isSword(id) || id === B.BOW || isShield(id); }
+function isTool(id) { return isPickaxe(id) || isAxe(id) || isShovel(id) || isSword(id) || id === B.BOW || isShield(id) || isFishingRod(id); }
 function isWoodTier(id) { return id === B.WOOD_PICKAXE || id === B.WOOD_AXE || id === B.WOOD_SHOVEL || id === B.WOOD_SWORD; }
 function isStoneTier(id) { return id === B.STONE_PICKAXE || id === B.STONE_AXE || id === B.STONE_SHOVEL || id === B.STONE_SWORD; }
 function isIronTier(id) { return id === B.IRON_PICKAXE || id === B.IRON_AXE || id === B.IRON_SHOVEL || id === B.IRON_SWORD; }
-// 工具耐久上限（木 60 / 石 130 / 铁 250 / 弓 100 / 盾 180）
+// 工具耐久上限（木 60 / 石 130 / 铁 250 / 弓 100 / 盾 180 / 钓竿 64）
 const TOOL_DURABILITY = {
   [B.WOOD_PICKAXE]: 60, [B.WOOD_AXE]: 60, [B.WOOD_SHOVEL]: 60, [B.WOOD_SWORD]: 60,
   [B.STONE_PICKAXE]: 130, [B.STONE_AXE]: 130, [B.STONE_SHOVEL]: 130, [B.STONE_SWORD]: 130,
   [B.IRON_PICKAXE]: 250, [B.IRON_AXE]: 250, [B.IRON_SHOVEL]: 250, [B.IRON_SWORD]: 250,
-  [B.BOW]: 100, [B.SHIELD]: 180,
+  [B.BOW]: 100, [B.SHIELD]: 180, [B.FISHING_ROD]: 64,
 };
 // 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌不可放置）
 function isPlaceable(id) {
-  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING) return false;
+  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE) return false;
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.MELON_SLICE) return false;
   if (isFood(id)) return false;   // 食物不可放置
   return true;
@@ -6165,6 +6604,14 @@ function playEndermanStare() {
   tone(380, 240, 0.45, 'sawtooth', 0.22);
   burst(0.15, 0.08, 480, 'lowpass');
 }
+function playSpiderHiss() {
+  burst(0.20, 0.12, 1400, 'bandpass');
+  tone(180, 110, 0.16, 'sawtooth', 0.10);
+}
+function playFishCatch() {
+  tone(440, 660, 0.14, 'triangle', 0.18);
+  setTimeout(() => tone(660, 880, 0.18, 'sine', 0.22), 80);
+}
 
 // —— 木门开关状态 ——
 const openDoors = new Set();
@@ -6283,13 +6730,14 @@ const NAMES = {
   [B.CHEST]: '储物箱', [B.GUNPOWDER]: '火药',
   [B.CAMPFIRE]: '营火', [B.DOOR]: '木门',
   [B.ENDER_PEARL]: '末影珍珠', [B.COBWEB]: '蜘蛛网', [B.STRING]: '线',
+  [B.FISHING_ROD]: '钓鱼竿', [B.SPIDER_EYE]: '蜘蛛眼',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 // —— 食物：恢复饥饿值 ——
 const FOOD = {
   [B.APPLE]: 4, [B.BREAD]: 5, [B.PUMPKIN_PIE]: 8, [B.WHEAT]: 1, [B.ROTTEN_FLESH]: 2, [B.RAW_MEAT]: 3,
   [B.MELON_SLICE]: 2, [B.EGG]: 2, [B.COOKED_MEAT]: 8, [B.RAW_FISH]: 2, [B.COOKED_FISH]: 6,
-  [B.GOLDEN_APPLE]: 20,
+  [B.GOLDEN_APPLE]: 20, [B.SPIDER_EYE]: 2,
 };
 function isFood(id) { return FOOD[id] !== undefined; }
 
@@ -6349,6 +6797,7 @@ const RECIPES = [
   { out: B.BOW, n: 1, need: [[B.STICK, 3], [B.STRING, 3]] },
   { out: B.WOOL, n: 1, need: [[B.STRING, 4]] },
   { out: B.COBWEB, n: 1, need: [[B.STRING, 5]] },
+  { out: B.FISHING_ROD, n: 1, need: [[B.STICK, 3], [B.STRING, 2]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -6729,12 +7178,39 @@ function makeItemIcon(id) {
     ctx.fillRect(21, 8, 2, 2);
     ctx.fillStyle = '#9ea6b0';
     ctx.fillRect(10, 23, 2, 2); ctx.fillRect(17, 15, 2, 2);
+  } else if (id === B.FISHING_ROD) {
+    // 钓鱼竿图标：斜持木质钓竿 + 银白线轮 + 下垂鱼线与红白浮漂
+    ctx.fillStyle = '#8a5c32';
+    for (let i = 0; i < 22; i++) ctx.fillRect(4 + i, 27 - i, 2, 2);
+    ctx.fillStyle = '#c48a4c';
+    for (let i = 0; i < 20; i++) ctx.fillRect(5 + i, 27 - i, 1, 1);
+    ctx.fillStyle = '#a6b0be'; ctx.fillRect(7, 23, 4, 4);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(8, 24, 2, 2);
+    ctx.strokeStyle = '#dce2ea'; ctx.lineWidth = 1.0;
+    ctx.beginPath(); ctx.moveTo(25, 6); ctx.lineTo(25, 20); ctx.stroke();
+    ctx.fillStyle = '#d43030'; ctx.fillRect(24, 20, 3, 3);
+    ctx.fillStyle = '#f0f4f8'; ctx.fillRect(24, 23, 3, 2);
+    ctx.fillStyle = '#9ea6b0'; ctx.fillRect(25, 25, 2, 3); ctx.fillRect(23, 27, 2, 1);
+  } else if (id === B.SPIDER_EYE) {
+    // 蜘蛛眼图标：深红复眼 + 幽红脉络与反光晶体
+    ctx.fillStyle = '#4a0812';
+    ctx.fillRect(10, 8, 12, 16); ctx.fillRect(8, 10, 16, 12);
+    ctx.fillStyle = '#941024';
+    ctx.fillRect(9, 9, 14, 14);
+    ctx.fillStyle = '#d8223c';
+    ctx.fillRect(11, 11, 10, 10);
+    ctx.fillStyle = '#ff6078';
+    ctx.fillRect(12, 12, 4, 4);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(13, 11, 2, 2);
+    ctx.fillStyle = '#30040c';
+    ctx.fillRect(10, 19, 4, 2); ctx.fillRect(18, 17, 3, 2);
   }
   return cv;
 }
 function makeIcon(id) {
-  if (id === B.STICK || (isTool(id) && id !== B.SHIELD)) return makeToolIcon(id);
-  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING) return makeItemIcon(id);
+  if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD)) return makeToolIcon(id);
+  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
   return makeIconCanvas(id);
 }
@@ -7617,6 +8093,11 @@ function onMousedown(btn) {
       throwEnderPearl();
       return;
     }
+    // 手持钓鱼竿右键抛竿/收杆
+    if (sel && sel.id === B.FISHING_ROD) {
+      castFishingRod();
+      return;
+    }
     const hit = raycast(origin, dir, 6);
     // 右键点击床 → 上床入睡并跳过黑夜
     if (hit && hit.id === B.BED) {
@@ -7821,9 +8302,11 @@ function animate() {
     updateCreepers(dt);
     updateSkeletons(dt);
     updateEndermen(dt);
+    updateSpiders(dt);
     updatePrimedTnt(dt);
     updateSnowballs(dt);
     updateEnderPearls(dt);
+    updateFishing(dt);
     updateArrows(dt);
     if (bowCharging) bowChargeTime += dt;
     updateCrops(dt);
