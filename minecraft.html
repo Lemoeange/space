@@ -249,7 +249,27 @@
 <div id="vignette"></div>
 <div id="underwater"></div>
 <div id="sleepFade" style="position:fixed;inset:0;background:#060814;opacity:0;pointer-events:none;transition:opacity 0.65s cubic-bezier(0.4, 0, 0.2, 1);z-index:9999;"></div>
+<div id="totemFlash" style="position:fixed;inset:0;background:radial-gradient(circle, rgba(255,215,0,0.85) 0%, rgba(23,221,98,0.55) 60%, transparent 100%);opacity:0;pointer-events:none;transition:opacity 0.7s cubic-bezier(0.1, 0.9, 0.2, 1);z-index:9998;"></div>
 <div id="crosshair"></div>
+
+<!-- 顶端村庄袭击 BOSS 血条 (Raid HUD) -->
+<div id="raidHUD" style="display:none; position:fixed; top:20px; left:50%; transform:translateX(-50%); width:340px; z-index:900; text-align:center; pointer-events:none; font-family:'Segoe UI',sans-serif;">
+  <div id="raidTitle" style="color:#ff3b4e; font-weight:bold; font-size:15px; text-shadow:0 2px 4px rgba(0,0,0,0.85); margin-bottom:5px; letter-spacing:1px;">⚔️ 村庄袭击 第 1 波</div>
+  <div style="width:100%; height:12px; background:rgba(20,10,10,0.8); border:2px solid #5a1018; border-radius:6px; overflow:hidden; box-shadow:0 0 12px rgba(255,50,50,0.4);">
+    <div id="raidBar" style="width:100%; height:100%; background:linear-gradient(90deg, #d32f2f, #ff5252); transition:width 0.3s ease;"></div>
+  </div>
+  <div id="raidSub" style="color:#ffd8d8; font-size:12px; text-shadow:0 1px 3px rgba(0,0,0,0.8); margin-top:3px;">剩余灾厄暴徒: 4</div>
+</div>
+
+<!-- 右上角状态效果 (Status Effects: 不祥之兆 / 村庄英雄) -->
+<div id="statusEffects" style="position:fixed; top:18px; right:18px; z-index:900; display:flex; flex-direction:column; gap:8px; pointer-events:none; font-family:'Segoe UI',sans-serif;">
+  <div id="badOmenBadge" style="display:none; background:rgba(25,15,30,0.85); border:1px solid #9c27b0; border-radius:8px; padding:6px 14px; color:#f0d0ff; font-size:13px; font-weight:bold; text-shadow:0 1px 3px rgba(0,0,0,0.8); box-shadow:0 4px 12px rgba(0,0,0,0.4);">
+    ☠️ 不祥之兆 <span id="badOmenTime" style="font-weight:normal; opacity:0.85; font-size:11px;">03:00</span>
+  </div>
+  <div id="heroBadge" style="display:none; background:rgba(15,35,20,0.85); border:1px solid #2ecc71; border-radius:8px; padding:6px 14px; color:#a3f7bf; font-size:13px; font-weight:bold; text-shadow:0 1px 3px rgba(0,0,0,0.8); box-shadow:0 4px 12px rgba(46,204,113,0.35);">
+    🏆 村庄英雄 <span id="heroTime" style="font-weight:normal; opacity:0.85; font-size:11px;">05:00</span>
+  </div>
+</div>
 
 <div id="hud">
   <h1>MINECRAFT · WEB 复刻</h1>
@@ -265,7 +285,7 @@
 <div id="menu">
   <div class="box">
     <h1>⛏️ 我的世界 <span class="tag">Web 复刻</span></h1>
-    <div class="sub">村庄集市交易 · 绿宝石货币 · 驯服萌猫驱赶苦力怕 · 鸣响村庄之钟 · 铁傀儡守护者 · 动物繁育 · 储物箱</div>
+    <div class="sub">村庄保卫战袭击 · 灾厄巡逻队 · 不死图腾免死 · 流浪商人与行商羊驼 · 村民繁育小村民 · 村庄英雄特惠 · 鸣钟警戒 · 铁傀儡守护</div>
     <div class="keys">
       <span><b>W A S D</b> 移动</span>
       <span><b>鼠标</b> 视角</span>
@@ -390,7 +410,7 @@ const B = {
   CHEST:103, GUNPOWDER:104,
   CAMPFIRE:105, DOOR:106,
   ENDER_PEARL:107, COBWEB:108, STRING:109,
-  FISHING_ROD:110, SPIDER_EYE:111, EMERALD:112
+  FISHING_ROD:110, SPIDER_EYE:111, EMERALD:112, TOTEM_OF_UNDYING:113
 };
 
 function mulberry32(a) {
@@ -3710,7 +3730,7 @@ const BLOCK_COLORS = {
   [B.CHEST]: 0x9b6c3c, [B.GUNPOWDER]: 0x4a4a4a,
   [B.CAMPFIRE]: 0xec7828, [B.DOOR]: 0xad7e46,
   [B.ENDER_PEARL]: 0x228b8b, [B.COBWEB]: 0xeeeeee, [B.STRING]: 0xe4e4e4,
-  [B.FISHING_ROD]: 0x8a5228, [B.SPIDER_EYE]: 0xa01828, [B.EMERALD]: 0x17dd62,
+  [B.FISHING_ROD]: 0x8a5228, [B.SPIDER_EYE]: 0xa01828, [B.EMERALD]: 0x17dd62, [B.TOTEM_OF_UNDYING]: 0xf5c827,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -5550,6 +5570,10 @@ function updateIronGolems(dt) {
       const d = Math.hypot(sp.x - g.x, sp.z - g.z);
       if (d < minDist) { minDist = d; target = { mob: sp, kind: 'spider' }; }
     }
+    for (const p of pillagers) {
+      const d = Math.hypot(p.x - g.x, p.z - g.z);
+      if (d < minDist) { minDist = d; target = { mob: p, kind: 'pillager' }; }
+    }
 
     if (target) {
       const m = target.mob;
@@ -5581,6 +5605,7 @@ function updateIronGolems(dt) {
           if (target.kind === 'zombie') { const idx = zombies.indexOf(m); if (idx >= 0) killZombie(idx); }
           else if (target.kind === 'skeleton') { const idx = skeletons.indexOf(m); if (idx >= 0) killSkeleton(idx); }
           else if (target.kind === 'spider') { const idx = spiders.indexOf(m); if (idx >= 0) killSpider(idx); }
+          else if (target.kind === 'pillager') { const idx = pillagers.indexOf(m); if (idx >= 0) killPillager(idx); }
         }
       }
     } else {
@@ -5698,6 +5723,16 @@ const VILLAGER_TRADES = {
   }
 };
 
+const TRADER_TRADES = [
+  { need: [B.EMERALD, 14], give: [B.TOTEM_OF_UNDYING, 1] },
+  { need: [B.EMERALD, 6], give: [B.GOLDEN_APPLE, 1] },
+  { need: [B.EMERALD, 4], give: [B.ENDER_PEARL, 2] },
+  { need: [B.EMERALD, 3], give: [B.GLOWSTONE, 4] },
+  { need: [B.EMERALD, 1], give: [B.LILY_PAD, 3] },
+  { need: [B.EMERALD, 2], give: [B.PUMPKIN_PIE, 3] },
+  { need: [B.EMERALD, 1], give: [B.GUNPOWDER, 4] },
+];
+
 function findEntityGround(x, currY, z) {
   const ix = Math.floor(x), iz = Math.floor(z);
   const startY = Math.min(HEIGHT - 2, Math.floor(currY) + 1);
@@ -5714,7 +5749,7 @@ function findEntityGround(x, currY, z) {
   return currY;
 }
 
-function spawnVillager(x, yOrProf, zOrNull = null, prof = 'farmer') {
+function spawnVillager(x, yOrProf, zOrNull = null, prof = 'farmer', isBaby = false) {
   let explicitY = null, actualZ = zOrNull, actualProf = prof;
   if (typeof yOrProf === 'number' && typeof zOrNull === 'number') {
     explicitY = yOrProf;
@@ -5727,6 +5762,7 @@ function spawnVillager(x, yOrProf, zOrNull = null, prof = 'farmer') {
   const gy = explicitY !== null ? explicitY : findGround(Math.floor(x), Math.floor(actualZ));
 
   const g = new THREE.Group();
+  if (isBaby) g.scale.set(0.55, 0.55, 0.55);
 
   const faceMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [198, 140, 98], 901, paintVillagerFace) });
   const skinMat = new THREE.MeshLambertMaterial({ color: 0xc68c62 });
@@ -5771,10 +5807,13 @@ function spawnVillager(x, yOrProf, zOrNull = null, prof = 'farmer') {
     g, head, robe, arms, legs,
     x, y: gy, z: actualZ,
     prof: actualProf,
+    isBaby,
+    age: isBaby ? 240 : 0,
+    loveTimer: 0,
     hp: 20,
     heading: Math.random() * Math.PI * 2,
     timer: 2 + Math.random() * 4,
-    speed: 1.0,
+    speed: isBaby ? 1.6 : 1.0,
     phase: 0,
     isIdle: true,
     fleeing: false
@@ -5785,6 +5824,20 @@ function updateVillagers(dt) {
   for (let i = villagers.length - 1; i >= 0; i--) {
     const v = villagers[i];
     v.y = findEntityGround(v.x, v.y, v.z);
+
+    if (v.isBaby) {
+      v.age -= dt;
+      if (v.age <= 0) {
+        v.isBaby = false;
+        v.g.scale.set(1, 1, 1);
+        v.speed = 1.0;
+        toast('🎉 小村民长大成为了一名成年村民！');
+      }
+    }
+    if (v.loveTimer > 0) {
+      v.loveTimer -= dt;
+      if (Math.random() < 0.08) spawnParticles(v.x, v.y + (v.isBaby ? 0.9 : 1.4), v.z, 0xff3b56, 1);
+    }
 
     let threateningZombie = null, minZd = 12;
     for (const z of zombies) {
@@ -5873,15 +5926,19 @@ document.getElementById('closeTradeBtn').onclick = closeTradeUI;
 
 function buildTradeUI() {
   if (!currentTradingVillager) return;
-  const cfg = VILLAGER_TRADES[currentTradingVillager.prof];
+  const isTrader = currentTradingVillager.isTrader;
+  const cfg = isTrader ? { title: '🧳 流浪商人 · 奇珍秘宝', trades: TRADER_TRADES } : VILLAGER_TRADES[currentTradingVillager.prof];
   if (!cfg) return;
 
-  document.getElementById('tradeTitle').textContent = cfg.title;
+  const isHero = heroOfVillageTimer > 0 && !isTrader;
+  document.getElementById('tradeTitle').innerHTML = cfg.title + (isHero ? ' <span style="font-size:13px; color:#2ecc71; margin-left:8px;">🏆 英雄半价特惠</span>' : '');
   const listEl = document.getElementById('tradeList');
   listEl.innerHTML = '';
 
   cfg.trades.forEach((t, idx) => {
-    const [needId, needCount] = t.need;
+    const needId = t.need[0];
+    const baseCount = t.need[1];
+    const needCount = (isHero && baseCount > 1) ? Math.max(1, Math.floor(baseCount * 0.5)) : baseCount;
     const [giveId, giveCount] = t.give;
     const haveCount = countItem(needId);
     const canTrade = haveCount >= needCount;
@@ -5929,10 +5986,13 @@ function buildTradeUI() {
 
 function executeTrade(tradeIdx) {
   if (!currentTradingVillager) return;
-  const cfg = VILLAGER_TRADES[currentTradingVillager.prof];
+  const isTrader = currentTradingVillager.isTrader;
+  const cfg = isTrader ? { title: '🧳 流浪商人 · 奇珍秘宝', trades: TRADER_TRADES } : VILLAGER_TRADES[currentTradingVillager.prof];
   if (!cfg || !cfg.trades[tradeIdx]) return;
   const t = cfg.trades[tradeIdx];
-  const [needId, needCount] = t.need;
+  const isHero = heroOfVillageTimer > 0 && !isTrader;
+  const needId = t.need[0];
+  const needCount = (isHero && t.need[1] > 1) ? Math.max(1, Math.floor(t.need[1] * 0.5)) : t.need[1];
   const [giveId, giveCount] = t.give;
 
   if (countItem(needId) < needCount) {
@@ -6568,8 +6628,554 @@ function highlightMonstersNear(bx, by, bz, radius) {
       spawnParticles(cr.x, cr.g.position.y + 1.0, cr.z, 0xffd700, 18); count++;
     }
   }
+  for (const p of pillagers) {
+    if (Math.hypot(p.x - bx, p.z - bz) < radius) {
+      spawnParticles(p.x, p.y + 1.2, p.z, 0xffd700, 20); count++;
+    }
+  }
   if (count > 0) {
-    toast(`⚠️ 钟声警报照亮了周围 ${count} 只游荡的敌对怪物！`);
+    toast(`⚠️ 钟声警报照亮了周围 ${count} 只游荡的敌对怪物与灾厄掠夺者！`);
+  }
+}
+
+/* ============================ 🏹 掠夺者与灾厄巡逻队 (Pillagers & Raids) ============================ */
+const pillagers = [];
+const pillagerHeadGeo = new THREE.BoxGeometry(0.38, 0.44, 0.38);
+const pillagerNoseGeo = new THREE.BoxGeometry(0.09, 0.18, 0.12);
+const pillagerTorsoGeo = new THREE.BoxGeometry(0.44, 0.72, 0.30);
+const pillagerArmsGeo = new THREE.BoxGeometry(0.48, 0.26, 0.24);
+const pillagerLegGeo = new THREE.BoxGeometry(0.16, 0.46, 0.16);
+const crossbowGeo = new THREE.BoxGeometry(0.08, 0.08, 0.46);
+const bannerPoleGeo = new THREE.BoxGeometry(0.05, 0.85, 0.05);
+const bannerClothGeo = new THREE.BoxGeometry(0.45, 0.65, 0.03);
+
+function paintPillagerFace(ctx) {
+  ctx.fillStyle = '#959b9b'; ctx.fillRect(0, 0, 16, 16);
+  ctx.fillStyle = '#2d2e30'; ctx.fillRect(3, 4, 10, 2);
+  ctx.fillStyle = '#1c4a5c'; ctx.fillRect(4, 6, 2, 2); ctx.fillRect(10, 6, 2, 2);
+  ctx.fillStyle = '#3a8399'; ctx.fillRect(4, 7, 1, 1); ctx.fillRect(10, 7, 1, 1);
+  ctx.fillStyle = '#484b4d'; ctx.fillRect(6, 11, 4, 1);
+}
+function paintPillagerRobe(ctx) {
+  ctx.fillStyle = '#3b2f27'; ctx.fillRect(0, 0, 16, 16);
+  ctx.fillStyle = '#241b16'; ctx.fillRect(0, 0, 16, 3); ctx.fillRect(6, 3, 4, 13);
+  ctx.fillStyle = '#8f969b'; ctx.fillRect(6, 10, 4, 3);
+  ctx.fillStyle = '#181a1c'; ctx.fillRect(7, 11, 2, 1);
+}
+function paintOminousBanner(ctx) {
+  ctx.fillStyle = '#2b2c2e'; ctx.fillRect(0, 0, 16, 16);
+  ctx.fillStyle = '#4a4d52'; ctx.fillRect(0, 2, 16, 2); ctx.fillRect(0, 12, 16, 2);
+  ctx.fillStyle = '#9da1a8'; ctx.fillRect(5, 5, 6, 4);
+  ctx.fillStyle = '#2b2c2e'; ctx.fillRect(6, 6, 1, 1); ctx.fillRect(9, 6, 1, 1);
+  ctx.fillStyle = '#9da1a8'; ctx.fillRect(7, 9, 2, 2);
+}
+
+function playRaidHorn() {
+  tone(110, 110, 0.7, 'sawtooth', 0.45);
+  setTimeout(() => tone(146, 146, 1.1, 'sawtooth', 0.50), 380);
+  setTimeout(() => tone(110, 110, 1.4, 'sawtooth', 0.55), 1050);
+}
+function playVictoryChime() {
+  tone(523, 659, 0.28, 'triangle', 0.35);
+  setTimeout(() => tone(659, 784, 0.32, 'triangle', 0.35), 160);
+  setTimeout(() => tone(784, 1046, 0.45, 'sine', 0.40), 340);
+  setTimeout(() => tone(1046, 1318, 0.60, 'sine', 0.45), 560);
+}
+function spawnFirework(x, z) {
+  const colors = [0xff3b30, 0x4cd964, 0x5ac8fa, 0xffcc00, 0xff2d55, 0x5856d6];
+  for (let c of colors) {
+    spawnParticles(x + (Math.random() - 0.5) * 8, findGround(Math.floor(x), Math.floor(z)) + 8 + Math.random() * 5, z + (Math.random() - 0.5) * 8, c, 20);
+  }
+  tone(300, 800, 0.2, 'sine', 0.25);
+  burst(0.2, 0.15, 300);
+}
+
+function spawnPillager(x, y, z, isCaptain = false) {
+  const g = new THREE.Group();
+  const faceMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [149, 155, 155], 961, paintPillagerFace) });
+  const skinMat = new THREE.MeshLambertMaterial({ color: 0x959b9b });
+  const headMats = [skinMat, skinMat, skinMat, skinMat, skinMat, faceMat];
+  const robeMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [59, 47, 39], 962, paintPillagerRobe) });
+  const darkMat = new THREE.MeshLambertMaterial({ color: 0x241b16 });
+
+  const head = new THREE.Mesh(pillagerHeadGeo, headMats);
+  head.position.set(0, 1.42, 0); head.castShadow = true; g.add(head);
+
+  const nose = new THREE.Mesh(pillagerNoseGeo, skinMat);
+  nose.position.set(0, -0.06, -0.24); head.add(nose);
+
+  const robe = new THREE.Mesh(pillagerTorsoGeo, robeMat);
+  robe.position.set(0, 0.84, 0); robe.castShadow = true; g.add(robe);
+
+  const arms = new THREE.Mesh(pillagerArmsGeo, darkMat);
+  arms.position.set(0, 0.88, -0.16); arms.rotation.x = 0.4; arms.castShadow = true; g.add(arms);
+
+  const bow = new THREE.Mesh(crossbowGeo, new THREE.MeshLambertMaterial({ color: 0x6e4e32 }));
+  bow.position.set(0, 0.86, -0.32); bow.rotation.x = 0.2; g.add(bow);
+
+  const legs = [];
+  for (const dx of [-0.11, 0.11]) {
+    const leg = new THREE.Mesh(pillagerLegGeo, darkMat);
+    leg.position.set(dx, 0.23, 0); leg.castShadow = true; g.add(leg);
+    legs.push(leg);
+  }
+
+  let banner = null;
+  if (isCaptain) {
+    banner = new THREE.Group();
+    const pole = new THREE.Mesh(bannerPoleGeo, new THREE.MeshLambertMaterial({ color: 0x5c4033 }));
+    pole.position.set(0, 2.15, 0); banner.add(pole);
+    const bannerTex = makeMobTex(16, [43, 44, 46], 963, paintOminousBanner);
+    const cloth = new THREE.Mesh(bannerClothGeo, new THREE.MeshLambertMaterial({ map: bannerTex, side: THREE.DoubleSide }));
+    cloth.position.set(0, 2.10, -0.06); banner.add(cloth);
+    g.add(banner);
+  }
+
+  g.position.set(x, y, z);
+  scene.add(g);
+
+  pillagers.push({
+    g, head, robe, arms, legs, banner,
+    x, y, z,
+    hp: isCaptain ? 32 : 24,
+    maxHp: isCaptain ? 32 : 24,
+    isCaptain,
+    heading: Math.random() * Math.PI * 2,
+    speed: isCaptain ? 1.9 : 1.6,
+    shootCooldown: 1.5 + Math.random() * 1.5,
+    hurtT: 0,
+    phase: 0
+  });
+}
+
+function killPillager(i) {
+  const p = pillagers[i];
+  scene.remove(p.g);
+  spawnParticles(p.x, p.y + 0.9, p.z, 0x959b9b, 20);
+  playZombieHit();
+
+  dropItem(B.ARROW, p.x, p.y + 0.5, p.z);
+  if (Math.random() < 0.45) dropItem(B.EMERALD, p.x, p.y + 0.5, p.z);
+
+  if (p.isCaptain) {
+    dropItem(B.EMERALD, p.x, p.y + 0.5, p.z);
+    dropItem(B.EMERALD, p.x, p.y + 0.5, p.z);
+    if (Math.random() < 0.35) {
+      dropItem(B.TOTEM_OF_UNDYING, p.x, p.y + 0.5, p.z);
+      toast('✨ 掠夺者队长掉落了传说中的【不死图腾】！');
+    }
+    badOmenTimer = 240;
+    playRaidHorn();
+    spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0x7e2d96, 30);
+    toast('☠️ 击败了掠夺者队长！获得了「不祥之兆」！若进入村庄将触发袭击！');
+  }
+
+  pillagers.splice(i, 1);
+  updateRaidProgress();
+}
+
+function updatePillagers(dt) {
+  for (let i = pillagers.length - 1; i >= 0; i--) {
+    const p = pillagers[i];
+    p.hurtT -= dt;
+    p.shootCooldown -= dt;
+    p.y = findEntityGround(p.x, p.y, p.z);
+
+    // 索敌：优先玩家、驻村铁傀儡、村民
+    let target = null, minDist = 24;
+    if (!player.fly) {
+      const dp = Math.hypot(player.pos.x - p.x, player.pos.z - p.z);
+      if (dp < minDist) { minDist = dp; target = { x: player.pos.x, y: player.pos.y, z: player.pos.z, isPlayer: true }; }
+    }
+    for (const g of ironGolems) {
+      const dg = Math.hypot(g.x - p.x, g.z - p.z);
+      if (dg < minDist) { minDist = dg; target = { x: g.x, y: g.y, z: g.z, isGolem: true }; }
+    }
+    for (const v of villagers) {
+      const dv = Math.hypot(v.x - p.x, v.z - p.z);
+      if (dv < minDist) { minDist = dv; target = { x: v.x, y: v.y, z: v.z, isVillager: true }; }
+    }
+
+    if (target) {
+      const dx = target.x - p.x, dz = target.z - p.z;
+      p.heading = Math.atan2(dx, dz);
+      const dist = Math.hypot(dx, dz);
+
+      if (dist > 7) {
+        const nx = p.x + Math.sin(p.heading) * p.speed * dt;
+        const nz = p.z + Math.cos(p.heading) * p.speed * dt;
+        const tg = findEntityGround(nx, p.y, nz);
+        if (Math.abs(tg - p.y) <= 1.2 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
+          p.x = nx; p.z = nz;
+        }
+      }
+
+      // 弩箭远程齐射
+      if (p.shootCooldown <= 0 && dist < 18) {
+        p.shootCooldown = 2.4 + Math.random() * 0.8;
+        playBowDraw();
+        const origin = new THREE.Vector3(p.x + Math.sin(p.heading) * 0.3, p.y + 1.1, p.z + Math.cos(p.heading) * 0.3);
+        const tY = target.y + (target.isPlayer ? 0.9 : 0.8);
+        const arrowDir = new THREE.Vector3(target.x - origin.x, tY - origin.y, target.z - origin.z).normalize();
+        const mesh = new THREE.Mesh(arrowGeo, arrowMat);
+        mesh.position.copy(origin);
+        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), arrowDir);
+        scene.add(mesh);
+        arrows.push({
+          mesh, pos: origin,
+          vel: arrowDir.clone().multiplyScalar(15.0).add(new THREE.Vector3(0, 1.2, 0)),
+          dmg: 3, fromMob: true, stuck: false, life: 6.0
+        });
+      }
+    } else {
+      if (Math.random() < 0.02) p.heading += (Math.random() - 0.5) * 1.5;
+      const nx = p.x + Math.sin(p.heading) * 0.9 * dt;
+      const nz = p.z + Math.cos(p.heading) * 0.9 * dt;
+      const tg = findEntityGround(nx, p.y, nz);
+      if (Math.abs(tg - p.y) <= 1.2 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
+        p.x = nx; p.z = nz;
+      }
+    }
+
+    p.g.position.set(p.x, p.y, p.z);
+    p.g.rotation.y = p.heading + Math.PI;
+
+    p.phase += dt * (target ? 5.5 : 2.5);
+    const swing = Math.sin(p.phase) * (target ? 0.38 : 0.15);
+    p.legs.forEach((leg, idx) => {
+      leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
+    });
+  }
+}
+
+/* ============================ ⚔️ 村庄保卫战与状态效果系统 (Raid Manager) ============================ */
+let badOmenTimer = 0;
+let heroOfVillageTimer = 0;
+let raidActive = false;
+let raidWave = 0;
+let raidMaxWaves = 2;
+let raidTotalInWave = 0;
+let raidCenter = null;
+let patrolSpawnTimer = 180;
+
+function startVillageRaid(vx, vz) {
+  raidActive = true;
+  raidWave = 1;
+  raidCenter = { x: vx, z: vz };
+  playRaidHorn();
+  ringVillageBell(vx, findGround(Math.floor(vx), Math.floor(vz)), vz);
+  toast('⚔️ 不祥之兆触发！村庄袭击开始！');
+  spawnRaidWave();
+}
+
+function spawnRaidWave() {
+  if (!raidCenter) return;
+  const count = raidWave === 1 ? 4 : 6;
+  raidTotalInWave = count;
+  for (let k = 0; k < count; k++) {
+    const angle = (k / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+    const dist = 21 + Math.random() * 4;
+    const px = Math.floor(raidCenter.x + Math.sin(angle) * dist);
+    const pz = Math.floor(raidCenter.z + Math.cos(angle) * dist);
+    const py = findGround(px, pz);
+    const isCap = (k === 0 && raidWave === raidMaxWaves);
+    spawnPillager(px + 0.5, py, pz + 0.5, isCap);
+  }
+  updateRaidProgress();
+}
+
+function updateRaidProgress() {
+  const hud = document.getElementById('raidHUD');
+  if (!hud) return;
+  if (!raidActive) { hud.style.display = 'none'; return; }
+
+  hud.style.display = 'block';
+  const title = document.getElementById('raidTitle');
+  const bar = document.getElementById('raidBar');
+  const sub = document.getElementById('raidSub');
+  if (title) title.textContent = `⚔️ 村庄袭击 第 ${raidWave}/${raidMaxWaves} 波`;
+  if (bar) {
+    const ratio = Math.max(0, Math.min(1, pillagers.length / Math.max(1, raidTotalInWave)));
+    bar.style.width = `${Math.round(ratio * 100)}%`;
+  }
+  if (sub) sub.textContent = `剩余灾厄暴徒: ${pillagers.length}`;
+
+  if (pillagers.length === 0) {
+    if (raidWave < raidMaxWaves) {
+      raidWave++;
+      toast(`⚔️ 援军逼近！第 ${raidWave} 波掠夺者袭来！`);
+      playRaidHorn();
+      setTimeout(spawnRaidWave, 1500);
+    } else {
+      // 突袭大捷！村庄英雄！
+      raidActive = false;
+      hud.style.display = 'none';
+      heroOfVillageTimer = 300; // 5 分钟
+      playVictoryChime();
+      for (let k = 0; k < 6; k++) {
+        setTimeout(() => spawnFirework(raidCenter.x, raidCenter.z), k * 350);
+      }
+      toast('🏆 村庄保卫战大捷！全村狂欢，你成为了备受爱戴的【村庄英雄】！');
+      // 村民抛掷礼物
+      for (const v of villagers) {
+        if (Math.hypot(v.x - raidCenter.x, v.z - raidCenter.z) < 25) {
+          dropItem(B.EMERALD, v.x, v.y + 0.6, v.z);
+          dropItem(B.BREAD, v.x, v.y + 0.6, v.z);
+          spawnParticles(v.x, v.y + 1.2, v.z, 0x17dd62, 14);
+        }
+      }
+    }
+  }
+}
+
+function formatMMSS(s) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+}
+
+function updateRaids(dt) {
+  // 不祥之兆与触发判定
+  if (badOmenTimer > 0) {
+    badOmenTimer -= dt;
+    const badge = document.getElementById('badOmenBadge');
+    const timeEl = document.getElementById('badOmenTime');
+    if (badge) badge.style.display = 'block';
+    if (timeEl) timeEl.textContent = formatMMSS(badOmenTimer);
+
+    if (Math.random() < 0.05) {
+      spawnParticles(player.pos.x, player.pos.y + 2.0, player.pos.z, 0x7e2d96, 2);
+    }
+
+    if (!raidActive) {
+      for (const vk of villageCenters) {
+        const [cx, cz] = vk.split(',').map(Number);
+        const vx = cx * 16 + 8, vz = cz * 16 + 8;
+        if (Math.hypot(player.pos.x - vx, player.pos.z - vz) < 26) {
+          badOmenTimer = 0;
+          startVillageRaid(vx, vz);
+          break;
+        }
+      }
+    }
+  } else {
+    const badge = document.getElementById('badOmenBadge');
+    if (badge) badge.style.display = 'none';
+  }
+
+  // 村庄英雄光环与粒子
+  if (heroOfVillageTimer > 0) {
+    heroOfVillageTimer -= dt;
+    const badge = document.getElementById('heroBadge');
+    const timeEl = document.getElementById('heroTime');
+    if (badge) badge.style.display = 'block';
+    if (timeEl) timeEl.textContent = formatMMSS(heroOfVillageTimer);
+
+    if (Math.random() < 0.08) {
+      spawnParticles(player.pos.x + (Math.random() - 0.5), player.pos.y + 1.2, player.pos.z + (Math.random() - 0.5), 0x2ecc71, 2);
+    }
+  } else {
+    const badge = document.getElementById('heroBadge');
+    if (badge) badge.style.display = 'none';
+  }
+
+  // 荒野巡逻队偶发自然生成（仅在非袭击状态且距离村庄较远时）
+  patrolSpawnTimer -= dt;
+  if (patrolSpawnTimer <= 0 && pillagers.length === 0 && !raidActive) {
+    patrolSpawnTimer = 240 + Math.random() * 120;
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 32 + Math.random() * 10;
+    const px = Math.floor(player.pos.x + Math.sin(angle) * dist);
+    const pz = Math.floor(player.pos.z + Math.cos(angle) * dist);
+    const py = findGround(px, pz);
+    if (py > SEA) {
+      spawnPillager(px, py, pz, true); // 巡逻队长
+      spawnPillager(px + 2, py, pz, false);
+      spawnPillager(px - 2, py, pz, false);
+      toast('⚠️ 荒野中发现了掠夺者巡逻队！');
+    }
+  }
+}
+
+/* ============================ 🧳 流浪商人与行商羊驼 (Wandering Trader & Llamas) ============================ */
+let wanderingTrader = null;
+const traderLlamas = [];
+let traderSpawnTimer = 120;
+
+function spawnWanderingTrader(x, y, z) {
+  if (wanderingTrader) return;
+  const g = new THREE.Group();
+  const faceMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [198, 140, 98], 901, paintVillagerFace) });
+  const skinMat = new THREE.MeshLambertMaterial({ color: 0xc68c62 });
+  const headMats = [skinMat, skinMat, skinMat, skinMat, skinMat, faceMat];
+
+  const robeMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [29, 78, 216], 971, paintVillagerRobe('#1d4ed8', '#facc15')) });
+
+  const head = new THREE.Mesh(villagerHeadGeo, headMats);
+  head.position.set(0, 1.45, 0); head.castShadow = true; g.add(head);
+
+  const nose = new THREE.Mesh(villagerNoseGeo, skinMat);
+  nose.position.set(0, -0.06, -0.25); head.add(nose);
+
+  const robe = new THREE.Mesh(villagerRobeGeo, robeMat);
+  robe.position.set(0, 0.82, 0); robe.castShadow = true; g.add(robe);
+
+  const arms = new THREE.Mesh(villagerArmsGeo, robeMat);
+  arms.position.set(0, 0.88, -0.14); arms.rotation.x = 0.35; arms.castShadow = true; g.add(arms);
+
+  const legs = [];
+  for (const dx of [-0.12, 0.12]) {
+    const leg = new THREE.Mesh(villagerLegGeo, skinMat);
+    leg.position.set(dx, 0.24, 0); leg.castShadow = true; g.add(leg);
+    legs.push(leg);
+  }
+
+  g.position.set(x, y, z);
+  scene.add(g);
+
+  wanderingTrader = {
+    g, head, robe, arms, legs,
+    x, y, z,
+    hp: 20,
+    heading: Math.random() * Math.PI * 2,
+    speed: 0.9,
+    timer: 2.5,
+    isIdle: true,
+    invisible: false,
+    isTrader: true
+  };
+
+  tone(330, 440, 0.25, 'triangle', 0.22);
+  toast('🧳 牵着羊驼的流浪商人来到了附近！携带着各种奇珍异宝');
+
+  spawnTraderLlama(x + 2, y, z + 1.5, '#c2410c');
+  spawnTraderLlama(x - 2, y, z + 1.5, '#0284c7');
+}
+
+const llamaHeadGeo = new THREE.BoxGeometry(0.24, 0.40, 0.28);
+const llamaNeckGeo = new THREE.BoxGeometry(0.20, 0.50, 0.20);
+const llamaBodyGeo = new THREE.BoxGeometry(0.44, 0.52, 0.72);
+const llamaLegGeo = new THREE.BoxGeometry(0.14, 0.48, 0.14);
+const llamaCarpetGeo = new THREE.BoxGeometry(0.48, 0.54, 0.50);
+
+function spawnTraderLlama(x, y, z, carpetColor) {
+  const g = new THREE.Group();
+  const furMat = new THREE.MeshLambertMaterial({ color: 0xdfd4be });
+  const carpetMat = new THREE.MeshLambertMaterial({ color: carpetColor });
+
+  const body = new THREE.Mesh(llamaBodyGeo, furMat);
+  body.position.set(0, 0.70, 0); body.castShadow = true; g.add(body);
+
+  const carpet = new THREE.Mesh(llamaCarpetGeo, carpetMat);
+  carpet.position.set(0, 0.72, 0.02); g.add(carpet);
+
+  const neck = new THREE.Mesh(llamaNeckGeo, furMat);
+  neck.position.set(0, 1.10, -0.28); neck.rotation.x = -0.15; neck.castShadow = true; g.add(neck);
+
+  const head = new THREE.Mesh(llamaHeadGeo, furMat);
+  head.position.set(0, 1.35, -0.35); head.castShadow = true; g.add(head);
+
+  const legs = [];
+  for (const dx of [-0.14, 0.14]) {
+    for (const dz of [-0.24, 0.24]) {
+      const leg = new THREE.Mesh(llamaLegGeo, furMat);
+      leg.position.set(dx, 0.24, dz); leg.castShadow = true; g.add(leg);
+      legs.push(leg);
+    }
+  }
+
+  g.position.set(x, y, z);
+  scene.add(g);
+
+  traderLlamas.push({
+    g, head, body, legs,
+    x, y, z,
+    hp: 25,
+    heading: Math.random() * Math.PI * 2,
+    speed: 1.1,
+    phase: 0
+  });
+}
+
+function updateWanderingTrader(dt) {
+  if (!wanderingTrader) {
+    traderSpawnTimer -= dt;
+    if (traderSpawnTimer <= 0) {
+      traderSpawnTimer = 480;
+      const angle = Math.random() * Math.PI * 2;
+      const px = Math.floor(player.pos.x + Math.sin(angle) * 12);
+      const pz = Math.floor(player.pos.z + Math.cos(angle) * 12);
+      const py = findGround(px, pz);
+      if (py > SEA) spawnWanderingTrader(px + 0.5, py, pz + 0.5);
+    }
+    return;
+  }
+
+  const tr = wanderingTrader;
+  tr.y = findEntityGround(tr.x, tr.y, tr.z);
+
+  const isNight = timeOfDay >= 0.48 || timeOfDay < 0.20;
+  if (isNight && !tr.invisible) {
+    tr.invisible = true;
+    tr.g.visible = false;
+    tone(260, 520, 0.25, 'sine', 0.2);
+    spawnParticles(tr.x, tr.y + 1.2, tr.z, 0x8a2be2, 20);
+    toast('🧪 夜幕降临，流浪商人饮下了隐形药水避开怪物的视线');
+  } else if (!isNight && tr.invisible) {
+    tr.invisible = false;
+    tr.g.visible = true;
+    tone(440, 330, 0.2, 'triangle', 0.2);
+    spawnParticles(tr.x, tr.y + 1.2, tr.z, 0xffffff, 20);
+    toast('🥛 黎明破晓，流浪商人饮用牛奶解除隐形重新显形');
+  }
+
+  tr.timer -= dt;
+  if (tr.timer <= 0) {
+    tr.isIdle = Math.random() < 0.6;
+    tr.timer = tr.isIdle ? (3 + Math.random() * 4) : (2 + Math.random() * 3);
+    if (!tr.isIdle) tr.heading = Math.random() * Math.PI * 2;
+    if (Math.random() < 0.3) playVillagerHmm();
+  }
+
+  if (!tr.isIdle) {
+    const nx = tr.x + Math.sin(tr.heading) * tr.speed * dt;
+    const nz = tr.z + Math.cos(tr.heading) * tr.speed * dt;
+    const tg = findEntityGround(nx, tr.y, nz);
+    if (Math.abs(tg - tr.y) <= 1 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
+      tr.x = nx; tr.z = nz;
+    } else {
+      tr.isIdle = true;
+    }
+  }
+
+  tr.g.position.set(tr.x, tr.y, tr.z);
+  tr.g.rotation.y = tr.heading + Math.PI;
+
+  for (let idx = 0; idx < traderLlamas.length; idx++) {
+    const lm = traderLlamas[idx];
+    lm.y = findEntityGround(lm.x, lm.y, lm.z);
+    const targetOffset = idx === 0 ? 2.2 : 3.8;
+    const tx = tr.x - Math.sin(tr.heading) * targetOffset;
+    const tz = tr.z - Math.cos(tr.heading) * targetOffset;
+    const dL = Math.hypot(tx - lm.x, tz - lm.z);
+
+    if (dL > 1.2) {
+      lm.heading = Math.atan2(tx - lm.x, tz - lm.z);
+      const nx = lm.x + Math.sin(lm.heading) * lm.speed * dt;
+      const nz = lm.z + Math.cos(lm.heading) * lm.speed * dt;
+      const tg = findEntityGround(nx, lm.y, nz);
+      if (Math.abs(tg - lm.y) <= 1.2) { lm.x = nx; lm.z = nz; }
+      lm.phase += dt * 5.0;
+    } else {
+      lm.phase = 0;
+    }
+
+    lm.g.position.set(lm.x, lm.y, lm.z);
+    lm.g.rotation.y = lm.heading + Math.PI;
+    const swing = Math.sin(lm.phase) * 0.35;
+    lm.legs.forEach((leg, i) => {
+      leg.rotation.x = swing * (i % 2 === 0 ? 1 : -1);
+    });
   }
 }
 
@@ -6637,6 +7243,16 @@ function meleeAttack() {
       hitAny = true;
       playSpiderHiss();
       if (m.hp <= 0) killSpider(i);
+    }
+  }
+  for (let i = pillagers.length - 1; i >= 0; i--) {
+    const p = pillagers[i];
+    if (meleeHitMob(p, dir)) {
+      p.hp -= dmg;
+      hitAny = true;
+      playZombieHit();
+      spawnParticles(p.x, p.y + 1.0, p.z, 0x959b9b, 10);
+      if (p.hp <= 0) killPillager(i);
     }
   }
   for (let i = ironGolems.length - 1; i >= 0; i--) {
@@ -7267,6 +7883,24 @@ function updateArrows(dt) {
       }
 
       if (!hitMob) {
+        for (let pi = pillagers.length - 1; pi >= 0; pi--) {
+          const p = pillagers[pi];
+          const dist = Math.hypot(p.x - a.pos.x, (p.g.position.y + 0.8) - a.pos.y, p.z - a.pos.z);
+          if (dist < 0.80) {
+            hitMob = true;
+            p.hp -= a.dmg;
+            p.hurtT = 0.25;
+            p.x += vDir.x * 0.8;
+            p.z += vDir.z * 0.8;
+            playZombieHit();
+            spawnParticles(a.pos.x, a.pos.y, a.pos.z, 0x959b9b, 10);
+            if (p.hp <= 0) killPillager(pi);
+            break;
+          }
+        }
+      }
+
+      if (!hitMob) {
         for (let ai = animals.length - 1; ai >= 0; ai--) {
           const m = animals[ai];
           const dist = Math.hypot(m.x - a.pos.x, (m.g.position.y + 0.4) - a.pos.y, m.z - a.pos.z);
@@ -7500,6 +8134,19 @@ function updateHungerBar() {
   const full = Math.max(0, Math.ceil(player.hunger / 2));
   hungerEl.textContent = '🍗'.repeat(full) + '🦴'.repeat(10 - full);
 }
+function triggerTotemAnimation() {
+  tone(523, 784, 0.4, 'sine', 0.35);
+  setTimeout(() => tone(659, 1046, 0.5, 'sine', 0.4), 160);
+  setTimeout(() => tone(784, 1318, 0.6, 'sine', 0.45), 320);
+  spawnParticles(player.pos.x, player.pos.y + 1.0, player.pos.z, 0xf5c827, 45);
+  spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0x17dd62, 40);
+  const flash = document.getElementById('totemFlash');
+  if (flash) {
+    flash.style.opacity = '0.9';
+    setTimeout(() => { flash.style.opacity = '0'; }, 850);
+  }
+}
+
 function damagePlayer(dmg) {
   if (player.fly) return;               // 飞行模式不受伤害
   const sel = hotbar[selected];
@@ -7522,6 +8169,16 @@ function damagePlayer(dmg) {
   player.hp -= dmg;
   playHurt();
   if (player.hp <= 0) {
+    if (countItem(B.TOTEM_OF_UNDYING) >= 1) {
+      removeItem(B.TOTEM_OF_UNDYING, 1);
+      refreshHotbar();
+      player.hp = 10;
+      hurtCooldown = 1.5;
+      triggerTotemAnimation();
+      toast('✨ 不死图腾触发！免除致命伤害，生命奇迹复苏！');
+      updateHearts();
+      return;
+    }
     player.hp = 20;                       // 重生
     player.hunger = 20;
     const sp = findSpawn();
@@ -7670,7 +8327,7 @@ const TOOL_DURABILITY = {
 };
 // 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌不可放置）
 function isPlaceable(id) {
-  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD) return false;
+  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING) return false;
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.MELON_SLICE) return false;
   if (isFood(id)) return false;   // 食物不可放置
   return true;
@@ -8235,7 +8892,7 @@ const NAMES = {
   [B.CAMPFIRE]: '营火', [B.DOOR]: '木门',
   [B.ENDER_PEARL]: '末影珍珠', [B.COBWEB]: '蜘蛛网', [B.STRING]: '线',
   [B.FISHING_ROD]: '钓鱼竿', [B.SPIDER_EYE]: '蜘蛛眼',
-  [B.EMERALD]: '绿宝石',
+  [B.EMERALD]: '绿宝石', [B.TOTEM_OF_UNDYING]: '不死图腾',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 // —— 食物：恢复饥饿值 ——
@@ -8737,12 +9394,29 @@ function makeItemIcon(id) {
     ctx.fillRect(13, 11, 2, 2);
     ctx.fillStyle = '#0a6332';
     ctx.fillRect(11, 18, 8, 3); ctx.fillRect(18, 12, 3, 7);
+  } else if (id === B.TOTEM_OF_UNDYING) {
+    // 不死图腾图标：金色展翼神像 + 翠绿眼眸与护额宝石
+    ctx.fillStyle = '#9e6d08';
+    ctx.fillRect(8, 5, 16, 22);
+    ctx.fillStyle = '#f5c827';
+    ctx.fillRect(10, 7, 12, 18);
+    // 黄金双翼
+    ctx.fillStyle = '#f5c827';
+    ctx.fillRect(4, 9, 6, 6); ctx.fillRect(22, 9, 6, 6);
+    ctx.fillStyle = '#ffeaa7';
+    ctx.fillRect(6, 10, 4, 4); ctx.fillRect(22, 10, 4, 4);
+    // 翠绿双眼
+    ctx.fillStyle = '#17dd62';
+    ctx.fillRect(12, 12, 2, 2); ctx.fillRect(18, 12, 2, 2);
+    // 额头高光
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(14, 9, 4, 2);
   }
   return cv;
 }
 function makeIcon(id) {
   if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD)) return makeToolIcon(id);
-  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD) return makeItemIcon(id);
+  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
   return makeIconCanvas(id);
 }
@@ -9745,12 +10419,46 @@ function onMousedown(btn) {
     }
 
     // 3. 准星精准射线检测活体生物交互（要求准星正对实体，且前方无方块遮挡）
-    // 右键点击村民开启贸易集市
+    // 右键点击村民开启贸易集市 / 投喂面包繁育可爱小村民
     const targetVillager = raycastTargetEntity(origin, dir, villagers, 4.5, blockDist, 0.45, 1.95);
     if (targetVillager) {
+      if (sel && sel.id === B.BREAD && !targetVillager.isBaby) {
+        if (!player.fly) removeItem(B.BREAD, 1);
+        targetVillager.loveTimer = 45;
+        playVillagerHmm();
+        spawnParticles(targetVillager.x, targetVillager.y + 1.2, targetVillager.z, 0xff3b56, 16);
+        toast('🥖 投喂了村民面包！爱心萌动中…');
+        for (const other of villagers) {
+          if (other !== targetVillager && other.loveTimer > 0 && Math.hypot(other.x - targetVillager.x, other.z - targetVillager.z) < 5.0) {
+            targetVillager.loveTimer = 0;
+            other.loveTimer = 0;
+            const bx = (targetVillager.x + other.x) * 0.5;
+            const bz = (targetVillager.z + other.z) * 0.5;
+            const by = findGround(Math.floor(bx), Math.floor(bz));
+            spawnVillager(bx, by, bz, targetVillager.prof, true);
+            spawnParticles(bx, by + 0.8, bz, 0xff3b56, 30);
+            tone(523, 659, 0.2, 'sine', 0.2);
+            setTimeout(() => tone(659, 784, 0.25, 'triangle', 0.25), 150);
+            toast('👶 诞生了可爱的小村民！欢声笑语充满村庄');
+            break;
+          }
+        }
+        refreshHotbar();
+        return;
+      }
       if (chestOpen) closeChest();
       openTradeUI(targetVillager);
       return;
+    }
+
+    // 右键点击流浪商人开启奇珍秘宝交易
+    if (wanderingTrader && !wanderingTrader.invisible) {
+      const targetTrader = raycastTargetEntity(origin, dir, [wanderingTrader], 4.5, blockDist, 0.45, 1.95);
+      if (targetTrader) {
+        if (chestOpen) closeChest();
+        openTradeUI(targetTrader);
+        return;
+      }
     }
 
     // 右键流浪猫喂鱼驯服 / 抚摸
@@ -10036,6 +10744,9 @@ function animate() {
     updateSpiders(dt);
     updateIronGolems(dt);
     updateVillagers(dt);
+    updatePillagers(dt);
+    updateRaids(dt);
+    updateWanderingTrader(dt);
     updateCats(dt);
     updatePrimedTnt(dt);
     updateSnowballs(dt);
