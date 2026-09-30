@@ -242,7 +242,7 @@
 <div id="menu">
   <div class="box">
     <h1>⛏️ 我的世界 <span class="tag">Web 复刻</span></h1>
-    <div class="sub">原版怪物生态 · 蜘蛛攀爬飞扑 · 浮漂垂钓 · 营火烘烤 · 储物箱 · 瞬移传送 · 合成冶炼</div>
+    <div class="sub">铁傀儡守护者 · 动物喂食繁殖 · 蜘蛛攀爬飞扑 · 浮漂垂钓 · 营火烘烤 · 储物箱 · 瞬移传送</div>
     <div class="keys">
       <span><b>W A S D</b> 移动</span>
       <span><b>鼠标</b> 视角</span>
@@ -255,7 +255,7 @@
       <span><b>V</b> 望远镜放大</span>
       <span><b>0</b> 切换昼夜</span>
       <span><b>左键</b> 破坏方块 / 攻击</span>
-      <span><b>右键</b> 放置/举盾/射箭/钓鱼/瞬移</span>
+      <span><b>右键</b> 放置/举盾/射箭/钓鱼/喂食/瞬移</span>
       <span><b>中键</b> 选取方块</span>
       <span><b>Esc</b> 暂停菜单</span>
     </div>
@@ -4062,6 +4062,32 @@ function paintSpiderSkin(ctx) {
   }
 }
 
+// —— 🛡️ 铁傀儡 (Iron Golem) ——
+function paintIronGolemFace(ctx) {
+  ctx.fillStyle = '#d2d6dc'; ctx.fillRect(0, 0, 16, 16);
+  ctx.fillStyle = '#b01824';
+  ctx.fillRect(4, 7, 2, 2);
+  ctx.fillRect(10, 7, 2, 2);
+  ctx.fillStyle = '#ff4455';
+  ctx.fillRect(4, 7, 1, 1); ctx.fillRect(10, 7, 1, 1);
+  ctx.fillStyle = '#9aa2ac'; ctx.fillRect(7, 7, 2, 6);
+  ctx.fillStyle = '#b8c0ca'; ctx.fillRect(7, 7, 1, 6);
+  ctx.fillStyle = '#5c6470'; ctx.fillRect(5, 14, 6, 1);
+  ctx.fillStyle = '#548c3e'; ctx.fillRect(1, 1, 3, 2); ctx.fillRect(12, 12, 3, 2);
+}
+function paintIronGolemBody(ctx) {
+  ctx.fillStyle = '#d0d4da'; ctx.fillRect(0, 0, 16, 16);
+  ctx.fillStyle = '#9ca4af';
+  ctx.fillRect(0, 7, 16, 1); ctx.fillRect(7, 0, 1, 16);
+  ctx.fillStyle = '#6b7280';
+  ctx.fillRect(1, 1, 1, 1); ctx.fillRect(14, 1, 1, 1);
+  ctx.fillRect(1, 14, 1, 1); ctx.fillRect(14, 14, 1, 1);
+  ctx.fillStyle = '#4c8438';
+  ctx.fillRect(2, 4, 3, 8); ctx.fillRect(10, 2, 4, 6);
+  ctx.fillStyle = '#6ab04c';
+  ctx.fillRect(3, 5, 2, 5); ctx.fillRect(11, 3, 2, 3);
+}
+
 const MOB_KINDS = [
   { name: 'pig', base: [242, 162, 178], paintBody: paintPigBody, paintFace: paintPigFace, paintLeg: paintPigLeg, seed: 1 },
   { name: 'sheep', base: [242, 238, 232], paintBody: paintSheepWool, paintFace: paintSheepFace, paintLeg: paintSheepLeg, seed: 2 },
@@ -4178,8 +4204,8 @@ function findGround(x, z) {
   groundCache.set(k, out);
   return out;
 }
-function spawnAnimal(x, z) {
-  const kind = selectAnimalKind(x, z);
+function spawnAnimal(x, z, overrideKind = null, isBaby = false) {
+  const kind = overrideKind || selectAnimalKind(x, z);
   const g = new THREE.Group();
   const legs = [];
   let wings = null;
@@ -4229,9 +4255,21 @@ function spawnAnimal(x, z) {
     g.add(collar);
   }
 
+  if (isBaby) {
+    g.scale.set(0.55, 0.55, 0.55);
+  }
+
   g.position.set(x, findGround(Math.floor(x), Math.floor(z)), z);
   scene.add(g);
-  animals.push({ g, legs, wings, collar, tamed: false, x, z, heading: Math.random() * Math.PI * 2, timer: 1 + Math.random() * 3, speed: 0.7 + Math.random() * 0.7, phase: Math.random() * 6, hp: 3, hurtT: 0, kind, isIdle: false });
+  animals.push({
+    g, legs, wings, collar, tamed: false, x, z,
+    heading: Math.random() * Math.PI * 2,
+    timer: 1 + Math.random() * 3,
+    speed: 0.7 + Math.random() * 0.7,
+    phase: Math.random() * 6,
+    hp: 3, hurtT: 0, kind, isIdle: false,
+    love: 0, breedCooldown: 0, isBaby, growTimer: isBaby ? 45.0 : 0
+  });
 }
 function spawnAnimalsNear(cx, cz, count) {
   let spawned = 0;
@@ -4308,6 +4346,69 @@ function updateAnimals(dt) {
       }
       continue;
     }
+
+    // 动物求偶与繁育
+    if (a.love > 0) {
+      a.love -= dt;
+      if (Math.random() < 0.08) {
+        spawnParticles(a.x, a.g.position.y + 0.8, a.z, 0xff2255, 1);
+      }
+      let mate = null, minMd = 8.0;
+      for (const other of animals) {
+        if (other !== a && other.kind.name === a.kind.name && other.love > 0 && !other.isBaby) {
+          const md = Math.hypot(other.x - a.x, other.z - a.z);
+          if (md < minMd) { minMd = md; mate = other; }
+        }
+      }
+      if (mate) {
+        a.heading = Math.atan2(mate.x - a.x, mate.z - a.z);
+        const md = Math.hypot(mate.x - a.x, mate.z - a.z);
+        if (md > 1.1) {
+          a.x += Math.sin(a.heading) * 1.8 * dt;
+          a.z += Math.cos(a.heading) * 1.8 * dt;
+          a.isIdle = false;
+        } else {
+          a.love = 0; mate.love = 0;
+          a.breedCooldown = 60; mate.breedCooldown = 60;
+          const babyX = (a.x + mate.x) * 0.5, babyZ = (a.z + mate.z) * 0.5;
+          spawnAnimal(babyX, babyZ, a.kind, true);
+          spawnParticles(babyX, a.g.position.y + 0.8, babyZ, 0xff2255, 20);
+          playGrow();
+          const kname = a.kind.name === 'cow' ? '牛' : a.kind.name === 'sheep' ? '羊' : a.kind.name === 'pig' ? '猪' : '鸡';
+          toast('💖 诞生了一只可爱的小' + kname + '！');
+        }
+      }
+    }
+    if (a.breedCooldown > 0) a.breedCooldown -= dt;
+    if (a.isBaby) {
+      a.growTimer -= dt;
+      const progress = 1 - Math.max(0, a.growTimer) / 45.0;
+      const sc = 0.55 + progress * 0.45;
+      a.g.scale.set(sc, sc, sc);
+      if (a.growTimer <= 0) {
+        a.isBaby = false;
+        a.g.scale.set(1, 1, 1);
+        spawnParticles(a.x, a.g.position.y + 0.8, a.z, 0x44dd44, 12);
+        toast('✨ 幼崽长大成熟了！');
+      }
+    }
+
+    // 手持喜好食物跟随玩家
+    const sel = hotbar[selected];
+    const isAttracted = sel && (
+      ((a.kind.name === 'cow' || a.kind.name === 'sheep' || a.kind.name === 'chicken') && sel.id === B.WHEAT) ||
+      (a.kind.name === 'pig' && sel.id === B.APPLE)
+    );
+    const pDist = Math.hypot(player.pos.x - a.x, player.pos.z - a.z);
+    if (isAttracted && pDist < 10.0 && a.love <= 0) {
+      a.heading = Math.atan2(player.pos.x - a.x, player.pos.z - a.z);
+      if (pDist > 2.0) {
+        a.x += Math.sin(a.heading) * 1.6 * dt;
+        a.z += Math.cos(a.heading) * 1.6 * dt;
+        a.isIdle = false;
+      }
+    }
+
     a.timer -= dt;
     if (a.timer <= 0) {
       a.isIdle = Math.random() < 0.42; // 42% 概率驻足吃草/张望休息
@@ -5144,6 +5245,195 @@ function updateSpiders(dt) {
     });
   }
 }
+
+/* ============================ 🛡️ 铁傀儡守护者 (Iron Golem) ============================ */
+const ironGolems = [];
+
+const ironGolemFaceMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [210, 214, 220], 801, paintIronGolemFace) });
+const ironGolemBodyMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [210, 214, 220], 802, paintIronGolemBody) });
+const ironGolemHeadMats = [ironGolemBodyMat, ironGolemBodyMat, ironGolemBodyMat, ironGolemBodyMat, ironGolemBodyMat, ironGolemFaceMat];
+
+const golemTorsoGeo = new THREE.BoxGeometry(0.85, 1.0, 0.50);
+const golemHeadGeo = new THREE.BoxGeometry(0.44, 0.52, 0.44);
+const golemArmGeo = new THREE.BoxGeometry(0.22, 1.35, 0.22);
+const golemLegGeo = new THREE.BoxGeometry(0.26, 0.85, 0.26);
+
+function spawnIronGolem(x, y, z) {
+  const g = new THREE.Group();
+
+  const body = new THREE.Mesh(golemTorsoGeo, ironGolemBodyMat);
+  body.position.set(0, 1.35, 0); body.castShadow = true; body.receiveShadow = true; g.add(body);
+
+  const head = new THREE.Mesh(golemHeadGeo, ironGolemHeadMats);
+  head.position.set(0, 2.0, 0); head.castShadow = true; head.receiveShadow = true; g.add(head);
+
+  const armL = new THREE.Mesh(golemArmGeo, ironGolemBodyMat);
+  armL.position.set(-0.54, 1.25, 0); armL.castShadow = true; armL.receiveShadow = true; g.add(armL);
+
+  const armR = new THREE.Mesh(golemArmGeo, ironGolemBodyMat);
+  armR.position.set(0.54, 1.25, 0); armR.castShadow = true; armR.receiveShadow = true; g.add(armR);
+
+  const legs = [];
+  for (const dx of [-0.22, 0.22]) {
+    const leg = new THREE.Mesh(golemLegGeo, ironGolemBodyMat);
+    leg.position.set(dx, 0.42, 0); leg.castShadow = true; leg.receiveShadow = true;
+    g.add(leg); legs.push(leg);
+  }
+
+  g.position.set(x, y, z);
+  scene.add(g);
+
+  ironGolems.push({
+    g, head, body, armL, armR, legs,
+    x, y, z,
+    hp: 50, maxHp: 50,
+    heading: 0,
+    attackCooldown: 0,
+    swingTimer: 0,
+    hurtT: 0,
+    phase: 0
+  });
+
+  tone(90, 160, 0.4, 'sawtooth', 0.25);
+  burst(0.2, 0.15, 450);
+  spawnParticles(x, y + 1.2, z, 0xd8dcde, 32);
+  toast('🛡️ 唤醒了铁傀儡！坚不可摧的营地守护神已就位');
+}
+
+function killIronGolem(i) {
+  const g = ironGolems[i];
+  scene.remove(g.g);
+  spawnParticles(g.x, g.y + 1.2, g.z, 0xd8dcde, 35);
+  const ingots = 3 + Math.floor(Math.random() * 3);
+  for (let k = 0; k < ingots; k++) dropItem(B.IRON_INGOT, g.x, g.y + 0.5, g.z);
+  dropItem(B.FLOWER_RED, g.x, g.y + 0.5, g.z);
+  ironGolems.splice(i, 1);
+  tone(120, 50, 0.35, 'sawtooth', 0.18);
+  toast('🥀 铁傀儡倒下了…掉落了铁锭与虞美人');
+}
+
+function checkIronGolemSpawn(px, py, pz) {
+  if (py < 2) return false;
+  if (world.getBlock(px, py - 1, pz) !== B.IRON_BLOCK || world.getBlock(px, py - 2, pz) !== B.IRON_BLOCK) {
+    return false;
+  }
+
+  const isXArm = (world.getBlock(px - 1, py - 1, pz) === B.IRON_BLOCK && world.getBlock(px + 1, py - 1, pz) === B.IRON_BLOCK);
+  const isZArm = (world.getBlock(px, py - 1, pz - 1) === B.IRON_BLOCK && world.getBlock(px, py - 1, pz + 1) === B.IRON_BLOCK);
+
+  if (isXArm) {
+    world.setBlock(px, py, pz, B.AIR);
+    world.setBlock(px, py - 1, pz, B.AIR);
+    world.setBlock(px, py - 2, pz, B.AIR);
+    world.setBlock(px - 1, py - 1, pz, B.AIR);
+    world.setBlock(px + 1, py - 1, pz, B.AIR);
+    enqueueAround(px, py - 1, pz);
+    enqueueAround(px - 1, py - 1, pz);
+    enqueueAround(px + 1, py - 1, pz);
+    spawnIronGolem(px + 0.5, py - 2, pz + 0.5);
+    return true;
+  } else if (isZArm) {
+    world.setBlock(px, py, pz, B.AIR);
+    world.setBlock(px, py - 1, pz, B.AIR);
+    world.setBlock(px, py - 2, pz, B.AIR);
+    world.setBlock(px, py - 1, pz - 1, B.AIR);
+    world.setBlock(px, py - 1, pz + 1, B.AIR);
+    enqueueAround(px, py - 1, pz);
+    enqueueAround(px, py - 1, pz - 1);
+    enqueueAround(px, py - 1, pz + 1);
+    spawnIronGolem(px + 0.5, py - 2, pz + 0.5);
+    return true;
+  }
+  return false;
+}
+
+function updateIronGolems(dt) {
+  for (let i = ironGolems.length - 1; i >= 0; i--) {
+    const g = ironGolems[i];
+    g.hurtT -= dt;
+    g.attackCooldown -= dt;
+    g.swingTimer = Math.max(0, g.swingTimer - dt * 4);
+
+    const gy = findGround(Math.floor(g.x), Math.floor(g.z));
+    g.y = gy;
+
+    let target = null, minDist = 18;
+    for (const z of zombies) {
+      const d = Math.hypot(z.x - g.x, z.z - g.z);
+      if (d < minDist) { minDist = d; target = { mob: z, kind: 'zombie' }; }
+    }
+    for (const sk of skeletons) {
+      const d = Math.hypot(sk.x - g.x, sk.z - g.z);
+      if (d < minDist) { minDist = d; target = { mob: sk, kind: 'skeleton' }; }
+    }
+    for (const sp of spiders) {
+      const d = Math.hypot(sp.x - g.x, sp.z - g.z);
+      if (d < minDist) { minDist = d; target = { mob: sp, kind: 'spider' }; }
+    }
+
+    if (target) {
+      const m = target.mob;
+      const dxm = m.x - g.x, dzm = m.z - g.z;
+      g.heading = Math.atan2(dxm, dzm);
+      const mDist = Math.hypot(dxm, dzm);
+
+      if (mDist > 1.8) {
+        const speed = 2.0;
+        const nx = g.x + Math.sin(g.heading) * speed * dt;
+        const nz = g.z + Math.cos(g.heading) * speed * dt;
+        const tg = findGround(Math.floor(nx), Math.floor(nz));
+        if (Math.abs(tg - g.y) <= 1) { g.x = nx; g.z = nz; }
+      } else if (g.attackCooldown <= 0) {
+        g.attackCooldown = 1.2;
+        g.swingTimer = 1.0;
+        tone(80, 220, 0.18, 'sawtooth', 0.22);
+        burst(0.12, 0.1, 700);
+
+        m.hp -= 10;
+        m.hurtT = 0.35;
+        m.x += Math.sin(g.heading) * 1.5;
+        m.z += Math.cos(g.heading) * 1.5;
+        if (m.g) m.g.position.y += 2.5;
+
+        spawnParticles(m.x, g.y + 1.2, m.z, 0xd8dcde, 16);
+
+        if (m.hp <= 0) {
+          if (target.kind === 'zombie') { const idx = zombies.indexOf(m); if (idx >= 0) killZombie(idx); }
+          else if (target.kind === 'skeleton') { const idx = skeletons.indexOf(m); if (idx >= 0) killSkeleton(idx); }
+          else if (target.kind === 'spider') { const idx = spiders.indexOf(m); if (idx >= 0) killSpider(idx); }
+        }
+      }
+    } else {
+      if (Math.random() < 0.01) g.heading += (Math.random() - 0.5) * 1.5;
+      const dp = Math.hypot(player.pos.x - g.x, player.pos.z - g.z);
+      if (dp > 20) {
+        g.heading = Math.atan2(player.pos.x - g.x, player.pos.z - g.z);
+        const nx = g.x + Math.sin(g.heading) * 1.0 * dt;
+        const nz = g.z + Math.cos(g.heading) * 1.0 * dt;
+        g.x = nx; g.z = nz;
+      }
+    }
+
+    g.g.position.set(g.x, g.y, g.z);
+    g.g.rotation.y = g.heading + Math.PI;
+
+    const isMoving = target && minDist > 1.8;
+    g.phase += dt * (isMoving ? 4.5 : 1.5);
+    const swing = Math.sin(g.phase) * (isMoving ? 0.35 : 0.08);
+
+    g.legs.forEach((leg, idx) => {
+      leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
+    });
+
+    if (g.swingTimer > 0) {
+      g.armR.rotation.x = -Math.PI * 0.65 * g.swingTimer;
+      g.armL.rotation.x = -Math.PI * 0.65 * g.swingTimer;
+    } else {
+      g.armR.rotation.x = -swing;
+      g.armL.rotation.x = swing;
+    }
+  }
+}
 // 攻击伤害（剑 / 徒手）
 function meleeDamage() {
   const s = hotbar[selected];
@@ -5208,6 +5498,16 @@ function meleeAttack() {
       hitAny = true;
       playSpiderHiss();
       if (m.hp <= 0) killSpider(i);
+    }
+  }
+  for (let i = ironGolems.length - 1; i >= 0; i--) {
+    const m = ironGolems[i];
+    if (meleeHitMob(m, dir)) {
+      m.hp -= dmg;
+      hitAny = true;
+      tone(120, 200, 0.12, 'sawtooth', 0.18);
+      spawnParticles(m.x, m.y + 1.2, m.z, 0xd8dcde, 8);
+      if (m.hp <= 0) killIronGolem(i);
     }
   }
   for (let i = animals.length - 1; i >= 0; i--) {
@@ -5405,6 +5705,15 @@ function explodeTnt(ex, ey, ez) {
     const s = spiders[i];
     const dist = Math.hypot(s.x - ex, s.g.position.y - ey, s.z - ez);
     if (dist < radius + 2) killSpider(i);
+  }
+
+  for (let i = ironGolems.length - 1; i >= 0; i--) {
+    const g = ironGolems[i];
+    const dist = Math.hypot(g.x - ex, g.y - ey, g.z - ez);
+    if (dist < radius + 2) {
+      g.hp -= 20;
+      if (g.hp <= 0) killIronGolem(i);
+    }
   }
 
   for (let i = animals.length - 1; i >= 0; i--) {
@@ -8098,6 +8407,50 @@ function onMousedown(btn) {
       castFishingRod();
       return;
     }
+    // 手持铁锭右键修复铁傀儡
+    if (sel && sel.id === B.IRON_INGOT) {
+      for (const g of ironGolems) {
+        const dist = Math.hypot(g.x - origin.x, (g.y + 1.2) - origin.y, g.z - origin.z);
+        if (dist < 4.5 && g.hp < g.maxHp) {
+          if (!player.fly) removeItem(B.IRON_INGOT, 1);
+          g.hp = Math.min(g.maxHp, g.hp + 15);
+          tone(600, 850, 0.16, 'triangle', 0.22);
+          spawnParticles(g.x, g.y + 1.2, g.z, 0xffd700, 16);
+          toast(`🔧 修复了铁傀儡 · 当前生命值：${g.hp}/${g.maxHp}`);
+          return;
+        }
+      }
+    }
+    // 手持食物右键喂食动物（进入求偶或促进幼崽成长）
+    if (sel && (sel.id === B.WHEAT || sel.id === B.APPLE || sel.id === B.RAW_MEAT || sel.id === B.COOKED_MEAT)) {
+      for (const a of animals) {
+        const dist = Math.hypot(a.x - origin.x, (a.g.position.y + 0.5) - origin.y, a.z - origin.z);
+        if (dist < 4.2) {
+          const kind = a.kind.name;
+          const likesWheat = (kind === 'cow' || kind === 'sheep' || kind === 'chicken') && sel.id === B.WHEAT;
+          const likesApple = kind === 'pig' && sel.id === B.APPLE;
+          const likesMeat = kind === 'wolf' && a.tamed && (sel.id === B.RAW_MEAT || sel.id === B.COOKED_MEAT);
+
+          if (likesWheat || likesApple || likesMeat) {
+            if (a.isBaby) {
+              if (!player.fly) removeItem(sel.id, 1);
+              a.growTimer = Math.max(0, a.growTimer - 15);
+              spawnParticles(a.x, a.g.position.y + 0.6, a.z, 0x44dd44, 10);
+              playGrow();
+              toast('🌱 喂食幼崽加速成长！');
+              return;
+            } else if (a.breedCooldown <= 0 && a.love <= 0) {
+              if (!player.fly) removeItem(sel.id, 1);
+              a.love = 30;
+              spawnParticles(a.x, a.g.position.y + 0.8, a.z, 0xff2255, 14);
+              playGrow();
+              toast('💖 动物进入求偶状态！喂食两只同类即可繁殖');
+              return;
+            }
+          }
+        }
+      }
+    }
     const hit = raycast(origin, dir, 6);
     // 右键点击床 → 上床入睡并跳过黑夜
     if (hit && hit.id === B.BED) {
@@ -8182,6 +8535,9 @@ function onMousedown(btn) {
     spawnParticles(px, py, pz, blockColor(sid), 10);
     enqueueAround(px, py, pz);
     playPlace(sid);
+    if (sid === B.PUMPKIN || sid === B.JACK_O_LANTERN) {
+      checkIronGolemSpawn(px, py, pz);
+    }
     if (sid !== B.WATER) {                          // 水是无限水源，不消耗
       sel.count--;
       if (sel.count <= 0) hotbar[selected] = null;
@@ -8303,6 +8659,7 @@ function animate() {
     updateSkeletons(dt);
     updateEndermen(dt);
     updateSpiders(dt);
+    updateIronGolems(dt);
     updatePrimedTnt(dt);
     updateSnowballs(dt);
     updateEnderPearls(dt);
