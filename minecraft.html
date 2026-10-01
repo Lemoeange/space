@@ -490,7 +490,8 @@ const B = {
   MAPLE_LOG:121, SAPLING:122, MAPLE_SAPLING:123, CHERRY_SAPLING:124,
   MILK_BUCKET:125, IRON_HELMET:126, IRON_CHESTPLATE:127, DIAMOND_HELMET:128, DIAMOND_CHESTPLATE:129,
   IRON_BOOTS:130, DIAMOND_BOOTS:131, HEALING_POTION:132, SPEED_POTION:133,
-  FIRE_CHARGE:134, GOLDEN_CARROT:135, COMPASS:136, CLOCK:137
+  FIRE_CHARGE:134, GOLDEN_CARROT:135, COMPASS:136, CLOCK:137,
+  ENCHANTED_GOLDEN_APPLE:138, COOKIE:139, FIREWORK_ROCKET:140
 };
 
 function mulberry32(a) {
@@ -8977,6 +8978,53 @@ function updateFireCharges(dt) {
   }
 }
 
+/* ============================ 🎆 烟花火箭与庆典系统 (Firework Rockets) ============================ */
+const fireworks = [];
+const fireworkGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.45, 6);
+const fireworkMat = new THREE.MeshLambertMaterial({ color: 0xff4757 });
+
+function launchFirework(origin, dir) {
+  const spawnPos = origin.clone().addScaledVector(dir, 0.5);
+  const mesh = new THREE.Mesh(fireworkGeo, fireworkMat);
+  mesh.position.copy(spawnPos);
+  mesh.rotation.x = Math.PI / 2;
+  scene.add(mesh);
+  tone(440, 1200, 0.35, 'sawtooth', 0.15);
+  fireworks.push({
+    mesh,
+    pos: spawnPos,
+    vel: new THREE.Vector3((Math.random() - 0.5) * 2.5, 18.0 + Math.random() * 4.0, (Math.random() - 0.5) * 2.5),
+    timer: 1.1 + Math.random() * 0.4
+  });
+  toast('🎆 点燃并发射了绚丽的烟花火箭！');
+}
+
+function updateFireworks(dt) {
+  for (let i = fireworks.length - 1; i >= 0; i--) {
+    const fw = fireworks[i];
+    fw.timer -= dt;
+    fw.pos.addScaledVector(fw.vel, dt);
+    fw.mesh.position.copy(fw.pos);
+
+    if (Math.random() < 0.7) {
+      spawnParticles(fw.pos.x, fw.pos.y - 0.2, fw.pos.z, 0xffd700, 2);
+    }
+
+    if (fw.timer <= 0) {
+      tone(120, 45, 0.35, 'triangle', 0.3);
+      playPop();
+      const colors = [0xff3366, 0x33ccff, 0xffd700, 0x2ed573, 0xa55eea, 0xff9f43, 0xffffff];
+      const c1 = colors[Math.floor(Math.random() * colors.length)];
+      const c2 = colors[Math.floor(Math.random() * colors.length)];
+      spawnParticles(fw.pos.x, fw.pos.y, fw.pos.z, c1, 40);
+      spawnParticles(fw.pos.x, fw.pos.y, fw.pos.z, c2, 35);
+      playLevelUp();
+      scene.remove(fw.mesh);
+      fireworks.splice(i, 1);
+    }
+  }
+}
+
 /* ============================ 投掷末影珍珠系统 (Ender Pearl) ============================ */
 const enderPearls = [];
 const enderPearlGeo = new THREE.DodecahedronGeometry(0.13, 1);
@@ -9852,7 +9900,7 @@ const TOOL_DURABILITY = {
 };
 // 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌不可放置）
 function isPlaceable(id) {
-  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.COMPASS || id === B.CLOCK) return false;
+  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.COMPASS || id === B.CLOCK || id === B.FIREWORK_ROCKET) return false;
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.MELON_SLICE) return false;
   if (isFood(id)) return false;   // 食物不可放置
   return true;
@@ -10576,6 +10624,7 @@ const NAMES = {
   [B.MILK_BUCKET]: '牛奶桶', [B.IRON_HELMET]: '铁头盔', [B.IRON_CHESTPLATE]: '铁胸甲', [B.DIAMOND_HELMET]: '钻石头盔', [B.DIAMOND_CHESTPLATE]: '钻石胸甲',
   [B.IRON_BOOTS]: '铁靴子', [B.DIAMOND_BOOTS]: '钻石靴子', [B.HEALING_POTION]: '治疗药水', [B.SPEED_POTION]: '迅捷药水',
   [B.FIRE_CHARGE]: '火焰弹', [B.GOLDEN_CARROT]: '金胡萝卜', [B.COMPASS]: '指南针', [B.CLOCK]: '时钟',
+  [B.ENCHANTED_GOLDEN_APPLE]: '附魔金苹果', [B.COOKIE]: '曲奇', [B.FIREWORK_ROCKET]: '烟花火箭',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 function isHelmet(id) { return id === B.IRON_HELMET || id === B.DIAMOND_HELMET; }
@@ -10613,7 +10662,7 @@ function updateArmorBar() {
 const FOOD = {
   [B.APPLE]: 4, [B.BREAD]: 5, [B.PUMPKIN_PIE]: 8, [B.WHEAT]: 1, [B.ROTTEN_FLESH]: 2, [B.RAW_MEAT]: 3,
   [B.MELON_SLICE]: 2, [B.EGG]: 2, [B.COOKED_MEAT]: 8, [B.RAW_FISH]: 2, [B.COOKED_FISH]: 6,
-  [B.GOLDEN_APPLE]: 20, [B.SPIDER_EYE]: 2, [B.GOLDEN_CARROT]: 6,
+  [B.GOLDEN_APPLE]: 20, [B.SPIDER_EYE]: 2, [B.GOLDEN_CARROT]: 6, [B.ENCHANTED_GOLDEN_APPLE]: 20, [B.COOKIE]: 2,
 };
 function isFood(id) { return FOOD[id] !== undefined; }
 
@@ -10692,6 +10741,9 @@ const RECIPES = [
   { out: B.GOLDEN_CARROT, n: 1, need: [[B.APPLE, 1], [B.GOLD_INGOT, 8]] },
   { out: B.COMPASS, n: 1, need: [[B.IRON_INGOT, 4], [B.REDSTONE_ORE, 1]] },
   { out: B.CLOCK, n: 1, need: [[B.GOLD_INGOT, 4], [B.REDSTONE_ORE, 1]] },
+  { out: B.ENCHANTED_GOLDEN_APPLE, n: 1, need: [[B.APPLE, 1], [B.GOLD_BLOCK, 8]] },
+  { out: B.COOKIE, n: 8, need: [[B.WHEAT, 1], [B.CHARCOAL, 1]] },
+  { out: B.FIREWORK_ROCKET, n: 3, need: [[B.GUNPOWDER, 1], [B.STRING, 1]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -11316,12 +11368,32 @@ function makeItemIcon(id) {
     ctx.fillStyle = '#0984e3'; ctx.beginPath(); ctx.arc(16, 16, 8, 0, Math.PI, false); ctx.fill();
     ctx.fillStyle = '#ffeaa7'; ctx.beginPath(); ctx.arc(16, 16, 8, Math.PI, Math.PI * 2, false); ctx.fill();
     ctx.fillStyle = '#2d3436'; ctx.fillRect(15, 12, 2, 8);
+  } else if (id === B.ENCHANTED_GOLDEN_APPLE) {
+    // 附魔金苹果：紫罗兰附魔幻彩流光 + 纯金苹果实体
+    ctx.fillStyle = '#9b59b6'; ctx.beginPath(); ctx.arc(16, 17, 12, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#f1c40f'; ctx.beginPath(); ctx.arc(16, 17, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fef9e7'; ctx.beginPath(); ctx.arc(13, 14, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#8e44ad'; ctx.fillRect(15, 5, 2, 4);
+    ctx.fillStyle = '#2ecc71'; ctx.fillRect(17, 6, 3, 2);
+  } else if (id === B.COOKIE) {
+    // 曲奇饼干：焦黄酥脆圆饼 + 浓郁黑巧颗粒
+    ctx.fillStyle = '#d39e58'; ctx.beginPath(); ctx.arc(16, 16, 10, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ba7f35'; ctx.beginPath(); ctx.arc(16, 16, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#4a2c11';
+    ctx.fillRect(12, 11, 2, 2); ctx.fillRect(18, 12, 3, 2); ctx.fillRect(14, 16, 3, 3);
+    ctx.fillRect(10, 17, 2, 2); ctx.fillRect(18, 19, 2, 2);
+  } else if (id === B.FIREWORK_ROCKET) {
+    // 烟花火箭：火药纸筒 + 喜庆红尖头 + 导火索
+    ctx.fillStyle = '#ecf0f1'; ctx.fillRect(13, 11, 6, 14);
+    ctx.fillStyle = '#e74c3c'; ctx.beginPath(); ctx.moveTo(16, 4); ctx.lineTo(11, 11); ctx.lineTo(21, 11); ctx.fill();
+    ctx.fillStyle = '#3498db'; ctx.fillRect(13, 15, 6, 3);
+    ctx.fillStyle = '#f39c12'; ctx.fillRect(15, 25, 2, 4);
   }
   return cv;
 }
 function makeIcon(id) {
   if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD && id !== B.CROSSBOW && id !== B.SHEARS && id !== B.FLINT_AND_STEEL)) return makeToolIcon(id);
-  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.GOLDEN_CARROT || id === B.COMPASS || id === B.CLOCK) return makeItemIcon(id);
+  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.GOLDEN_CARROT || id === B.COMPASS || id === B.CLOCK || id === B.ENCHANTED_GOLDEN_APPLE || id === B.COOKIE || id === B.FIREWORK_ROCKET) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
   return makeIconCanvas(id);
 }
@@ -12408,14 +12480,21 @@ function onMousedown(btn) {
           return;
         }
       }
-      // 右键打火石 → 引燃 TNT、营火或地面
-      if (sel && sel.id === B.FLINT_AND_STEEL) {
-        if (hit.id === B.TNT) {
-          igniteTNT(hit.x, hit.y, hit.z);
-          tone(600, 240, 0.15, 'sawtooth', 0.25);
-          toast('💥 打火石引燃了 TNT！即将引爆！');
+      // 右键 TNT 方块交互（必须手持打火石）
+      if (hit.id === B.TNT) {
+        if (sel && sel.id === B.FLINT_AND_STEEL) {
+          primeTnt(hit.x, hit.y, hit.z);
+          tone(800, 1400, 0.05, 'triangle', 0.15);
+          spawnParticles(hit.x + 0.5, hit.y + 1.0, hit.z + 0.5, 0xffaa00, 16);
+          toast('🧨 打火石点燃了 TNT 引信！即将引爆！');
+          return;
+        } else {
+          toast('💡 需要手持【打火石】右键方可点燃 TNT');
           return;
         }
+      }
+      // 右键打火石擦出火花
+      if (sel && sel.id === B.FLINT_AND_STEEL) {
         tone(720, 360, 0.1, 'sawtooth', 0.2);
         spawnParticles(hit.x + 0.5, hit.y + 1.0, hit.z + 0.5, 0xff7700, 20);
         toast('🔥 擦出烈焰火花！');
@@ -12494,19 +12573,6 @@ function onMousedown(btn) {
         }
         startSleeping();
         return;
-      }
-      // 右键已放置的 TNT → 必须使用打火石点燃引信
-      if (hit.id === B.TNT) {
-        if (sel && sel.id === B.FLINT_AND_STEEL) {
-          primeTnt(hit.x, hit.y, hit.z);
-          tone(800, 1400, 0.05, 'triangle', 0.15);
-          spawnParticles(hit.x + 0.5, hit.y + 1.0, hit.z + 0.5, 0xffaa00, 16);
-          toast('🧨 已用打火石点燃 TNT 引信！');
-          return;
-        } else {
-          toast('💡 需要手持【打火石】右键方可点燃 TNT');
-          return;
-        }
       }
       // 右键营火 → 烘烤生肉/生鱼
       if (hit.id === B.CAMPFIRE) {
@@ -12950,6 +13016,45 @@ function onMousedown(btn) {
       return;
     }
 
+    // 手持附魔金苹果进食：神级附魔金心与全盛状态
+    if (sel && sel.id === B.ENCHANTED_GOLDEN_APPLE) {
+      if (!player.fly) removeItem(B.ENCHANTED_GOLDEN_APPLE, 1);
+      refreshHotbar();
+      playEat();
+      playGoldenApple();
+      player.hunger = 20;
+      updateHungerBar();
+      player.hp = 20;
+      player.absorption = 16; // 8 颗吸收金心（16 点吸收生命）
+      updateHearts();
+      spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0x9b59b6, 32);
+      spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0xffd700, 32);
+      toast('👑 享用了神话级【附魔金苹果】！获得了 8 颗吸收金心与神圣庇护！');
+      return;
+    }
+
+    // 手持曲奇饼干进食
+    if (sel && sel.id === B.COOKIE) {
+      if (!player.fly) removeItem(B.COOKIE, 1);
+      refreshHotbar();
+      playEat();
+      player.hunger = Math.min(20, player.hunger + 2);
+      updateHungerBar();
+      player.hp = Math.min(20, player.hp + 1);
+      updateHearts();
+      spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0xd39e58, 12);
+      toast('🍪 咔嚓！享用了酥脆香浓的黑巧曲奇饼干！');
+      return;
+    }
+
+    // 手持烟花火箭发射
+    if (sel && sel.id === B.FIREWORK_ROCKET) {
+      if (!player.fly) removeItem(B.FIREWORK_ROCKET, 1);
+      refreshHotbar();
+      launchFirework(origin, dir);
+      return;
+    }
+
     // 4. 手持食物进食（未对准任何交互方块与实体时）
     if (sel && isFood(sel.id)) {
       eat(sel);
@@ -13160,6 +13265,7 @@ function animate() {
     updatePrimedTnt(dt);
     updateSnowballs(dt);
     updateFireCharges(dt);
+    updateFireworks(dt);
     updateEnderPearls(dt);
     updateFishing(dt);
     updateArrows(dt);
