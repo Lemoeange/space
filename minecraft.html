@@ -622,17 +622,49 @@ function isCave(x, y, z) {
   return false;
 }
 
-// 矿脉噪声
+// 矿脉独立分布系统：各矿种空间互斥独立生成，安全中心定距，彻底杜绝多种不同矿物同处一窝、层层相叠的现象
 function oreNoise(x, y, z) { x += WX; z += WZ; return P.ore.fbm3(x * 0.13 + 700, y * 0.13 + 700, z * 0.13 + 700, 2); }
-function oreFor(y, v) {
-  if (y < 16 && v > 0.76) return B.DIAMOND;
-  if (y < 20 && v > 0.70) return B.REDSTONE_ORE;
-  if (y < 32 && v > 0.64) return B.LAPIS_ORE;
-  if (y < 32 && v > 0.60) return B.EMERALD_ORE;
-  if (y < 28 && v > 0.56) return B.GOLD;
-  if (y < 44 && v > 0.52) return B.IRON;
-  if (y < 64 && v > 0.48) return B.COPPER_ORE;
-  if (y < 72 && v > 0.44) return B.COAL;
+function oreFor(wx, y, wz) {
+  const CELL_XZ = 10, CELL_Y = 8;
+  const cx = Math.floor(wx / CELL_XZ);
+  const cy = Math.floor(y / CELL_Y);
+  const cz = Math.floor(wz / CELL_XZ);
+
+  // 区域专属哈希
+  let h = (cx * 73856093 ^ cy * 19349663 ^ cz * 83492791 ^ ((WX + 17) * 31 + WZ)) >>> 0;
+  h = (h ^ (h >>> 16)) * 0x45d9f3b;
+  const hash = ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+
+  let targetOre = B.STONE;
+  if (y < 16 && hash < 0.05) targetOre = B.DIAMOND;
+  else if (y < 22 && hash >= 0.05 && hash < 0.11) targetOre = B.REDSTONE_ORE;
+  else if (y < 30 && hash >= 0.11 && hash < 0.16) targetOre = B.GOLD;
+  else if (y < 34 && hash >= 0.16 && hash < 0.20) targetOre = B.LAPIS_ORE;
+  else if (y < 38 && hash >= 0.20 && hash < 0.24) targetOre = B.EMERALD_ORE;
+  else if (y < 56 && hash >= 0.24 && hash < 0.40) targetOre = B.IRON;
+  else if (y < 68 && hash >= 0.40 && hash < 0.54) targetOre = B.COPPER_ORE;
+  else if (y < 85 && hash >= 0.54 && hash < 0.74) targetOre = B.COAL;
+
+  if (targetOre === B.STONE) return B.STONE;
+
+  // 矿脉核心位于网格中心安全区内，绝不触碰边缘，保证矿脉之间彼此独立隔离绝不粘连
+  const hx = ((h * 13) % 1000) / 1000;
+  const hy = ((h * 37) % 1000) / 1000;
+  const hz = ((h * 71) % 1000) / 1000;
+  const ox = cx * CELL_XZ + 3.0 + hx * (CELL_XZ - 6.0);
+  const oy = cy * CELL_Y + 2.0 + hy * (CELL_Y - 4.0);
+  const oz = cz * CELL_XZ + 3.0 + hz * (CELL_XZ - 6.0);
+
+  const dx = wx + 0.5 - ox;
+  const dy = y + 0.5 - oy;
+  const dz = wz + 0.5 - oz;
+
+  // 椭球矿脉形态：生成 2~6 块纯种单一矿脉
+  const distSq = dx * dx + dy * dy * 1.5 + dz * dz;
+  const maxR = 1.35 + (((h * 97) % 1000) / 1000) * 0.45;
+  if (distSq <= maxR * maxR) {
+    return targetOre;
+  }
   return B.STONE;
 }
 
@@ -2274,20 +2306,20 @@ sky.frustumCulled = false;
 sky.renderOrder = -1;
 scene.add(sky);
 
-// 光照（电影感：双向昼夜动态阴影 + 暖色日光 + 冷色月光 + 天光半球）
-const hemi = new THREE.HemisphereLight(0xbfd8ff, 0x8a7a5a, 0.7);
+// 光照（电影感：双向昼夜动态阴影 + 暖柔日光 + 冷月光 + 天光半球，加深阴影层次）
+const hemi = new THREE.HemisphereLight(0xc2e0ff, 0x5a5042, 0.38);
 scene.add(hemi);
-const ambient = new THREE.AmbientLight(0xfff2e0, 0.35);   // 均匀环境光：提亮侧面、缩小顶面与侧面的亮度差
+const ambient = new THREE.AmbientLight(0xfff2e2, 0.22);   // 适度降低散射光底噪，增强阴影纵深立体感
 scene.add(ambient);
-const sun = new THREE.DirectionalLight(0xffe9c8, 2.0);
+const sun = new THREE.DirectionalLight(0xfff5e6, 2.2);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);   // 分辨率提上来 + 视锥收紧，单方块能分到多得多的阴影纹素
+sun.shadow.mapSize.set(2048, 2048);   // 高清阴影图
 const sc = sun.shadow.camera;
 sc.left = -96; sc.right = 96; sc.top = 96; sc.bottom = -96; sc.near = 1; sc.far = 400;
 sc.updateProjectionMatrix();
-sun.shadow.bias = 0.00004;            // 极微小正偏移，彻底消除大面积自阴影锯齿与摩尔纹
-sun.shadow.normalBias = 0.042;        // 严丝合缝的法线偏移，避免阴影悬浮脱离方块（Peter Panning）
-sun.shadow.radius = 2.4;              // 柔化采样滤波半径提升，平滑消除阴影边缘锯齿抖动与台阶跳变
+sun.shadow.bias = 0.00032;            // 适度正偏移，彻底消除斜坡、洞穴顶底与树叶自阴影条纹闪烁（Shadow Acne）
+sun.shadow.normalBias = 0.052;        // 顺滑法线偏移，避免阴影悬浮脱离方块（Peter Panning）
+sun.shadow.radius = 2.0;              // 柔化采样滤波半径，阴影边缘如原版般柔和自然
 scene.add(sun);
 scene.add(sun.target);
 
@@ -2297,9 +2329,9 @@ moon.shadow.mapSize.set(2048, 2048);
 const mc = moon.shadow.camera;
 mc.left = -96; mc.right = 96; mc.top = 96; mc.bottom = -96; mc.near = 1; mc.far = 400;
 mc.updateProjectionMatrix();
-moon.shadow.bias = 0.00004;
-moon.shadow.normalBias = 0.042;
-moon.shadow.radius = 2.4;
+moon.shadow.bias = 0.00032;
+moon.shadow.normalBias = 0.052;
+moon.shadow.radius = 2.0;
 scene.add(moon);
 scene.add(moon.target);
 
@@ -2685,7 +2717,7 @@ class World {
               id = B.GRASS;
             }
           }
-          if (id === B.STONE) id = oreFor(y, oreNoise(wx, y, wz));
+          if (id === B.STONE) id = oreFor(wx, y, wz);
           c.blocks[y * 256 + lz * 16 + lx] = id;
         }
         // 沼泽与绿洲：保持天然水系在海平面及以下，不在陆地上突兀生成一格格的单格水
@@ -3805,7 +3837,7 @@ function buildChunkMeshes(c) {
   const geo = buildChunkGeometry(c);
   if (geo.opaque) { const m = new THREE.Mesh(geo.opaque, opaqueMat); m.castShadow = true; m.receiveShadow = true; g.add(m); }
   if (geo.cutout) { const m = new THREE.Mesh(geo.cutout, cutoutMat); m.castShadow = true; m.receiveShadow = true; g.add(m); }
-  if (geo.water) { const m = new THREE.Mesh(geo.water, waterMat); m.receiveShadow = true; g.add(m); }
+  if (geo.water) { const m = new THREE.Mesh(geo.water, waterMat); m.castShadow = false; m.receiveShadow = false; g.add(m); }
   if (geo.torch) { const m = new THREE.Mesh(geo.torch, torchMat); g.add(m); }
   c.group = g;
   scene.add(g);
@@ -6397,22 +6429,42 @@ function buildVillage(c) {
     }
   };
 
+  // —— 村庄建筑与保护区判定（道路绝不破坏任何建筑，智能绕行）——
+  const isBuildingZone = (x, z) => {
+    // 1. 水井中心与金钟区域
+    if (x >= cx8 - 3 && x <= cx8 + 3 && z >= cz8 - 3 && z <= cz8 + 3) return true;
+    // 2. 北侧大教堂主体与后殿 (chX, chZ+13, 7x9)
+    if (x >= cx8 - 4 && x <= cx8 + 4 && z >= cz8 + 8 && z <= cz8 + 18) return true;
+    // 3. 正南农田与水渠 (farmX, farmZ-15, 11x9)
+    if (x >= cx8 - 6 && x <= cx8 + 6 && z >= cz8 - 20 && z <= cz8 - 10) return true;
+    // 4. 西北图书馆 (libX-14, libZ+9, 7x7)
+    if (x >= cx8 - 18 && x <= cx8 - 10 && z >= cz8 + 5 && z <= cz8 + 14) return true;
+    // 5. 西南小屋 (cotX-14, cotZ-6, 7x7)
+    if (x >= cx8 - 18 && x <= cx8 - 10 && z >= cz8 - 10 && z <= cz8 - 2) return true;
+    // 6. 东南铁匠铺 (smithX+14, smithZ-5, 7x7)
+    if (x >= cx8 + 10 && x <= cx8 + 18 && z >= cz8 - 9 && z <= cz8 - 1) return true;
+    // 7. 东北洋楼 (thX+14, thZ+10, 7x7)
+    if (x >= cx8 + 10 && x <= cx8 + 18 && z >= cz8 + 6 && z <= cz8 + 14) return true;
+    // 8. 东南牧场栅栏圈 (ranX+14, ranZ-16, 8x8)
+    if (x >= cx8 + 10 && x <= cx8 + 18 && z >= cz8 - 20 && z <= cz8 - 12) return true;
+    return false;
+  };
+
   // —— 智能平滑道路铺设系统 ——
-  // 1. 沿行进方向逐格平滑延伸，高度变化严格限制在最多 ±1 格，杜绝 2 格以上断崖
+  // 1. 沿行进方向逐格平滑延伸，高度变化严格限制在最多 ±1 格，杜绝断崖
   // 2. 双格宽道路截面强制绝对同高，绝不出现左右倾斜或错层
-  // 3. 上方清理 3 格空气净空，下方深层加固圆石地基支撑
+  // 3. 严格避让建筑结构，遇到建筑时绕行；绝不破坏门窗、墙壁、家具与农田
   const paveSmoothStrip = (steps, startY = gy) => {
     let curY = startY;
     for (const step of steps) {
-      const inProtectedWell = step.some(([x, z]) => (x >= cx8 - 3 && x <= cx8 + 3 && z >= cz8 - 3 && z <= cz8 + 3));
-      if (inProtectedWell) continue;
+      if (step.some(([x, z]) => isBuildingZone(x, z))) continue;
 
       let avgGround = 0;
       for (const [x, z] of step) {
         let sy = 0;
         for (let y = HEIGHT - 2; y >= 1; y--) {
           const b = world.getBlock(x, y, z);
-          if (isSolid(b) && b !== B.LOG && b !== B.PLANKS && b !== B.DOOR && b !== B.GLASS && !isLeaf(b)) {
+          if (isSolid(b) && b !== B.LOG && b !== B.PLANKS && b !== B.DOOR && b !== B.GLASS && b !== B.STONE_BRICK && !isLeaf(b)) {
             sy = y; break;
           }
         }
@@ -6424,14 +6476,25 @@ function buildVillage(c) {
       else if (avgGround < curY) curY -= 1;
 
       for (const [x, z] of step) {
+        // 若当前格已有建筑方块（木板、原木、石砖、玻璃、门、箱子、熔炉等），严格跳过保留，绝不破坏！
+        const checkB = world.getBlock(x, curY, z);
+        if (checkB === B.PLANKS || checkB === B.LOG || checkB === B.STONE_BRICK || checkB === B.DOOR || checkB === B.GLASS || checkB === B.CHEST || checkB === B.FURNACE || checkB === B.BED || checkB === B.QUARTZ) continue;
+
         const mat = ((x * 5 + z * 11) % 4 === 0) ? B.COBBLE : B.GRAVEL;
         world.setBlock(x, curY, z, mat);
-        world.setBlock(x, curY + 1, z, B.AIR);
-        world.setBlock(x, curY + 2, z, B.AIR);
-        world.setBlock(x, curY + 3, z, B.AIR);
+
+        // 仅在上方是自然方块（空气/花草/树叶/泥土/沙子）时清理净空，绝不掏空建筑屋顶或室内
+        for (let dy = 1; dy <= 3; dy++) {
+          const ub = world.getBlock(x, curY + dy, z);
+          if (ub === B.AIR || isCrossPlant(ub) || isLeaf(ub) || isPetals(ub) || ub === B.GRASS || ub === B.DIRT) {
+            world.setBlock(x, curY + dy, z, B.AIR);
+          }
+        }
+
+        // 地基向下加固
         for (let y = curY - 1; y >= Math.max(1, curY - 10); y--) {
           const cur = world.getBlock(x, y, z);
-          if (isSolid(cur) && cur !== B.LOG && cur !== B.PLANKS && cur !== B.DOOR && cur !== B.GLASS && !isLeaf(cur)) break;
+          if (isSolid(cur) && cur !== B.LOG && cur !== B.PLANKS && cur !== B.DOOR && cur !== B.GLASS && cur !== B.STONE_BRICK && !isLeaf(cur)) break;
           world.setBlock(x, y, z, B.COBBLE);
         }
       }
@@ -6699,53 +6762,62 @@ function buildVillage(c) {
   world.setBlock(ranX - 2, gy + 1, ranZ + 2, B.HAY_BALE);
   clearDoorway(ranX - 3, ranZ, gy, -1, 0, 3);
 
-  // 9. 纵横延申的大道网络 (Extended Roads & Lighting - 全程平滑无断崖)
-  // 南北主干大道（由广场中心向北、向南平滑延展，双格同高）
+  // 9. 纵横延申的大道网络 (Extended Roads & Lighting - 全程平滑且避让全部房屋建筑，智能绕行)
+  // 北大道（由集市广场直达大教堂正门台阶）
   const northRoad = [];
-  for (let dz = 4; dz <= 22; dz++) northRoad.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
+  for (let dz = 4; dz <= 8; dz++) northRoad.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
   paveSmoothStrip(northRoad, gy);
 
+  // 大教堂环行绕道：东侧优雅绕过大教堂主体，在教堂后方会合继续北上，绝不破坏大教堂墙体
+  const cathedralBypass = [];
+  for (let dx = 1; dx <= 5; dx++) cathedralBypass.push([[cx8 + dx, cz8 + 6], [cx8 + dx, cz8 + 7]]);
+  for (let dz = 8; dz <= 18; dz++) cathedralBypass.push([[cx8 + 5, cz8 + dz], [cx8 + 6, cz8 + dz]]);
+  for (let dx = 5; dx >= 0; dx--) cathedralBypass.push([[cx8 + dx, cz8 + 19], [cx8 + dx, cz8 + 20]]);
+  for (let dz = 21; dz <= 27; dz++) cathedralBypass.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
+  paveSmoothStrip(cathedralBypass, gy);
+
+  // 南大道（由集市广场直达正南农田北入口）
   const southRoad = [];
-  for (let dz = -4; dz >= -22; dz--) southRoad.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
+  for (let dz = -4; dz >= -9; dz--) southRoad.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
   paveSmoothStrip(southRoad, gy);
 
-  // 东西主干大道（由广场中心向东、向西平滑延展，双格同高）
+  // 农田环行绕道：西侧平滑绕过整片农田与水渠，在农田南侧会合继续南下，绝不踩踏庄稼与破坏栅栏
+  const farmBypass = [];
+  for (let dx = -1; dx >= -7; dx--) farmBypass.push([[cx8 + dx, cz8 - 8], [cx8 + dx, cz8 - 9]]);
+  for (let dz = -10; dz >= -20; dz--) farmBypass.push([[cx8 - 7, cz8 + dz], [cx8 - 8, cz8 + dz]]);
+  for (let dx = -7; dx <= 0; dx++) farmBypass.push([[cx8 + dx, cz8 - 21], [cx8 + dx, cz8 - 22]]);
+  for (let dz = -23; dz >= -27; dz--) farmBypass.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
+  paveSmoothStrip(farmBypass, gy);
+
+  // 东西主干大道（由广场中心向东、向西平滑延展，穿过建筑间开阔带）
   const eastRoad = [];
-  for (let dx = 4; dx <= 22; dx++) eastRoad.push([[cx8 + dx, cz8], [cx8 + dx, cz8 + 1]]);
+  for (let dx = 4; dx <= 25; dx++) eastRoad.push([[cx8 + dx, cz8], [cx8 + dx, cz8 + 1]]);
   paveSmoothStrip(eastRoad, gy);
 
   const westRoad = [];
-  for (let dx = -4; dx >= -22; dx--) westRoad.push([[cx8 + dx, cz8], [cx8 + dx, cz8 + 1]]);
+  for (let dx = -4; dx >= -25; dx--) westRoad.push([[cx8 + dx, cz8], [cx8 + dx, cz8 + 1]]);
   paveSmoothStrip(westRoad, gy);
 
-  // 支线延伸小道（直通各建筑大门门前台阶，平缓缓坡）
-  const churchBranch = [];
-  for (let dz = 4; dz <= 9; dz++) churchBranch.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
-  paveSmoothStrip(churchBranch, gy);
-
+  // 支线延伸小道（直通各建筑大门门前台阶，在门外止步对接，绝不破门入室）
   const libBranch = [];
-  for (let dx = -1; dx >= -14; dx--) libBranch.push([[cx8 + dx, cz8 + 9]]);
+  for (let dz = 2; dz <= 9; dz++) libBranch.push([[cx8 - 10, cz8 + dz], [cx8 - 9, cz8 + dz]]);
   paveSmoothStrip(libBranch, gy);
 
-  const smithBranch = [];
-  for (let dx = 0; dx <= 14; dx++) smithBranch.push([[cx8 + dx, cz8 - 5]]);
-  paveSmoothStrip(smithBranch, gy);
-
   const cotBranch = [];
-  for (let dx = -1; dx >= -14; dx--) cotBranch.push([[cx8 + dx, cz8 - 6]]);
+  for (let dz = -2; dz >= -6; dz--) cotBranch.push([[cx8 - 10, cz8 + dz], [cx8 - 9, cz8 + dz]]);
   paveSmoothStrip(cotBranch, gy);
 
+  const smithBranch = [];
+  for (let dz = -2; dz >= -5; dz--) smithBranch.push([[cx8 + 9, cz8 + dz], [cx8 + 10, cz8 + dz]]);
+  paveSmoothStrip(smithBranch, gy);
+
   const thBranch = [];
-  for (let dx = 0; dx <= 14; dx++) thBranch.push([[cx8 + dx, cz8 + 10]]);
+  for (let dz = 2; dz <= 10; dz++) thBranch.push([[cx8 + 9, cz8 + dz], [cx8 + 10, cz8 + dz]]);
   paveSmoothStrip(thBranch, gy);
 
   const ranBranch = [];
-  for (let dx = 0; dx <= 14; dx++) ranBranch.push([[cx8 + dx, cz8 - 16]]);
+  for (let dz = -6; dz >= -16; dz--) ranBranch.push([[cx8 + 9, cz8 + dz], [cx8 + 10, cz8 + dz]]);
   paveSmoothStrip(ranBranch, gy);
-
-  const farmBranch = [];
-  for (let dz = -10; dz >= -22; dz--) farmBranch.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
-  paveSmoothStrip(farmBranch, gy);
 
   // 街道火把立柱路灯
   for (const [lx, lz] of [[-6, -6], [6, -6], [-6, 6], [6, 6], [0, -18], [0, 19], [-18, 0], [18, 0]]) {
@@ -12403,16 +12475,17 @@ function animate() {
   waterMat.uniforms.uFogFar.value = scene.fog.far;
   skyMat.uniforms.uTime.value = clock.elapsedTime;   // 星星闪烁
 
-  // 太阳 / 月亮跟随玩家（阴影）；对齐当前主投射光源的阴影纹素，彻底避免阴影爬行/抖动
-  const activeLightDir = sun.castShadow ? sunDir : moonDir;
-  const sp = snapShadowToTexel(player.pos, activeLightDir);
-  sun.position.set(sp.x + sunDir.x * 120, sp.y + sunDir.y * 120, sp.z + sunDir.z * 120);
-  sun.target.position.set(sp.x, sp.y, sp.z);
+  // 太阳 / 月亮跟随玩家（阴影）；采用整格体素对齐，杜绝旋转帧抖动导致的树叶/洞穴/地表阴影闪烁
+  const lx = Math.round(player.pos.x);
+  const lz = Math.round(player.pos.z);
+  const ly = Math.round(player.pos.y);
+  sun.position.set(lx + sunDir.x * 120, ly + sunDir.y * 120, lz + sunDir.z * 120);
+  sun.target.position.set(lx, ly, lz);
   sun.updateMatrixWorld();
   sun.target.updateMatrixWorld();
 
-  moon.position.set(sp.x + moonDir.x * 120, sp.y + moonDir.y * 120, sp.z + moonDir.z * 120);
-  moon.target.position.set(sp.x, sp.y, sp.z);
+  moon.position.set(lx + moonDir.x * 120, ly + moonDir.y * 120, lz + moonDir.z * 120);
+  moon.target.position.set(lx, ly, lz);
   moon.updateMatrixWorld();
   moon.target.updateMatrixWorld();
   sky.position.copy(player.pos);
