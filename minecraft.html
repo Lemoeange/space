@@ -71,7 +71,7 @@
 
   /* 物品名提示（切物品栏时短暂显示） */
   #itemName {
-    position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%) translateY(6px);
+    position: fixed; left: 50%; bottom: 86px; transform: translateX(-50%) translateY(6px);
     z-index: 10; padding: 4px 14px; border-radius: 6px;
     background: rgba(10, 14, 20, 0.72); color: #fff; font-size: 14px; letter-spacing: 1px;
     text-shadow: 0 1px 2px #000; pointer-events: none; opacity: 0;
@@ -280,17 +280,24 @@
 
 <div id="itemName"></div>
 
+<div id="xpContainer" style="position:fixed; left:50%; bottom:66px; transform:translateX(-50%); width:360px; max-width:86vw; z-index:9; pointer-events:none; display:flex; flex-direction:column; align-items:center;">
+  <div id="xpLevel" style="color:#80ff20; font-size:13px; font-weight:900; text-shadow:0 1px 2px #000, 0 0 5px #3a9e08; line-height:1; margin-bottom:2px;">0</div>
+  <div style="width:100%; height:5px; background:rgba(0,0,0,0.65); border:1px solid rgba(0,0,0,0.85); border-radius:3px; overflow:hidden;">
+    <div id="xpBar" style="width:0%; height:100%; background:linear-gradient(90deg, #55cc00, #99e600); box-shadow:0 0 6px rgba(110,230,0,0.7); transition:width 0.15s ease-out;"></div>
+  </div>
+</div>
+
 <div id="hotbar"></div>
 
 <div id="menu">
   <div class="box">
     <h1>⛏️ 我的世界 <span class="tag">Web 复刻</span></h1>
-    <div class="sub">穿墙透视高亮发光边框 · 光灵箭标记 · 狂暴劫掠兽冲撞 · 治愈净化僵尸村民 · 猫咪清晨献礼 · 灾厄袭击保卫战 · 不死图腾免死 · 流浪商人</div>
+    <div class="sub">经验等级与磁吸经验球 · 忠诚猎犬协同战斗 · 驯马策马疾驰 · 穿墙透视高亮边框 · 光灵箭 · 狂暴劫掠兽 · 治愈僵尸村民 · 村庄突袭</div>
     <div class="keys">
-      <span><b>W A S D</b> 移动</span>
+      <span><b>W A S D</b> 移动 / 策马奔腾</span>
       <span><b>鼠标</b> 视角</span>
-      <span><b>空格</b> 跳跃 / 上浮</span>
-      <span><b>Shift</b> 潜行 / 下降</span>
+      <span><b>空格</b> 跳跃 / 骑马腾跃</span>
+      <span><b>Shift</b> 潜行 / 骑马下马</span>
       <span><b>F</b> 飞行模式</span>
       <span><b>Ctrl</b> 疾跑</span>
       <span><b>E</b> 背包 / 合成</span>
@@ -298,7 +305,7 @@
       <span><b>V</b> 望远镜放大</span>
       <span><b>0</b> 切换昼夜</span>
       <span><b>左键</b> 破坏方块 / 攻击</span>
-      <span><b>右键</b> 放置/交易/举盾/射箭/钓鱼/喂食</span>
+      <span><b>右键</b> 放置/交易/骑马/驯狼/举盾/射箭</span>
       <span><b>中键</b> 选取方块</span>
       <span><b>Esc</b> 暂停菜单</span>
     </div>
@@ -4307,7 +4314,26 @@ function updateAnimalSpawning(dt) {
     const gy = findGround(x, z);
     if (!isDryGround(x, gy, z)) continue;                             // 严防水里刷怪
     spawnAnimal(x + 0.5, z + 0.5);
-    return;
+    break;
+  }
+
+  // 补刷旷野骏马与森林野狼
+  if (horses.length < 4 && Math.random() < 0.35) {
+    const ang = Math.random() * Math.PI * 2, r = 24 + Math.random() * 20;
+    const x = Math.floor(player.pos.x + Math.cos(ang) * r);
+    const z = Math.floor(player.pos.z + Math.sin(ang) * r);
+    const gy = findGround(x, z);
+    if (isDryGround(x, gy, z)) {
+      const colors = [0x6d4522, 0xe6dfd1, 0x221c16, 0xb8860b];
+      spawnHorse(x + 0.5, gy, z + 0.5, colors[Math.floor(Math.random() * colors.length)]);
+    }
+  }
+  if (wolves.length < 5 && Math.random() < 0.35) {
+    const ang = Math.random() * Math.PI * 2, r = 22 + Math.random() * 18;
+    const x = Math.floor(player.pos.x + Math.cos(ang) * r);
+    const z = Math.floor(player.pos.z + Math.sin(ang) * r);
+    const gy = findGround(x, z);
+    if (isDryGround(x, gy, z)) spawnWolf(x + 0.5, gy, z + 0.5);
   }
 }
 const animals = [];
@@ -4682,6 +4708,7 @@ function killZombie(i) {
   const n = 1 + ((Math.random() * 2) | 0);
   for (let k = 0; k < n; k++) dropItem(B.ROTTEN_FLESH, bx, by, bz);
   if (Math.random() < 0.35) dropItem(B.BONE, bx, by, bz);   // 僵尸掉落骨头（用于驯狼）
+  spawnXpOrb(bx + 0.5, by + 0.5, bz + 0.5, 3);
   zombies.splice(i, 1);
   playZombieDeath();
 }
@@ -4848,6 +4875,7 @@ function killCreeper(i) {
   const n = 1 + ((Math.random() * 2) | 0);
   for (let k = 0; k < n; k++) dropItem(B.GUNPOWDER, bx, by, bz);
   if (Math.random() < 0.15) dropItem(B.TNT, bx, by, bz);
+  spawnXpOrb(bx + 0.5, by + 0.5, bz + 0.5, 4);
   creepers.splice(i, 1);
   playZombieDeath();
 }
@@ -5028,6 +5056,7 @@ function killSkeleton(i) {
   const nArrow = 1 + ((Math.random() * 3) | 0);
   for (let k = 0; k < nArrow; k++) dropItem(B.ARROW, bx, by, bz);
   if (Math.random() < 0.15) dropItem(B.BOW, bx, by, bz);
+  spawnXpOrb(bx + 0.5, by + 0.5, bz + 0.5, 3);
   skeletons.splice(i, 1);
   tone(140, 50, 0.25, 'sawtooth', 0.12);
   burst(0.12, 0.08, 980);
@@ -5184,6 +5213,7 @@ function killEnderman(i) {
   spawnParticles(bx, by + 1.2, bz, 0x9b30ff, 28);
   const n = 1 + (Math.random() < 0.6 ? 1 : 0);
   for (let k = 0; k < n; k++) dropItem(B.ENDER_PEARL, bx, by + 1, bz);
+  spawnXpOrb(bx + 0.5, by + 1, bz + 0.5, 5);
   endermen.splice(i, 1);
   playTeleport();
   toast('🔮 获得了末影珍珠！');
@@ -5367,6 +5397,7 @@ function killSpider(i) {
   const strings = 1 + (Math.random() < 0.65 ? 1 : 0);
   for (let k = 0; k < strings; k++) dropItem(B.STRING, bx, by + 0.5, bz);
   if (Math.random() < 0.45) dropItem(B.SPIDER_EYE, bx, by + 0.5, bz);
+  spawnXpOrb(bx + 0.5, by + 0.5, bz + 0.5, 3);
   spiders.splice(i, 1);
   playZombieDeath();
 }
@@ -6410,11 +6441,13 @@ function buildVillage(c) {
   spawnCat(cx8 - 4.5, gy, cz8 - 3.5, 'calico');
   spawnCat(cx8 + 7.5, gy, cz8 + 8.5, 'tuxedo');
 
-  // 在村庄牧场生成家畜（牛与羊）
+  // 在村庄牧场生成家畜（牛与羊、骏马与伴生狼）
   const cowKind = MOB_KINDS.find(k => k.name === 'cow');
   const sheepKind = MOB_KINDS.find(k => k.name === 'sheep');
   if (cowKind) spawnAnimal(ranX + 1.5, ranZ + 1.5, cowKind);
   if (sheepKind) spawnAnimal(ranX - 1.5, ranZ - 1.5, sheepKind);
+  spawnHorse(ranX + 0.5, gy, ranZ - 2.5, 0x6d4522);
+  spawnWolf(cx8 + 5.5, gy, cz8 + 2.5);
 
   // 标记 3x3 区块 dirty 重新渲染
   for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
@@ -6617,6 +6650,318 @@ function updateCats(dt) {
       leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
     });
     c.tail.rotation.z = Math.sin(c.phase * 1.2) * 0.25;
+  }
+}
+
+/* ============================ ✨ 经验值球系统 (XP Orbs System) ============================ */
+const xpOrbs = [];
+const xpOrbGeo = new THREE.SphereGeometry(0.12, 6, 6);
+const xpOrbMat = new THREE.MeshBasicMaterial({ color: 0x99ff33, wireframe: true });
+
+function spawnXpOrb(x, y, z, value = 1) {
+  const mesh = new THREE.Mesh(xpOrbGeo, xpOrbMat);
+  mesh.position.set(x, y + 0.3, z);
+  mesh.renderOrder = 999;
+  scene.add(mesh);
+
+  xpOrbs.push({
+    mesh,
+    x, y: y + 0.3, z,
+    vx: (Math.random() - 0.5) * 2.0,
+    vy: 1.5 + Math.random() * 2.0,
+    vz: (Math.random() - 0.5) * 2.0,
+    value,
+    life: 180.0
+  });
+}
+
+function updateXpOrbs(dt) {
+  for (let i = xpOrbs.length - 1; i >= 0; i--) {
+    const o = xpOrbs[i];
+    o.life -= dt;
+    if (o.life <= 0) {
+      scene.remove(o.mesh);
+      xpOrbs.splice(i, 1);
+      continue;
+    }
+
+    const dx = player.pos.x - o.x;
+    const dy = (player.pos.y + 0.8) - o.y;
+    const dz = player.pos.z - o.z;
+    const dist = Math.hypot(dx, dy, dz);
+
+    if (dist < 7.5) {
+      const spd = Math.min(18.0, 4.0 + (7.5 - dist) * 2.5);
+      o.vx = (dx / dist) * spd;
+      o.vy = (dy / dist) * spd;
+      o.vz = (dz / dist) * spd;
+
+      if (dist < 0.85) {
+        addPlayerXp(o.value);
+        tone(750 + (player.level % 12) * 45, 950 + (player.level % 12) * 45, 0.07, 'sine', 0.16);
+        spawnParticles(player.pos.x, player.pos.y + 0.5, player.pos.z, 0x80ff20, 4);
+        scene.remove(o.mesh);
+        xpOrbs.splice(i, 1);
+        continue;
+      }
+    } else {
+      o.vy -= 9.8 * dt;
+      const ground = findGround(Math.floor(o.x), Math.floor(o.z));
+      if (o.y < ground + 0.15) {
+        o.y = ground + 0.15;
+        o.vy = 0;
+        o.vx *= 0.8;
+        o.vz *= 0.8;
+      }
+    }
+
+    o.x += o.vx * dt;
+    o.y += o.vy * dt;
+    o.z += o.vz * dt;
+    o.mesh.position.set(o.x, o.y, o.z);
+    o.mesh.rotation.y += dt * 4.0;
+  }
+}
+
+/* ============================ 🐕 狼与忠诚猎犬系统 (Wolf & Dog System) ============================ */
+const wolves = [];
+const wolfHeadGeo = new THREE.BoxGeometry(0.32, 0.32, 0.32);
+const wolfSnoutGeo = new THREE.BoxGeometry(0.18, 0.16, 0.22);
+const wolfEarGeo = new THREE.BoxGeometry(0.08, 0.12, 0.06);
+const wolfBodyGeo = new THREE.BoxGeometry(0.36, 0.38, 0.62);
+const wolfLegGeo = new THREE.BoxGeometry(0.12, 0.38, 0.12);
+const wolfTailGeo = new THREE.BoxGeometry(0.10, 0.10, 0.32);
+const wolfCollarGeo = new THREE.BoxGeometry(0.38, 0.10, 0.38);
+
+function playWolfBark(pitch = 1.0) {
+  tone(320 * pitch, 240 * pitch, 0.12, 'sawtooth', 0.20);
+  setTimeout(() => tone(280 * pitch, 180 * pitch, 0.10, 'sawtooth', 0.18), 70);
+}
+function playWolfWhine() {
+  tone(600, 750, 0.15, 'sine', 0.15);
+}
+
+function spawnWolf(x, y, z, tamed = false) {
+  const g = new THREE.Group();
+  const furMat = new THREE.MeshLambertMaterial({ color: 0xd8d8d8 });
+  const snoutMat = new THREE.MeshLambertMaterial({ color: 0x909090 });
+  const collarMat = new THREE.MeshLambertMaterial({ color: 0xcc2222 });
+
+  const body = new THREE.Mesh(wolfBodyGeo, furMat);
+  body.position.set(0, 0.50, 0); body.castShadow = true; g.add(body);
+
+  const head = new THREE.Mesh(wolfHeadGeo, furMat);
+  head.position.set(0, 0.72, -0.32); head.castShadow = true; g.add(head);
+
+  const snout = new THREE.Mesh(wolfSnoutGeo, snoutMat);
+  snout.position.set(0, -0.06, -0.22); head.add(snout);
+
+  for (const dx of [-0.10, 0.10]) {
+    const ear = new THREE.Mesh(wolfEarGeo, furMat);
+    ear.position.set(dx, 0.20, 0.05); head.add(ear);
+  }
+
+  const collar = new THREE.Mesh(wolfCollarGeo, collarMat);
+  collar.position.set(0, 0.64, -0.24); collar.visible = tamed; g.add(collar);
+
+  const tail = new THREE.Mesh(wolfTailGeo, furMat);
+  tail.position.set(0, 0.60, 0.32); tail.rotation.x = -0.6; g.add(tail);
+
+  const legs = [];
+  for (const dx of [-0.12, 0.12]) {
+    for (const dz of [-0.20, 0.20]) {
+      const leg = new THREE.Mesh(wolfLegGeo, furMat);
+      leg.position.set(dx, 0.19, dz); leg.castShadow = true; g.add(leg);
+      legs.push(leg);
+    }
+  }
+
+  g.position.set(x, y, z);
+  scene.add(g);
+
+  wolves.push({
+    g, head, body, collar, tail, legs,
+    x, y, z,
+    hp: 20, maxHp: 20,
+    tamed,
+    sitting: false,
+    heading: Math.random() * Math.PI * 2,
+    speed: 1.8,
+    attackTarget: null,
+    attackCooldown: 0,
+    phase: 0
+  });
+}
+
+function updateWolves(dt) {
+  for (let i = wolves.length - 1; i >= 0; i--) {
+    const w = wolves[i];
+    w.y = findEntityGround(w.x, w.y, w.z);
+    w.attackCooldown -= dt;
+
+    // 尾巴高度随剩余生命值动态升降（满血高高扬起，濒死下垂）
+    w.tail.rotation.x = -0.2 - (w.hp / w.maxHp) * 0.7;
+
+    if (w.sitting) {
+      w.g.position.set(w.x, w.y, w.z);
+      continue;
+    }
+
+    let target = w.attackTarget;
+    if (target && (target.hp <= 0 || (target.g && !target.g.parent))) {
+      w.attackTarget = null;
+      target = null;
+    }
+
+    if (target) {
+      const dx = target.x - w.x, dz = target.z - w.z;
+      w.heading = Math.atan2(dx, dz);
+      const dist = Math.hypot(dx, dz);
+
+      if (dist > 1.2) {
+        const sprintSpeed = 3.4;
+        const nx = w.x + Math.sin(w.heading) * sprintSpeed * dt;
+        const nz = w.z + Math.cos(w.heading) * sprintSpeed * dt;
+        const tg = findEntityGround(nx, w.y, nz);
+        if (Math.abs(tg - w.y) <= 1.2) { w.x = nx; w.z = nz; }
+        w.phase += dt * 12.0;
+      } else if (w.attackCooldown <= 0) {
+        w.attackCooldown = 0.8;
+        playWolfBark(1.1);
+        target.hp -= 4;
+        target.hurtT = 0.25;
+        spawnParticles(target.x, target.y + 0.8, target.z, 0xcc2222, 8);
+        if (target.hp <= 0) {
+          w.attackTarget = null;
+        }
+      }
+    } else if (w.tamed) {
+      const dxp = player.pos.x - w.x, dzp = player.pos.z - w.z;
+      const dp = Math.hypot(dxp, dzp);
+      if (dp > 2.5) {
+        w.heading = Math.atan2(dxp, dzp);
+        const followSpeed = dp > 6 ? 3.2 : 1.8;
+        const nx = w.x + Math.sin(w.heading) * followSpeed * dt;
+        const nz = w.z + Math.cos(w.heading) * followSpeed * dt;
+        const tg = findEntityGround(nx, w.y, nz);
+        if (Math.abs(tg - w.y) <= 1.2) { w.x = nx; w.z = nz; }
+        w.phase += dt * 8.0;
+      } else {
+        w.phase = 0;
+      }
+    } else {
+      if (Math.random() < 0.02) w.heading += (Math.random() - 0.5) * 1.5;
+      const nx = w.x + Math.sin(w.heading) * 0.9 * dt;
+      const nz = w.z + Math.cos(w.heading) * 0.9 * dt;
+      const tg = findEntityGround(nx, w.y, nz);
+      if (Math.abs(tg - w.y) <= 1.0) { w.x = nx; w.z = nz; }
+      w.phase += dt * 4.0;
+    }
+
+    w.g.position.set(w.x, w.y, w.z);
+    w.g.rotation.y = w.heading + Math.PI;
+
+    const swing = Math.sin(w.phase) * 0.35;
+    w.legs.forEach((leg, idx) => {
+      leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
+    });
+  }
+}
+
+/* ============================ 🐎 驯马与骑乘疾驰系统 (Horse Riding System) ============================ */
+const horses = [];
+const horseBodyGeo = new THREE.BoxGeometry(0.70, 0.85, 1.45);
+const horseNeckGeo = new THREE.BoxGeometry(0.28, 0.65, 0.32);
+const horseHeadGeo = new THREE.BoxGeometry(0.28, 0.34, 0.52);
+const horseManeGeo = new THREE.BoxGeometry(0.08, 0.60, 0.12);
+const horseLegGeo = new THREE.BoxGeometry(0.18, 0.85, 0.18);
+const horseTailGeo = new THREE.BoxGeometry(0.12, 0.65, 0.12);
+const horseSaddleGeo = new THREE.BoxGeometry(0.74, 0.22, 0.70);
+
+function playGallop() {
+  tone(90, 60, 0.06, 'triangle', 0.22);
+  setTimeout(() => tone(110, 70, 0.05, 'triangle', 0.18), 80);
+}
+function playHorseNeigh() {
+  tone(350, 480, 0.25, 'sawtooth', 0.22);
+  setTimeout(() => tone(480, 320, 0.35, 'sawtooth', 0.18), 120);
+}
+
+function spawnHorse(x, y, z, coatColor = 0x6d4522) {
+  const g = new THREE.Group();
+  const coatMat = new THREE.MeshLambertMaterial({ color: coatColor });
+  const darkMat = new THREE.MeshLambertMaterial({ color: 0x221c16 });
+  const saddleMat = new THREE.MeshLambertMaterial({ color: 0x5a3418 });
+
+  const body = new THREE.Mesh(horseBodyGeo, coatMat);
+  body.position.set(0, 0.95, 0); body.castShadow = true; g.add(body);
+
+  const saddleMesh = new THREE.Mesh(horseSaddleGeo, saddleMat);
+  saddleMesh.position.set(0, 1.05, 0.05); saddleMesh.visible = false; g.add(saddleMesh);
+
+  const neck = new THREE.Mesh(horseNeckGeo, coatMat);
+  neck.position.set(0, 1.45, -0.55); neck.rotation.x = -0.35; neck.castShadow = true; g.add(neck);
+
+  const head = new THREE.Mesh(horseHeadGeo, coatMat);
+  head.position.set(0, 0.40, -0.22); head.rotation.x = 0.35; head.castShadow = true; neck.add(head);
+
+  const mane = new THREE.Mesh(horseManeGeo, darkMat);
+  mane.position.set(0, 0.05, 0.18); neck.add(mane);
+
+  const tail = new THREE.Mesh(horseTailGeo, darkMat);
+  tail.position.set(0, 0.85, 0.75); tail.rotation.x = 0.2; g.add(tail);
+
+  const legs = [];
+  for (const dx of [-0.22, 0.22]) {
+    for (const dz of [-0.48, 0.48]) {
+      const leg = new THREE.Mesh(horseLegGeo, coatMat);
+      leg.position.set(dx, 0.42, dz); leg.castShadow = true; g.add(leg);
+      legs.push(leg);
+    }
+  }
+
+  g.position.set(x, y, z);
+  scene.add(g);
+
+  horses.push({
+    g, head, neck, body, saddleMesh, legs, tail,
+    x, y, z,
+    hp: 30, maxHp: 30,
+    tamed: false,
+    saddled: false,
+    tameAttempts: 0,
+    heading: Math.random() * Math.PI * 2,
+    speed: 1.5,
+    gallopTimer: 0,
+    phase: 0
+  });
+}
+
+function updateHorses(dt) {
+  for (let i = horses.length - 1; i >= 0; i--) {
+    const h = horses[i];
+    if (player.ridingHorse === h) continue;
+
+    h.y = findEntityGround(h.x, h.y, h.z);
+    if (Math.random() < 0.015) h.heading += (Math.random() - 0.5) * 1.5;
+
+    const nx = h.x + Math.sin(h.heading) * h.speed * dt;
+    const nz = h.z + Math.cos(h.heading) * h.speed * dt;
+    const tg = findEntityGround(nx, h.y, nz);
+    if (Math.abs(tg - h.y) <= 1.0 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
+      h.x = nx; h.z = nz;
+      h.phase += dt * 3.5;
+    } else {
+      h.phase = 0;
+    }
+
+    h.g.position.set(h.x, h.y, h.z);
+    h.g.rotation.y = h.heading + Math.PI;
+
+    const swing = Math.sin(h.phase) * 0.25;
+    h.legs.forEach((leg, idx) => {
+      leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
+    });
   }
 }
 
@@ -6859,6 +7204,7 @@ function killRavager(i) {
   if (Math.random() < 0.6) dropItem(B.EMERALD, r.x, r.y + 0.5, r.z);
 
   toast('🦏 击溃了恐怖的狂暴劫掠兽！缴获了珍贵的鞍与绿宝石！');
+  spawnXpOrb(r.x, r.y + 0.5, r.z, 20);
   ravagers.splice(i, 1);
   updateRaidProgress();
 }
@@ -7027,6 +7373,7 @@ function killPillager(i) {
     toast('☠️ 击败了掠夺者队长！获得了「不祥之兆」！若进入村庄将触发袭击！');
   }
 
+  spawnXpOrb(p.x, p.y + 0.5, p.z, p.isCaptain ? 10 : 5);
   pillagers.splice(i, 1);
   updateRaidProgress();
 }
@@ -7472,6 +7819,12 @@ function meleeHitMob(m, dir) {
   m.hurtT = 0.25;
   return true;
 }
+function alertWolves(target) {
+  for (const w of wolves) {
+    if (w.tamed && !w.sitting) w.attackTarget = target;
+  }
+}
+
 function meleeAttack() {
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
@@ -7479,15 +7832,15 @@ function meleeAttack() {
   let hitAny = false;
   for (let i = zombies.length - 1; i >= 0; i--) {
     const m = zombies[i];
-    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; playZombieHit(); if (m.hp <= 0) killZombie(i); }
+    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; playZombieHit(); alertWolves(m); if (m.hp <= 0) killZombie(i); }
   }
   for (let i = creepers.length - 1; i >= 0; i--) {
     const m = creepers[i];
-    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; playZombieHit(); if (m.hp <= 0) killCreeper(i); }
+    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; playZombieHit(); alertWolves(m); if (m.hp <= 0) killCreeper(i); }
   }
   for (let i = skeletons.length - 1; i >= 0; i--) {
     const m = skeletons[i];
-    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; tone(160, 240, 0.1, 'triangle', 0.1); if (m.hp <= 0) killSkeleton(i); }
+    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; tone(160, 240, 0.1, 'triangle', 0.1); alertWolves(m); if (m.hp <= 0) killSkeleton(i); }
   }
   for (let i = endermen.length - 1; i >= 0; i--) {
     const m = endermen[i];
@@ -7495,6 +7848,7 @@ function meleeAttack() {
       m.hp -= dmg;
       m.angry = true;
       hitAny = true;
+      alertWolves(m);
       tone(180, 260, 0.1, 'triangle', 0.1);
       if (Math.random() < 0.6 && m.teleCooldown <= 0) teleportEnderman(m);
       if (m.hp <= 0) killEnderman(i);
@@ -7506,6 +7860,7 @@ function meleeAttack() {
       m.hp -= dmg;
       m.angry = true;
       hitAny = true;
+      alertWolves(m);
       playSpiderHiss();
       if (m.hp <= 0) killSpider(i);
     }
@@ -7515,6 +7870,7 @@ function meleeAttack() {
     if (meleeHitMob(p, dir)) {
       p.hp -= dmg;
       hitAny = true;
+      alertWolves(p);
       playZombieHit();
       spawnParticles(p.x, p.y + 1.0, p.z, 0x959b9b, 10);
       if (p.hp <= 0) killPillager(i);
@@ -7525,6 +7881,7 @@ function meleeAttack() {
     if (meleeHitMob(r, dir)) {
       r.hp -= dmg;
       hitAny = true;
+      alertWolves(r);
       playZombieHit();
       spawnParticles(r.x, r.y + 1.2, r.z, 0x545559, 14);
       if (r.hp <= 0) killRavager(i);
@@ -8444,6 +8801,9 @@ const player = {
   halfW: 0.3, height: 1.8, eye: 1.62,
   hp: 20,
   hunger: 20,
+  xp: 0,
+  level: 0,
+  ridingHorse: null,
 };
 let maxFallY = null;   // 摔落起点高度（用于计算摔落伤害）
 function findSpawn() {
@@ -8466,6 +8826,40 @@ function updateHearts() {
 function updateHungerBar() {
   const full = Math.max(0, Math.ceil(player.hunger / 2));
   hungerEl.textContent = '🍗'.repeat(full) + '🦴'.repeat(10 - full);
+}
+function getXpNeededForLevel(lvl) {
+  if (lvl >= 30) return 112 + (lvl - 30) * 9;
+  if (lvl >= 15) return 37 + (lvl - 15) * 5;
+  return 7 + lvl * 2;
+}
+function addPlayerXp(amount) {
+  player.xp += amount;
+  let needed = getXpNeededForLevel(player.level);
+  let leveledUp = false;
+  while (player.xp >= needed) {
+    player.xp -= needed;
+    player.level++;
+    leveledUp = true;
+    needed = getXpNeededForLevel(player.level);
+  }
+  if (leveledUp) {
+    tone(440, 660, 0.25, 'triangle', 0.25);
+    setTimeout(() => tone(660, 880, 0.35, 'triangle', 0.25), 180);
+    setTimeout(() => tone(880, 1320, 0.45, 'sine', 0.30), 380);
+    spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0x80ff20, 30);
+    toast(`🎉 升级了！当前经验等级: Lv ${player.level}`);
+  }
+  updateXpBar();
+}
+function updateXpBar() {
+  const levelEl = document.getElementById('xpLevel');
+  const barEl = document.getElementById('xpBar');
+  if (levelEl) levelEl.textContent = player.level;
+  if (barEl) {
+    const needed = Math.max(1, getXpNeededForLevel(player.level));
+    const ratio = Math.max(0, Math.min(1, player.xp / needed));
+    barEl.style.width = `${Math.round(ratio * 100)}%`;
+  }
 }
 function triggerTotemAnimation() {
   tone(523, 784, 0.4, 'sine', 0.35);
@@ -8768,6 +9162,67 @@ function inCobweb() {
 }
 
 function updatePlayer(dt) {
+  if (player.ridingHorse) {
+    const h = player.ridingHorse;
+    if (keys['ShiftLeft'] || keys['ShiftRight']) {
+      player.ridingHorse = null;
+      player.pos.x += Math.sin(player.yaw + 1.5) * 1.0;
+      player.pos.z += Math.cos(player.yaw + 1.5) * 1.0;
+      toast('🐎 已从马背跃下');
+      return;
+    }
+
+    const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+    const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+    const move = new THREE.Vector3();
+    if (keys['KeyW']) move.add(forward);
+    if (keys['KeyS']) move.sub(forward);
+    if (keys['KeyD']) move.add(right);
+    if (keys['KeyA']) move.sub(right);
+    if (move.lengthSq() > 0) move.normalize();
+
+    const horseSpeed = 7.8;
+    if (move.lengthSq() > 0) {
+      h.heading = Math.atan2(move.x, move.z);
+      const nx = h.x + move.x * horseSpeed * dt;
+      const nz = h.z + move.z * horseSpeed * dt;
+      const tg = findEntityGround(nx, h.y, nz);
+      if (Math.abs(tg - h.y) <= 1.4 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
+        h.x = nx; h.z = nz; h.y = tg;
+      }
+      h.phase += dt * 14.0;
+      h.gallopTimer = (h.gallopTimer || 0) + dt;
+      if (h.gallopTimer >= 0.28) {
+        playGallop();
+        h.gallopTimer = 0;
+      }
+    } else {
+      h.phase = 0;
+    }
+
+    if (keys['Space'] && (h.jumpCooldown || 0) <= 0) {
+      h.jumpCooldown = 0.8;
+      h.y += 1.3;
+      tone(180, 300, 0.15, 'triangle', 0.2);
+    }
+    if (h.jumpCooldown > 0) h.jumpCooldown -= dt;
+
+    h.g.position.set(h.x, h.y, h.z);
+    h.g.rotation.y = h.heading + Math.PI;
+
+    const swing = Math.sin(h.phase) * 0.55;
+    h.legs.forEach((leg, idx) => {
+      leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
+    });
+    h.neck.rotation.x = -0.15 + Math.sin(h.phase) * 0.08;
+
+    player.pos.set(h.x, h.y + 1.35, h.z);
+    player.vel.set(0, 0, 0);
+    player.onGround = true;
+    maxFallY = null;
+    return;
+  }
+
   const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
   const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
   const move = new THREE.Vector3();
@@ -10525,6 +10980,10 @@ function updateBreaking(dt) {
       for (let k = 0; k < 4; k++) dropItem(B.SNOWBALL, bx, by, bz);
     }
     if (bid === B.WHEAT_CROP || bid === B.WHEAT_CROP_MATURE) crops.delete(bx + ',' + by + ',' + bz);
+    if (bid === B.COAL) spawnXpOrb(bx + 0.5, by + 0.5, bz + 0.5, 1);
+    else if (bid === B.DIAMOND) spawnXpOrb(bx + 0.5, by + 0.5, bz + 0.5, 5);
+    else if (bid === B.EMERALD_ORE) spawnXpOrb(bx + 0.5, by + 0.5, bz + 0.5, 6);
+    else if (bid === B.LAPIS_ORE || bid === B.REDSTONE_ORE) spawnXpOrb(bx + 0.5, by + 0.5, bz + 0.5, 3);
     spawnParticles(bx, by, bz, blockColor(bid), 14);
     enqueueAround(bx, by, bz);
     playPop(bid);
@@ -10872,6 +11331,93 @@ function onMousedown(btn) {
       }
     }
 
+    // 准星右键忠诚猎犬（驯服 / 喂肉回血 / 命令坐下与跟随）
+    const targetWolf = raycastTargetEntity(origin, dir, wolves, 4.2, blockDist, 0.45, 1.0);
+    if (targetWolf) {
+      if (sel && sel.id === B.BONE && !targetWolf.tamed) {
+        if (!player.fly) removeItem(B.BONE, 1);
+        if (Math.random() < 0.45) {
+          targetWolf.tamed = true;
+          targetWolf.collar.visible = true;
+          playWolfBark(1.2);
+          spawnParticles(targetWolf.x, targetWolf.y + 0.6, targetWolf.z, 0xff3b56, 16);
+          toast('🐕 成功驯服野狼！它成为了忠诚的猎犬！');
+        } else {
+          playWolfWhine();
+          spawnParticles(targetWolf.x, targetWolf.y + 0.6, targetWolf.z, 0xaaaaaa, 6);
+        }
+        refreshHotbar();
+        return;
+      }
+      if (targetWolf.tamed) {
+        if (sel && (sel.id === B.RAW_MEAT || sel.id === B.COOKED_MEAT || sel.id === B.ROTTEN_FLESH)) {
+          if (!player.fly) removeItem(sel.id, 1);
+          targetWolf.hp = Math.min(targetWolf.maxHp, targetWolf.hp + 6);
+          playWolfBark(1.1);
+          spawnParticles(targetWolf.x, targetWolf.y + 0.6, targetWolf.z, 0xff3b56, 12);
+          toast(`🐕 喂食了猎犬！生命值恢复 (HP: ${targetWolf.hp}/${targetWolf.maxHp})`);
+          refreshHotbar();
+          return;
+        }
+        if (!sel) {
+          targetWolf.sitting = !targetWolf.sitting;
+          if (targetWolf.sitting) {
+            targetWolf.legs.forEach(leg => { leg.rotation.x = -0.6; });
+            toast('🐕 猎犬已坐下原地待命');
+          } else {
+            targetWolf.legs.forEach(leg => { leg.rotation.x = 0; });
+            toast('🐕 猎犬起身跟随你');
+          }
+          playWolfBark(1.0);
+          return;
+        }
+      }
+    }
+
+    // 准星右键骏马（驯服 / 装备马鞍 / 跨上骏马策马疾驰）
+    const targetHorse = raycastTargetEntity(origin, dir, horses, 4.5, blockDist, 0.7, 1.8);
+    if (targetHorse) {
+      if (sel && sel.id === B.SADDLE && targetHorse.tamed && !targetHorse.saddled) {
+        if (!player.fly) removeItem(B.SADDLE, 1);
+        targetHorse.saddled = true;
+        targetHorse.saddleMesh.visible = true;
+        playHorseNeigh();
+        spawnParticles(targetHorse.x, targetHorse.y + 1.2, targetHorse.z, 0x17dd62, 16);
+        toast('🐎 已为骏马装配马鞍！右键即可跨上它策马疾驰！');
+        refreshHotbar();
+        return;
+      }
+      if (sel && (sel.id === B.WHEAT || sel.id === B.APPLE)) {
+        if (!player.fly) removeItem(sel.id, 1);
+        targetHorse.tameAttempts = (targetHorse.tameAttempts || 0) + 1;
+        playHorseNeigh();
+        spawnParticles(targetHorse.x, targetHorse.y + 1.2, targetHorse.z, 0xff3b56, 12);
+        toast('🐴 喂食了马匹，好感度提升！');
+        refreshHotbar();
+        return;
+      }
+      if (!targetHorse.tamed) {
+        targetHorse.tameAttempts = (targetHorse.tameAttempts || 0) + 1;
+        if (targetHorse.tameAttempts >= 2 || Math.random() < 0.45) {
+          targetHorse.tamed = true;
+          playHorseNeigh();
+          spawnParticles(targetHorse.x, targetHorse.y + 1.2, targetHorse.z, 0xff3b56, 20);
+          toast('🐎 成功驯服野马！手持【鞍】右键即可为它装上马鞍！');
+        } else {
+          tone(240, 160, 0.2, 'sawtooth', 0.2);
+          spawnParticles(targetHorse.x, targetHorse.y + 1.0, targetHorse.z, 0xaaaaaa, 8);
+          toast('🐴 野马有些桀骜，请多试几次或喂食小麦/苹果…');
+        }
+        return;
+      }
+      if (targetHorse.saddled) {
+        player.ridingHorse = targetHorse;
+        playHorseNeigh();
+        toast('🐎 正在策马疾驰！[W A S D] 奔腾，[空格] 腾空跃起，[Shift] 下马');
+        return;
+      }
+    }
+
     // 准星右键牲畜（灰狼骨头驯服 / 饲养繁育）
     const targetAnimal = raycastTargetEntity(origin, dir, animals, 4.2, blockDist, 0.55, 1.2);
     if (targetAnimal) {
@@ -11121,6 +11667,9 @@ function animate() {
     updateVillagers(dt);
     updatePillagers(dt);
     updateRavagers(dt);
+    updateHorses(dt);
+    updateWolves(dt);
+    updateXpOrbs(dt);
     updateGlowingSystem(dt);
     updateRaids(dt);
     updateWanderingTrader(dt);
