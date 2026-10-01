@@ -11543,14 +11543,20 @@ function buildInventory() {
     slot.addEventListener('click', () => { select(i); buildInventory(); });
     invHotbar.appendChild(slot);
   }
-  invSlotNum.textContent = selected + 1;
+  if (invSlotNum) invSlotNum.textContent = selected + 1;
 }
 function openInventory() {
   if (!started) return;
   inventoryOpen = true;
-  buildInventory();
+  try {
+    buildInventory();
+  } catch (err) {
+    console.error('buildInventory error:', err);
+  }
   refreshOverlays();
-  document.exitPointerLock();
+  if (document.pointerLockElement) {
+    document.exitPointerLock();
+  }
 }
 function closeInventory() {
   inventoryOpen = false;
