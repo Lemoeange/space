@@ -349,7 +349,7 @@
       <span><b>鼠标</b> 视角</span>
       <span><b>空格</b> 跳跃 / 骑马腾跃</span>
       <span><b>Shift</b> 潜行 / 骑马下马</span>
-      <span><b>F</b> 飞行模式</span>
+      <span><b>F</b> 创造模式</span>
       <span><b>Ctrl</b> 疾跑</span>
       <span><b>E</b> 背包 / 合成</span>
       <span><b>1-9</b> 选择物品栏</span>
@@ -470,7 +470,8 @@ const B = {
   ENDER_PEARL:107, COBWEB:108, STRING:109,
   FISHING_ROD:110, SPIDER_EYE:111, EMERALD:112, TOTEM_OF_UNDYING:113, SPECTRAL_ARROW:114,
   SADDLE:115, BUCKET:116, WATER_BUCKET:117, CROSSBOW:118,
-  SHEARS:119, FLINT_AND_STEEL:120
+  SHEARS:119, FLINT_AND_STEEL:120,
+  MAPLE_LOG:121, SAPLING:122, MAPLE_SAPLING:123, CHERRY_SAPLING:124
 };
 
 function mulberry32(a) {
@@ -740,7 +741,7 @@ const { HEIGHT, SEA, B, mulberry32, surfaceHeight, isCave, oreFor, oreNoise, bio
 /* ============================ 常量 ============================ */
 const CHUNK = 16;
 const TILE = 16;
-const ATLAS_TILES = 92;
+const ATLAS_TILES = 100;
 const ATLAS_W = ATLAS_TILES * TILE;
 const AO_LEVELS = [0.55, 0.7, 0.85, 1.0];
 const VIEW_R = 10;        // 视距（chunk 半径，每格 16 块）
@@ -783,6 +784,8 @@ function makeAtlas() {
   T.campfireTop = i++; T.campfireSide = i++;
   T.doorTop = i++; T.doorBottom = i++;
   T.cobweb = i++;
+  T.mapleLogSide = i++; T.mapleLogTop = i++;
+  T.sapling = i++; T.mapleSapling = i++; T.cherrySapling = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -1172,21 +1175,7 @@ function makeAtlas() {
     else put(T.furnace, x, y, 250, 92, 36);
   }
   /* ===== 材质统一打磨：只叠加/覆盖像素，不增删图块，图集结构与图层索引不变 ===== */
-  // 1) 树叶精致透光镂空点阵（85% 丰满叶冠不透明度，约 15% 错落斑驳透光孔）
-  const allLeafTiles = [
-    T.leaves, T.birchLeaves, T.spruceLeaves, T.jungleLeaves, T.acaciaLeaves, T.cherryLeaves, T.mapleLeaves
-  ];
-  allLeafTiles.forEach((tile, k) => {
-    speck(tile, [24, 76, 22], 24, 31 + k * 5);
-    const r = rng(tile, 88);
-    for (let y = 0; y < TILE; y++) {
-      for (let x = 0; x < TILE; x++) {
-        const isCutout = (((x ^ y) & 3) === 0 && r() < 0.60);
-        if (isCutout) put(tile, x, y, 0, 0, 0, 0); // alpha = 0 透光镂空孔隙（85% 实体度）
-      }
-    }
-  });
-  // 2) 石头系：补暗点/亮点，去掉"塑料感"
+  // 1) 石头系：补暗点/亮点，去掉"塑料感"
   speck(T.cobble, [88, 88, 88], 36, 61);
   speck(T.cobble, [172, 172, 172], 20, 63);
   speck(T.stoneBrick, [84, 84, 84], 26, 65);
@@ -1858,6 +1847,62 @@ function makeAtlas() {
   put(T.cobweb, 4, 4, 255, 255, 255, 240);
   put(T.cobweb, 11, 4, 255, 255, 255, 240);
 
+  // —— 枫木树干（枫树专属暗红深褐色树皮与温润木质顶芯）——
+  fill(T.mapleLogSide, [86, 52, 36], 12, 125);
+  for (let x = 0; x < TILE; x += 3) for (let y = 0; y < TILE; y++) put(T.mapleLogSide, x, y, 54, 30, 20);
+  speck(T.mapleLogSide, [128, 78, 48], 14, 126);
+  fill(T.mapleLogTop, [192, 136, 78], 10, 127);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const r = Math.hypot(x - 7.5, y - 7.5);
+    if (Math.round(r) % 2 === 0) put(T.mapleLogTop, x, y, 148, 96, 50);
+  }
+  put(T.mapleLogTop, 7, 7, 122, 70, 32); put(T.mapleLogTop, 8, 7, 122, 70, 32);
+  put(T.mapleLogTop, 7, 8, 122, 70, 32); put(T.mapleLogTop, 8, 8, 122, 70, 32);
+
+  // —— 树苗贴图绘制器（十字面透明背景小树苗：嫩茎 + 幼叶团簇）——
+  const drawSaplingTile = (tile, leafColors, stemColor) => {
+    // 树苗小木质主茎
+    for (let y = 1; y < 8; y++) {
+      put(tile, 7, y, stemColor[0], stemColor[1], stemColor[2], 255);
+      put(tile, 8, y, Math.max(0, stemColor[0] - 18), Math.max(0, stemColor[1] - 12), Math.max(0, stemColor[2] - 6), 255);
+    }
+    // 幼芽叶簇
+    const leafOffsets = [
+      [6, 4], [7, 4], [8, 4], [9, 4],
+      [5, 5], [6, 5], [7, 5], [8, 5], [9, 5], [10, 5],
+      [4, 6], [5, 6], [6, 6], [7, 6], [8, 6], [9, 6], [10, 6], [11, 6],
+      [4, 7], [5, 7], [6, 7], [7, 7], [8, 7], [9, 7], [10, 7], [11, 7],
+      [5, 8], [6, 8], [7, 8], [8, 8], [9, 8], [10, 8],
+      [6, 9], [7, 9], [8, 9], [9, 9],
+      [7, 10], [8, 10]
+    ];
+    for (const [lx, ly] of leafOffsets) {
+      const c = leafColors[(lx + ly * 3) % leafColors.length];
+      put(tile, lx, ly, c[0], c[1], c[2], 255);
+    }
+  };
+  // 1. 经典橡树树苗
+  drawSaplingTile(T.sapling, [[72, 160, 48], [56, 134, 38], [96, 192, 60], [112, 210, 72]], [110, 72, 38]);
+  // 2. 枫树树苗（秋季枫红/明橙）
+  drawSaplingTile(T.mapleSapling, [[212, 64, 34], [168, 32, 26], [246, 134, 36], [255, 202, 54]], [86, 52, 36]);
+  // 3. 樱花树苗（粉嫩樱花幼株）
+  drawSaplingTile(T.cherrySapling, [[248, 162, 186], [236, 134, 164], [255, 210, 226], [220, 110, 142]], [90, 52, 48]);
+
+  // —— 全树叶 85% 丰满度精致镂空最终通道（包括枫树叶、樱花树叶等全部 7 种树叶，确保无一漏网）——
+  const allLeafTiles = [
+    T.leaves, T.birchLeaves, T.spruceLeaves, T.jungleLeaves, T.acaciaLeaves, T.cherryLeaves, T.mapleLeaves
+  ];
+  allLeafTiles.forEach((tile, k) => {
+    speck(tile, [24, 76, 22], 24, 31 + k * 5);
+    const r = rng(tile, 88);
+    for (let y = 0; y < TILE; y++) {
+      for (let x = 0; x < TILE; x++) {
+        const isCutout = (((x ^ y) & 3) === 0 && r() < 0.60);
+        if (isCutout) put(tile, x, y, 0, 0, 0, 0); // alpha = 0 透光镂空孔隙（85% 实体度）
+      }
+    }
+  });
+
   ctx.putImageData(img, 0, 0);
   // 3D 渲染改用 2D 纹理数组（每 tile 独立一层，配合 RepeatWrapping 可让单个 tile 跨大四边形循环）
   const layers = ATLAS_TILES;
@@ -1958,6 +2003,10 @@ function tileOf(id) {
     case B.COBWEB: return { top: atlas.T.cobweb, side: atlas.T.cobweb, bottom: atlas.T.cobweb };
     case B.WHEAT_CROP: return { top: atlas.T.wheatCrop, side: atlas.T.wheatCrop, bottom: atlas.T.wheatCrop };
     case B.WHEAT_CROP_MATURE: return { top: atlas.T.wheatMature, side: atlas.T.wheatMature, bottom: atlas.T.wheatMature };
+    case B.MAPLE_LOG: return { top: atlas.T.mapleLogTop, side: atlas.T.mapleLogSide, bottom: atlas.T.mapleLogTop };
+    case B.SAPLING: return { top: atlas.T.sapling, side: atlas.T.sapling, bottom: atlas.T.sapling };
+    case B.MAPLE_SAPLING: return { top: atlas.T.mapleSapling, side: atlas.T.mapleSapling, bottom: atlas.T.mapleSapling };
+    case B.CHERRY_SAPLING: return { top: atlas.T.cherrySapling, side: atlas.T.cherrySapling, bottom: atlas.T.cherrySapling };
     default: return { top: atlas.T.stone, side: atlas.T.stone, bottom: atlas.T.stone };
   }
 }
@@ -2646,48 +2695,48 @@ class World {
         if (oasis && surf >= SEA && surf <= SEA + 2 && surf + 1 < HEIGHT) {
           if (plantHash(wx * 7 + 1, wz * 11 + 3) < 0.15) c.blocks[surf * 256 + lz * 16 + lx] = B.SAND;
         }
-        // 针叶林地表植被：蕨与高草（密度减半）
+        // 针叶林地表植被：蕨与高草（密度再度减半，更开阔疏朗）
         if (taiga && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const pr = plantHash(wx * 11 + 3, wz * 17 + 7);
-          if (pr < 0.04) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.022 ? B.FERN : B.GRASS_TALL);
+          if (pr < 0.02) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.011 ? B.FERN : B.GRASS_TALL);
         }
-        // 黑森林林下菌类（密度减半）
+        // 黑森林林下菌类（密度再度减半）
         if (darkForest && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const pr = plantHash(wx * 7 + 5, wz * 13 + 3);
-          if (pr < 0.02) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.01 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
-          else if (pr < 0.04) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.GRASS_TALL;
+          if (pr < 0.01) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.005 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
+          else if (pr < 0.02) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.GRASS_TALL;
         }
-        // 沙漠仙人掌（仅长在沙子上，密度减半）
+        // 沙漠仙人掌（仅长在沙子上，密度再度减半）
         if (desert && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.SAND) {
           const pr = plantHash(wx, wz);
-          if (pr < 0.0025) {
+          if (pr < 0.0012) {
             const h = 1 + ((plantHash(wx + 7, wz) * 3) | 0);
             for (let k = 1; k <= h && surf + k < HEIGHT; k++)
               c.blocks[(surf + k) * 256 + lz * 16 + lx] = B.CACTUS;
           }
         }
-        // 花海：成片花毯（密度减半，开阔浪漫）
+        // 花海：成片花毯（密度再度减半，纯净开阔自然）
         if (flowerField && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const pr = plantHash(wx * 5 + 3, wz * 9 + 1);
-          if (pr < 0.11) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.055 ? B.FLOWER_YELLOW : B.FLOWER_RED);
+          if (pr < 0.055) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.028 ? B.FLOWER_YELLOW : B.FLOWER_RED);
         }
-        // 樱花林：地表落英花毯与粉色花簇（密度减半）
+        // 樱花林：地表落英花毯与粉色花簇（密度再度减半）
         if (cherryGrove && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const pr = plantHash(wx * 7 + 3, wz * 11 + 5);
-          if (pr < 0.07) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.05 ? B.CHERRY_PETALS : B.FLOWER_RED);
+          if (pr < 0.035) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.025 ? B.CHERRY_PETALS : B.FLOWER_RED);
         }
-        // 竹林：挺拔青竹群落（密度减半，仅限草地/泥土）
+        // 竹林：挺拔青竹群落（密度再度减半，仅限草地/泥土）
         if (bambooJungle && surf > SEA && surf + 1 < HEIGHT) {
           const groundB = c.blocks[surf * 256 + lz * 16 + lx];
           if (groundB === B.GRASS || groundB === B.DIRT) {
             const pr = plantHash(wx * 5 + 7, wz * 7 + 11);
-            if (pr < 0.032) {
+            if (pr < 0.016) {
               const bh = 5 + Math.floor(plantHash(wx * 3 + 1, wz * 3 + 2) * 7);
               for (let k = 1; k <= bh && surf + k < HEIGHT; k++) {
                 c.blocks[(surf + k) * 256 + lz * 16 + lx] = B.BAMBOO;
               }
-            } else if (pr < 0.08) {
-              c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.05 ? B.FERN : B.GRASS_TALL);
+            } else if (pr < 0.04) {
+              c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.025 ? B.FERN : B.GRASS_TALL);
             }
           }
         }
@@ -2697,21 +2746,21 @@ class World {
             c.blocks[surf * 256 + lz * 16 + lx] = B.MAGMA;
           }
         }
-        // 田园麦原：成片金黄野生小麦与雏菊（干草垛不在野外散落，改为村庄附近成堆出现）
+        // 田园麦原：成片金黄野生小麦与雏菊（密度减半）
         if (meadow && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const pr = plantHash(wx * 11 + 7, wz * 13 + 1);
-          if (pr < 0.08) {
-            c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.05 ? B.WHEAT_CROP_MATURE : B.FLOWER_YELLOW);
-          } else if (pr < 0.13) {
+          if (pr < 0.04) {
+            c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.025 ? B.WHEAT_CROP_MATURE : B.FLOWER_YELLOW);
+          } else if (pr < 0.065) {
             c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.GRASS_TALL;
           }
         }
-        // 枫树林地表：秋花、高草与丰收南瓜（密度减半）
+        // 枫树林地表：秋花、高草与丰收南瓜（密度再度减半）
         if (mapleForest && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const pr = plantHash(wx * 7 + 2, wz * 9 + 4);
-          if (pr < 0.08) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.04 ? B.FLOWER_RED : B.FLOWER_YELLOW);
-          else if (pr < 0.12) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.GRASS_TALL;
-          else if (pr < 0.13) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.PUMPKIN;
+          if (pr < 0.04) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.02 ? B.FLOWER_RED : B.FLOWER_YELLOW);
+          else if (pr < 0.06) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.GRASS_TALL;
+          else if (pr < 0.065) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.PUMPKIN;
         }
         // 极地冰川：海冰封冻（水面冻结成厚冰块）
         if (frozenGlacier && surf <= SEA) {
@@ -2722,23 +2771,23 @@ class World {
             }
           }
         }
-        // 丛林与竹林：野生西瓜群落（密度减半）
+        // 丛林与竹林：野生西瓜群落（密度再度减半）
         if ((bm === 8 || bm === 19) && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const prMelon = plantHash(wx * 13 + 7, wz * 17 + 3);
-          if (prMelon < 0.008) {
+          if (prMelon < 0.004) {
             c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.MELON;
           }
         }
-        // 地表花草/蕨/南瓜（仅草地；花海、樱花林、竹林、枫树林、田园麦原走专用规则，密度减半）
+        // 地表花草/蕨/南瓜（仅草地；花海、樱花林、竹林、枫树林、田园麦原走专用规则，密度再度减半）
         if (!flowerField && !cherryGrove && !bambooJungle && !mapleForest && !meadow && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const lush = bm === 8 ? 2.4 : (bm === 6 ? 1.8 : 1);   // 丛林/热带草原植被更密
           const pr = plantHash(wx, wz);
           const pr2 = plantHash(wx + 9, wz + 4);
-          if (pr2 < 0.0025 * lush) {
+          if (pr2 < 0.0012 * lush) {
             c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.PUMPKIN;
-          } else if (pr < 0.025 * lush) {
-            const fern = bm === 8 ? 0.022 : 0.012;
-            const kind = pr < 0.01 * lush ? B.GRASS_TALL : (pr < fern ? B.FERN : (pr < 0.019 * lush ? B.FLOWER_YELLOW : B.FLOWER_RED));
+          } else if (pr < 0.0125 * lush) {
+            const fern = bm === 8 ? 0.011 : 0.006;
+            const kind = pr < 0.005 * lush ? B.GRASS_TALL : (pr < fern ? B.FERN : (pr < 0.0095 * lush ? B.FLOWER_YELLOW : B.FLOWER_RED));
             c.blocks[(surf + 1) * 256 + lz * 16 + lx] = kind;
           }
         }
@@ -2754,16 +2803,16 @@ class World {
             }
           }
         }
-        // 蘑菇岛：蘑菇成片生长（密度减半）
+        // 蘑菇岛：蘑菇成片生长（密度再度减半）
         if (mushroom && surf > SEA && surf + 1 < HEIGHT) {
           const gb = c.blocks[surf * 256 + lz * 16 + lx];
           if (gb === B.MOSSY || gb === B.GRASS) {
             const patch = plantHash(Math.floor(wx / 6) * 7 + 1, Math.floor(wz / 6) * 13 + 3);
             const pr = plantHash(wx * 3 + 11, wz * 7 + 5);
-            if (patch < 0.55 && pr < 0.11) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.055 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
+            if (patch < 0.45 && pr < 0.055) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.028 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
           }
         }
-        // 甘蔗（沙/土/草 + 邻水，近海平面，密度减半）
+        // 甘蔗（沙/土/草 + 邻水，近海平面，密度再度减半）
         if (surf > SEA && surf <= SEA + 2 && surf + 1 < HEIGHT) {
           const sid = c.blocks[surf * 256 + lz * 16 + lx];
           if (sid === B.SAND || sid === B.DIRT || sid === B.GRASS) {
@@ -2773,7 +2822,7 @@ class World {
             }
             if (nearWater) {
               const pr = plantHash(wx * 7 + 3, wz * 13 + 5);
-              if (pr < 0.02) {
+              if (pr < 0.01) {
                 const h = 2 + ((plantHash(wx + 3, wz) * 3) | 0);
                 for (let k = 1; k <= h && surf + k < HEIGHT; k++)
                   c.blocks[(surf + k) * 256 + lz * 16 + lx] = B.SUGARCANE;
@@ -2820,7 +2869,7 @@ class World {
             }
             if (nearLand) {
               const lp = plantHash(wx * 13 + 7, wz * 17 + 3);
-              if (lp < 0.0125) c.blocks[SEA * 256 + lz * 16 + lx] = B.LILY_PAD;
+              if (lp < 0.006) c.blocks[SEA * 256 + lz * 16 + lx] = B.LILY_PAD;
             }
           }
         }
@@ -3133,7 +3182,7 @@ function plantTrees(c) {
       if (bm === 4) { log = B.SPRUCE_LOG; leaf = B.SPRUCE_LEAVES; prob = 0.004; spruce = true; }   // 雪地：降低云杉长树概率至 0.004
       else if (bm === 15) { log = B.SPRUCE_LOG; leaf = B.SPRUCE_LEAVES; prob = 0.024; spruce = true; } // 针叶林：高大云杉群
       else if (bm === 18) { log = B.CHERRY_LOG; leaf = B.CHERRY_LEAVES; prob = 0.0105; cherry = true; } // 樱花林：专属樱花树干
-      else if (bm === 21) { log = B.LOG; leaf = B.MAPLE_LEAVES; prob = 0.022; maple = true; }          // 枫树林：秋季火红/金黄枫树
+      else if (bm === 21) { log = B.MAPLE_LOG; leaf = B.MAPLE_LEAVES; prob = 0.022; maple = true; }          // 枫树林：秋季火红/金黄枫树与专属枫木树干
       else if (bm === 23) { prob = 0.003; }                                                          // 田园麦原：极为开阔，偶有稀疏老橡树
       else if (bm === 19) { log = B.JUNGLE_LOG; leaf = B.JUNGLE_LEAVES; prob = 0.006; }             // 竹林：伴生稀疏丛林大树
       else if (bm === 16) { log = B.JUNGLE_LOG; leaf = B.JUNGLE_LEAVES; prob = 0.013; }             // 沙漠绿洲：热带棕榈树感
@@ -3202,6 +3251,68 @@ function plantTrees(c) {
           }
         }
       }
+    }
+  }
+}
+
+// —— 树苗自然生长与骨粉催熟系统 ——
+const plantedSaplings = new Map();
+
+function growTree(wx, surf, wz, saplingId) {
+  let log = B.LOG, leaf = B.LEAVES, cherry = false, maple = false;
+  if (saplingId === B.MAPLE_SAPLING) {
+    log = B.MAPLE_LOG; leaf = B.MAPLE_LEAVES; maple = true;
+  } else if (saplingId === B.CHERRY_SAPLING) {
+    log = B.CHERRY_LOG; leaf = B.CHERRY_LEAVES; cherry = true;
+  }
+
+  if (cherry || maple) {
+    const h = 5 + Math.floor(Math.random() * 2);
+    for (let y = surf + 1; y <= surf + h; y++) {
+      world.setBlock(wx, y, wz, log);
+    }
+    const top = surf + h;
+    for (let ly = top - 2; ly <= top + 1; ly++) {
+      const r = (ly === top + 1) ? 2 : (ly === top ? 3 : 2);
+      for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
+        if (dx * dx + dz * dz > r * r + 1) continue;
+        const cur = world.getBlock(wx + dx, ly, wz + dz);
+        if (cur === B.AIR || isCrossPlant(cur) || isPetals(cur) || isLeaf(cur)) {
+          world.setBlock(wx + dx, ly, wz + dz, leaf);
+        }
+      }
+    }
+  } else {
+    // 经典橡树
+    const h = 4 + Math.floor(Math.random() * 3);
+    for (let y = surf + 1; y <= surf + h; y++) {
+      world.setBlock(wx, y, wz, log);
+    }
+    const top = surf + h;
+    for (let ly = top - 2; ly <= top + 1; ly++) {
+      const r = (ly >= top) ? 1 : 2;
+      for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
+        if (dx * dx + dz * dz > r * r + 1) continue;
+        const cur = world.getBlock(wx + dx, ly, wz + dz);
+        if (cur === B.AIR || isCrossPlant(cur) || isPetals(cur) || isLeaf(cur)) {
+          world.setBlock(wx + dx, ly, wz + dz, leaf);
+        }
+      }
+    }
+  }
+  spawnParticles(wx + 0.5, surf + 2, wz + 0.5, 0x80ff20, 28);
+  enqueueAround(wx, surf + 2, wz);
+  playGrow();
+}
+
+function updatePlantedSaplings() {
+  const now = performance.now();
+  for (const [key, s] of plantedSaplings.entries()) {
+    if (now >= s.growAt) {
+      if (world.getBlock(s.x, s.y, s.z) === s.id) {
+        growTree(s.x, s.y - 1, s.z, s.id);
+      }
+      plantedSaplings.delete(key);
     }
   }
 }
@@ -3829,6 +3940,7 @@ const BLOCK_COLORS = {
   [B.FISHING_ROD]: 0x8a5228, [B.SPIDER_EYE]: 0xa01828, [B.EMERALD]: 0x17dd62, [B.TOTEM_OF_UNDYING]: 0xf5c827, [B.SPECTRAL_ARROW]: 0xffea00,
   [B.SADDLE]: 0x8d5b32, [B.BUCKET]: 0xd8dcde, [B.WATER_BUCKET]: 0x2277bb, [B.CROSSBOW]: 0x8a623c,
   [B.SHEARS]: 0xdcdde1, [B.FLINT_AND_STEEL]: 0x8a9298,
+  [B.MAPLE_LOG]: 0x583626, [B.SAPLING]: 0x48982a, [B.MAPLE_SAPLING]: 0xd44022, [B.CHERRY_SAPLING]: 0xf492b4,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -7139,6 +7251,7 @@ const horseTailGeo = new THREE.BoxGeometry(0.12, 0.65, 0.12);
 const horseSaddleGeo = new THREE.BoxGeometry(0.74, 0.22, 0.70);
 
 function playGallop() {
+  if (player.fly) return;
   tone(90, 60, 0.06, 'triangle', 0.22);
   setTimeout(() => tone(110, 70, 0.05, 'triangle', 0.18), 80);
 }
@@ -9362,9 +9475,10 @@ const mouse = { dx: 0, dy: 0, down: [false, false, false] };
 function playerAABB(pos) {
   return { minX: pos.x - player.halfW, maxX: pos.x + player.halfW, minY: pos.y, maxY: pos.y + player.height, minZ: pos.z - player.halfW, maxZ: pos.z + player.halfW };
 }
-function isCrossPlant(id) { return id === B.FLOWER_RED || id === B.FLOWER_YELLOW || id === B.GRASS_TALL || id === B.MUSHROOM_RED || id === B.MUSHROOM_BROWN || id === B.FERN || id === B.WHEAT_CROP || id === B.WHEAT_CROP_MATURE || id === B.BAMBOO || id === B.SUGARCANE || id === B.COBWEB; }
+function isCrossPlant(id) { return id === B.FLOWER_RED || id === B.FLOWER_YELLOW || id === B.GRASS_TALL || id === B.MUSHROOM_RED || id === B.MUSHROOM_BROWN || id === B.FERN || id === B.WHEAT_CROP || id === B.WHEAT_CROP_MATURE || id === B.BAMBOO || id === B.SUGARCANE || id === B.COBWEB || isSapling(id); }
 function isPetals(id) { return id === B.CHERRY_PETALS; }
-function isLog(id) { return id === B.LOG || id === B.BIRCH_LOG || id === B.SPRUCE_LOG || id === B.JUNGLE_LOG || id === B.ACACIA_LOG || id === B.CHERRY_LOG; }
+function isSapling(id) { return id === B.SAPLING || id === B.MAPLE_SAPLING || id === B.CHERRY_SAPLING; }
+function isLog(id) { return id === B.LOG || id === B.BIRCH_LOG || id === B.SPRUCE_LOG || id === B.JUNGLE_LOG || id === B.ACACIA_LOG || id === B.CHERRY_LOG || id === B.MAPLE_LOG; }
 function isLeaf(id) { return id === B.LEAVES || id === B.BIRCH_LEAVES || id === B.SPRUCE_LEAVES || id === B.JUNGLE_LEAVES || id === B.ACACIA_LEAVES || id === B.CHERRY_LEAVES || id === B.MAPLE_LEAVES; }
 function isTorch(id) { return id === B.TORCH; }
 function isLilyPad(id) { return id === B.LILY_PAD; }
@@ -9812,6 +9926,7 @@ function playPlace(id) {
 }
 /* 脚步声：8-bit 颗粒点跳感 */
 function playStep(matId, inWater, isRightFoot) {
+  if (player.fly) return; // 创造/飞行模式完全静音，绝无走路声
   if (inWater) {
     burst(0.04, 0.035, isRightFoot ? 750 : 700, 'lowpass');
     return;
@@ -9833,9 +9948,11 @@ function playStep(matId, inWater, isRightFoot) {
   }
 }
 function playJump() {
+  if (player.fly) return;
   tone(160, 320, 0.06, 'triangle', 0.06);
 }
 function playLand(matId) {
+  if (player.fly) return;
   burst(0.045, 0.045, 360, 'lowpass');
   tone(120, 60, 0.05, 'triangle', 0.06);
 }
@@ -10041,6 +10158,7 @@ const NAMES = {
   [B.EMERALD]: '绿宝石', [B.TOTEM_OF_UNDYING]: '不死图腾', [B.SPECTRAL_ARROW]: '光灵箭',
   [B.SADDLE]: '马鞍', [B.BUCKET]: '铁桶', [B.WATER_BUCKET]: '水桶', [B.CROSSBOW]: '机械弩',
   [B.SHEARS]: '剪刀', [B.FLINT_AND_STEEL]: '打火石',
+  [B.MAPLE_LOG]: '枫木原木', [B.SAPLING]: '橡树树苗', [B.MAPLE_SAPLING]: '枫树树苗', [B.CHERRY_SAPLING]: '樱花树苗',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 // —— 食物：恢复饥饿值 ——
@@ -10059,6 +10177,7 @@ const RECIPES = [
   { out: B.PLANKS, n: 4, need: [[B.JUNGLE_LOG, 1]] },
   { out: B.PLANKS, n: 4, need: [[B.ACACIA_LOG, 1]] },
   { out: B.PLANKS, n: 4, need: [[B.CHERRY_LOG, 1]] },
+  { out: B.PLANKS, n: 4, need: [[B.MAPLE_LOG, 1]] },
   { out: B.STICK, n: 4, need: [[B.PLANKS, 2]] },
   { out: B.TORCH, n: 4, need: [[B.COAL, 1], [B.STICK, 1]] },
   { out: B.WOOD_PICKAXE, n: 1, need: [[B.PLANKS, 3], [B.STICK, 2]] },
@@ -11247,7 +11366,7 @@ document.addEventListener('mousemove', (e) => {
 const HARDNESS = {
   [B.GRASS]: 0.4, [B.DIRT]: 0.4, [B.SAND]: 0.4, [B.GRAVEL]: 0.5,
   [B.STONE]: 1.5, [B.COBBLE]: 2.0, [B.STONE_BRICK]: 2.0, [B.MOSSY]: 2.0,
-  [B.LOG]: 1.0, [B.BIRCH_LOG]: 1.0, [B.SPRUCE_LOG]: 1.0, [B.JUNGLE_LOG]: 1.0, [B.ACACIA_LOG]: 1.0, [B.CHERRY_LOG]: 1.0,
+  [B.LOG]: 1.0, [B.BIRCH_LOG]: 1.0, [B.SPRUCE_LOG]: 1.0, [B.JUNGLE_LOG]: 1.0, [B.ACACIA_LOG]: 1.0, [B.CHERRY_LOG]: 1.0, [B.MAPLE_LOG]: 1.0,
   [B.LEAVES]: 0.2, [B.BIRCH_LEAVES]: 0.2, [B.SPRUCE_LEAVES]: 0.2, [B.JUNGLE_LEAVES]: 0.2, [B.ACACIA_LEAVES]: 0.2,
   [B.PLANKS]: 1.0, [B.BRICK]: 1.5, [B.SANDSTONE]: 1.2, [B.QUARTZ]: 1.5,
   [B.SNOW]: 0.3, [B.GLASS]: 0.3, [B.CACTUS]: 0.5, [B.SUGARCANE]: 0.2,
@@ -11263,6 +11382,7 @@ const HARDNESS = {
   [B.GLOWSTONE]: 0.3, [B.EGG]: 0.1,
   [B.COAL_BLOCK]: 2.0, [B.IRON_BLOCK]: 3.0, [B.GOLD_BLOCK]: 2.5, [B.DIAMOND_BLOCK]: 3.5,
   [B.TNT]: 0, [B.SNOWBALL]: 0.1, [B.CHEST]: 1.5, [B.CAMPFIRE]: 1.2, [B.DOOR]: 1.5, [B.COBWEB]: 0.15,
+  [B.SAPLING]: 0.1, [B.MAPLE_SAPLING]: 0.1, [B.CHERRY_SAPLING]: 0.1,
 };
 function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
 // 破坏掉落物
@@ -11382,7 +11502,16 @@ function updateBreaking(dt) {
       }
     }
     let drop = dropOf(bid);                       // 掉落物
-    if (drop === null && isLeaf(bid) && Math.random() < 0.08) drop = B.APPLE;   // 树叶偶尔掉苹果
+    if (isLeaf(bid)) {
+      // 破坏树叶概率掉落对应树苗（12% 掉落率，种植后长成大树）
+      if (Math.random() < 0.12) {
+        let sapDrop = B.SAPLING;
+        if (bid === B.MAPLE_LEAVES) sapDrop = B.MAPLE_SAPLING;
+        else if (bid === B.CHERRY_LEAVES) sapDrop = B.CHERRY_SAPLING;
+        dropItem(sapDrop, bx, by, bz);
+      }
+      if (Math.random() < 0.05) drop = B.APPLE;   // 偶尔掉落美味红苹果
+    }
     if (drop !== null && drop !== undefined) dropItem(drop, bx, by, bz);
     if (bid === B.MELON) {                        // 西瓜打碎掉落 2~4 块西瓜切片
       dropItem(B.MELON_SLICE, bx, by, bz);
@@ -11449,7 +11578,11 @@ document.addEventListener('contextmenu', (e) => e.preventDefault());
 let isZooming = false;
 document.addEventListener('keydown', (e) => {
   keys[e.code] = true;
-  if (e.code === 'KeyF') { player.fly = !player.fly; player.vel.y = 0; }
+  if (e.code === 'KeyF') {
+    player.fly = !player.fly;
+    player.vel.y = 0;
+    toast(player.fly ? '✨ 已开启创造模式（自由翱翔，无伤害）' : '🚶 已切换为生存模式');
+  }
   if (e.code === 'KeyN') { timeOfDay = 0.24; }                 // 跳到白天
   if (e.code === 'KeyE') {
     if (tradeOpen) { closeTradeUI(); return; }
@@ -11982,6 +12115,17 @@ function onMousedown(btn) {
       }
     }
 
+    // 准星右键已种植树苗：手持骨粉（BONE）瞬间催熟长成参天大树
+    if (hit && isSapling(hit.id) && sel && sel.id === B.BONE) {
+      if (!player.fly) removeItem(B.BONE, 1);
+      const sapId = hit.id, sx = hit.x, sy = hit.y, sz = hit.z;
+      world.setBlock(sx, sy, sz, B.AIR);
+      growTree(sx, sy - 1, sz, sapId);
+      plantedSaplings.delete(`${sx},${sy},${sz}`);
+      toast('🌱 骨粉滋养！树苗瞬间长成了参天大树！');
+      return;
+    }
+
     // 4. 手持食物进食（未对准任何交互方块与实体时）
     if (sel && isFood(sel.id)) {
       eat(sel);
@@ -12037,9 +12181,14 @@ function onMousedown(btn) {
     if (sid === B.BAMBOO && below !== B.GRASS && below !== B.DIRT && below !== B.BAMBOO) { toast('⚠️ 竹子只能种植在草地或泥土上'); return; }
     if (sid === B.SUGARCANE && below !== B.GRASS && below !== B.DIRT && below !== B.SAND && below !== B.SUGARCANE) { toast('⚠️ 甘蔗只能种植在泥土、草地或沙子上'); return; }
     if ((sid === B.FLOWER_RED || sid === B.FLOWER_YELLOW || sid === B.GRASS_TALL || sid === B.FERN || sid === B.CHERRY_PETALS) && below !== B.GRASS && below !== B.DIRT) { toast('⚠️ 花草只能种植在草地或泥土上'); return; }
+    if (isSapling(sid) && below !== B.GRASS && below !== B.DIRT && below !== B.SAND) { toast('⚠️ 树苗只能种植在泥土、草地或沙子上'); return; }
     if (sid === B.WATER) world.setWater(px, py, pz, 8);
     else world.setBlock(px, py, pz, sid);
     if (sid === B.TORCH || sid === B.JACK_O_LANTERN || sid === B.GLOWSTONE || sid === B.CAMPFIRE) addTorchLight(px, py, pz);
+    if (isSapling(sid)) {
+      plantedSaplings.set(`${px},${py},${pz}`, { x: px, y: py, z: pz, id: sid, growAt: performance.now() + 15000 + Math.random() * 15000 });
+      toast('🌱 树苗已播种入土，片刻后将长成大树（可用骨粉催熟）');
+    }
     spawnParticles(px, py, pz, blockColor(sid), 10);
     enqueueAround(px, py, pz);
     playPlace(sid);
@@ -12188,6 +12337,7 @@ function animate() {
     updateArrows(dt);
     if (bowCharging) bowChargeTime += dt;
     updateCrops(dt);
+    updatePlantedSaplings();
     // 昼夜推进（未进入游戏/暂停时冻结）
     timeOfDay = (timeOfDay + dt / DAY_LENGTH) % 1;
   }
@@ -12303,7 +12453,7 @@ function animate() {
     const facingNames = ['南', '西南', '西', '西北', '北', '东北', '东', '东南'];
     const facingIdx = Math.floor((((player.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4) + 0.5) % 8;
     const facingStr = facingNames[facingIdx];
-    hudMeta.textContent = `FPS ${fps} · 坐标 ${Math.round(player.pos.x)}, ${Math.round(player.pos.y)}, ${Math.round(player.pos.z)} · 朝向 ${facingStr} · ${biomeName} · 时间 ${clockStr} · ${player.fly ? '🚀 飞行' : '🚶 行走'}${submerged ? ' · 🫧 水下' : ''}`;
+    hudMeta.textContent = `FPS ${fps} · 坐标 ${Math.round(player.pos.x)}, ${Math.round(player.pos.y)}, ${Math.round(player.pos.z)} · 朝向 ${facingStr} · ${biomeName} · 时间 ${clockStr} · ${player.fly ? '✨ 创造' : '🚶 生存'}${submerged ? ' · 🫧 水下' : ''}`;
     fpsAcc = 0; fpsFrames = 0;
   }
 
