@@ -2691,13 +2691,11 @@ class World {
             c.blocks[surf * 256 + lz * 16 + lx] = B.MAGMA;
           }
         }
-        // 田园麦原：成片金黄野生小麦、捆扎干草垛与雏菊（密度减半）
+        // 田园麦原：成片金黄野生小麦与雏菊（干草垛不在野外散落，改为村庄附近成堆出现）
         if (meadow && surf > SEA && surf + 1 < HEIGHT && c.blocks[surf * 256 + lz * 16 + lx] === B.GRASS) {
           const pr = plantHash(wx * 11 + 7, wz * 13 + 1);
-          if (pr < 0.008) {
-            c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.HAY_BALE; // 自然干草垛
-          } else if (pr < 0.09) {
-            c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.06 ? B.WHEAT_CROP_MATURE : B.FLOWER_YELLOW);
+          if (pr < 0.08) {
+            c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.05 ? B.WHEAT_CROP_MATURE : B.FLOWER_YELLOW);
           } else if (pr < 0.13) {
             c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.GRASS_TALL;
           }
@@ -5731,7 +5729,9 @@ function updateIronGolems(dt) {
     g.attackCooldown -= dt;
     g.swingTimer = Math.max(0, g.swingTimer - dt * 4);
 
-    g.y = findEntityGround(g.x, g.y, g.z);
+    const targetGG = findEntityGround(g.x, g.y, g.z);
+    if (g.y > targetGG) g.y = Math.max(targetGG, g.y - 12 * dt);
+    else if (g.y < targetGG) g.y = Math.min(targetGG, g.y + 7 * dt);
 
     let target = null, minDist = 18;
     for (const z of zombies) {
@@ -5916,18 +5916,25 @@ const TRADER_TRADES = [
 
 function findEntityGround(x, currY, z) {
   const ix = Math.floor(x), iz = Math.floor(z);
-  const startY = Math.min(HEIGHT - 2, Math.floor(currY) + 1);
-  for (let y = startY; y >= Math.max(1, startY - 3); y--) {
+  const topG = findGround(ix, iz);
+  const floorY = Math.floor(currY);
+
+  // 从当前实体高度附近 (+1 到 -4) 寻找合法坚固立足点：
+  // 核心守则：
+  // 1. 脚下方块 b 必须坚实且不可为树叶、门、玻璃等 (isSolid && !isLeaf && b !== B.DOOR)
+  // 2. 实体躯干与头部空间 (y+1 与 y+2) 必须为空气或无碰撞方块，绝不把垂直墙壁、屋檐、吊灯等顶面算作地面！
+  for (let y = floorY + 1; y >= Math.max(1, floorY - 4); y--) {
     const b = world.getBlock(ix, y, iz);
-    if (isSolid(b) && b !== B.DOOR) {
-      return y + 1;
+    if (isSolid(b) && !isLeaf(b) && b !== B.DOOR) {
+      const up1 = world.getBlock(ix, y + 1, iz);
+      const up2 = world.getBlock(ix, y + 2, iz);
+      if ((!isSolid(up1) || up1 === B.DOOR) && !isSolid(up2)) {
+        return y + 1;
+      }
     }
   }
-  for (let y = startY - 4; y >= Math.max(1, startY - 8); y--) {
-    const b = world.getBlock(ix, y, iz);
-    if (isSolid(b) && b !== B.DOOR) return y + 1;
-  }
-  return currY;
+  // 若附近没有合法立足点（如踏空悬崖或跌落），直接回落到此纵列真实地表 topG，绝对根除浮空走路
+  return topG;
 }
 
 function spawnVillager(x, yOrProf, zOrNull = null, prof = 'farmer', isBaby = false) {
@@ -6004,7 +6011,12 @@ function spawnVillager(x, yOrProf, zOrNull = null, prof = 'farmer', isBaby = fal
 function updateVillagers(dt) {
   for (let i = villagers.length - 1; i >= 0; i--) {
     const v = villagers[i];
-    v.y = findEntityGround(v.x, v.y, v.z);
+    const targetG = findEntityGround(v.x, v.y, v.z);
+    if (v.y > targetG) {
+      v.y = Math.max(targetG, v.y - 12 * dt);
+    } else if (v.y < targetG) {
+      v.y = Math.min(targetG, v.y + 7 * dt);
+    }
 
     if (v.isBaby) {
       v.age -= dt;
@@ -6033,10 +6045,10 @@ function updateVillagers(dt) {
       const nx = v.x + Math.sin(v.heading) * spd * dt;
       const nz = v.z + Math.cos(v.heading) * spd * dt;
       const tg = findEntityGround(nx, v.y, nz);
-      if (Math.abs(tg - v.y) <= 1 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
+      if (Math.abs(tg - v.y) <= 1.05 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
         const headBlock = world.getBlock(Math.floor(nx), tg + 1, Math.floor(nz));
         if (!isSolid(headBlock) || headBlock === B.DOOR) {
-          v.x = nx; v.z = nz;
+          v.x = nx; v.z = nz; v.y = tg;
         }
       }
       if (Math.random() < 0.04) playVillagerHmm();
@@ -6054,15 +6066,17 @@ function updateVillagers(dt) {
         const nx = v.x + Math.sin(v.heading) * v.speed * dt;
         const nz = v.z + Math.cos(v.heading) * v.speed * dt;
         const tg = findEntityGround(nx, v.y, nz);
-        if (Math.abs(tg - v.y) <= 1 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
+        if (Math.abs(tg - v.y) <= 1.05 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
           const headBlock = world.getBlock(Math.floor(nx), tg + 1, Math.floor(nz));
           if (!isSolid(headBlock) || headBlock === B.DOOR) {
-            v.x = nx; v.z = nz;
+            v.x = nx; v.z = nz; v.y = tg;
           } else {
             v.isIdle = true;
+            v.heading += Math.PI * 0.5 + (Math.random() - 0.5);
           }
         } else {
           v.isIdle = true;
+          v.heading += Math.PI * 0.5 + (Math.random() - 0.5);
         }
       }
     }
@@ -6256,6 +6270,8 @@ function buildVillage(c) {
 
   // —— 道路地表自适应铺设与路基支撑 ——
   const pavePath = (x, z) => {
+    // 保护村庄中央水井与广场中心核心区（绝对不铺路覆盖破坏或堵塞水井）
+    if (x >= cx8 - 3 && x <= cx8 + 3 && z >= cz8 - 3 && z <= cz8 + 3) return;
     let sy = 0;
     for (let y = HEIGHT - 2; y >= 1; y--) {
       const b = world.getBlock(x, y, z);
@@ -6274,28 +6290,42 @@ function buildVillage(c) {
 
   // 1. 中央集市广场与水井金钟 (Town Plaza & Well)
   fillFoundation(cx8 - 4, cx8 + 4, cz8 - 4, cz8 + 4, gy, B.STONE_BRICK);
-  // 水井 (4x4)
+  // 原版经典敞开式水井 (4x4 外部，2x2 内部开阔泉水井道，严禁堵塞)
   for (let dz = -1; dz <= 2; dz++) {
     for (let dx = -1; dx <= 2; dx++) {
       const isEdge = (dx === -1 || dx === 2 || dz === -1 || dz === 2);
-      for (let y = gy - 3; y <= gy; y++) {
-        world.setBlock(cx8 + dx, y, cz8 + dz, isEdge ? B.COBBLE : B.AIR);
-        if (!isEdge && y <= gy - 1) world.setWater(cx8 + dx, y, cz8 + dz, 8);
+      // 井筒向下延伸深层水源井壁
+      for (let y = gy - 4; y <= gy; y++) {
+        if (isEdge || y === gy - 4) {
+          world.setBlock(cx8 + dx, y, cz8 + dz, B.COBBLE);
+        } else {
+          // 井道内部充盈清澈深水，上方直通空气
+          world.setBlock(cx8 + dx, y, cz8 + dz, y <= gy - 1 ? B.WATER : B.AIR);
+          if (y <= gy - 1) world.setWater(cx8 + dx, y, cz8 + dz, 8);
+        }
       }
-      if (isEdge) world.setBlock(cx8 + dx, gy + 1, cz8 + dz, B.COBBLE);
+      // 井沿（外圈圆石矮墙，内圈 2x2 保持完全通畅敞开）
+      world.setBlock(cx8 + dx, gy + 1, cz8 + dz, isEdge ? B.COBBLE : B.AIR);
     }
   }
+  // 4 根井角原木立柱与照明火把
   for (const [px, pz] of [[-1, -1], [-1, 2], [2, -1], [2, 2]]) {
     world.setBlock(cx8 + px, gy + 2, cz8 + pz, B.LOG);
     world.setBlock(cx8 + px, gy + 3, cz8 + pz, B.LOG);
     world.setBlock(cx8 + px, gy + 4, cz8 + pz, B.TORCH);
   }
+  // 井盖顶棚（悬在上方，保持开阔通透，中心悬挂黄金金钟）
   for (let dz = -1; dz <= 2; dz++) {
     for (let dx = -1; dx <= 2; dx++) {
       world.setBlock(cx8 + dx, gy + 4, cz8 + dz, B.COBBLE);
+      // 保证井棚内部净空无阻碍
+      if (dx !== -1 && dx !== 2 && dz !== -1 && dz !== 2) {
+        world.setBlock(cx8 + dx, gy + 2, cz8 + dz, B.AIR);
+        world.setBlock(cx8 + dx, gy + 3, cz8 + dz, B.AIR);
+      }
     }
   }
-  // 黄金村庄之钟
+  // 黄金村庄之钟（悬挂于水井顶棚下方中心）
   world.setBlock(cx8, gy + 3, cz8, B.GOLD_BLOCK);
   // 广场小营火与原木长椅
   world.setBlock(cx8 + 3, gy, cz8 + 2, B.CAMPFIRE);
@@ -6546,6 +6576,33 @@ function buildVillage(c) {
     world.setBlock(px, sy + 2, pz, B.TORCH);
   }
 
+  // 建立村庄自然干草垛堆群（原版风貌：在农田、粮仓与外围集聚成堆）
+  const spawnHayMound = (bx, bz, radius = 2) => {
+    for (let rz = -radius; rz <= radius; rz++) {
+      for (let rx = -radius; rx <= radius; rx++) {
+        const dist = Math.hypot(rx, rz);
+        if (dist > radius + 0.35) continue;
+        const px = bx + rx, pz = bz + rz;
+        let groundY = 0;
+        for (let y = HEIGHT - 2; y >= 1; y--) {
+          const b = world.getBlock(px, y, pz);
+          if (isSolid(b) && !isLeaf(b)) { groundY = y + 1; break; }
+        }
+        if (groundY <= SEA + 1) continue;
+        const maxH = dist < 0.9 ? 3 : (dist < 1.6 ? 2 : 1);
+        for (let h = 0; h < maxH; h++) {
+          world.setBlock(px, groundY + h, pz, B.HAY_BALE);
+        }
+        world.setBlock(px, groundY + maxH, pz, B.AIR);
+        world.setBlock(px, groundY + maxH + 1, pz, B.AIR);
+      }
+    }
+  };
+  // 在农田旁、粮仓后侧及牧场周边生成 3 处金黄错落的大型干草垛堆
+  spawnHayMound(farmX + 8, farmZ - 2, 2);
+  spawnHayMound(granX - 4, granZ + 2, 2);
+  spawnHayMound(ranX + 4, ranZ + 4, 2);
+
   // 10. 生成驻村守护者铁傀儡与村民（全部精准生成在开阔主干道和广场上，显式指定 gy，绝不出现在屋顶）
   spawnIronGolem(cx8 + 2.5, gy + 1, cz8 + 2.5);
 
@@ -6716,7 +6773,12 @@ function spawnCat(x, yOrBreed, zOrNull = null, breed = 'ginger', tamed = false) 
 function updateCats(dt) {
   for (let i = cats.length - 1; i >= 0; i--) {
     const c = cats[i];
-    c.y = findEntityGround(c.x, c.y, c.z);
+    const targetG = findEntityGround(c.x, c.y, c.z);
+    if (c.y > targetG) {
+      c.y = Math.max(targetG, c.y - 12 * dt);
+    } else if (c.y < targetG) {
+      c.y = Math.min(targetG, c.y + 7 * dt);
+    }
 
     if (c.tamed) {
       if (c.sitting) {
@@ -6731,12 +6793,15 @@ function updateCats(dt) {
       if (pDist > 16) {
         c.x = player.pos.x + (Math.random() - 0.5) * 2;
         c.z = player.pos.z + (Math.random() - 0.5) * 2;
+        c.y = findEntityGround(c.x, player.pos.y, c.z);
       } else if (pDist > 2.5) {
         c.heading = Math.atan2(player.pos.x - c.x, player.pos.z - c.z);
-        const nx = c.x + Math.sin(c.heading) * 2.2 * dt;
-        const nz = c.z + Math.cos(c.heading) * 2.2 * dt;
+        const nx = c.x + Math.sin(c.heading) * 2.4 * dt;
+        const nz = c.z + Math.cos(c.heading) * 2.4 * dt;
         const tg = findEntityGround(nx, c.y, nz);
-        if (Math.abs(tg - c.y) <= 1.2) { c.x = nx; c.z = nz; }
+        if (Math.abs(tg - c.y) <= 1.05 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
+          c.x = nx; c.z = nz; c.y = tg;
+        }
         c.isIdle = false;
       } else {
         c.isIdle = true;
@@ -6753,10 +6818,11 @@ function updateCats(dt) {
         const nx = c.x + Math.sin(c.heading) * c.speed * dt;
         const nz = c.z + Math.cos(c.heading) * c.speed * dt;
         const tg = findEntityGround(nx, c.y, nz);
-        if (Math.abs(tg - c.y) <= 1 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
-          c.x = nx; c.z = nz;
+        if (Math.abs(tg - c.y) <= 1.05 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
+          c.x = nx; c.z = nz; c.y = tg;
         } else {
           c.isIdle = true;
+          c.heading += Math.PI * 0.5 + (Math.random() - 0.5);
         }
       }
     }
@@ -6764,12 +6830,16 @@ function updateCats(dt) {
     c.g.position.set(c.x, c.y, c.z);
     c.g.rotation.y = c.heading + Math.PI;
 
-    c.phase += dt * (c.isIdle ? 2.0 : 6.0);
-    const swing = Math.sin(c.phase) * (c.isIdle ? 0.05 : 0.4);
+    c.phase += dt * (c.isIdle ? 1.5 : 6.5);
+    const swing = Math.sin(c.phase) * (c.isIdle ? 0.04 : 0.45);
+    // 真实四足对角步态：左前+右后同向，右前+左后反向
     c.legs.forEach((leg, idx) => {
-      leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
+      const quad = (idx === 0 || idx === 3) ? 1 : -1;
+      leg.rotation.x = swing * quad;
     });
-    c.tail.rotation.z = Math.sin(c.phase * 1.2) * 0.25;
+    c.body.position.y = 0.26 + (c.isIdle ? 0 : Math.abs(Math.sin(c.phase * 2)) * 0.02);
+    c.tail.rotation.y = Math.sin(c.phase) * 0.35;
+    c.tail.rotation.z = Math.sin(c.phase * 1.2) * 0.15;
   }
 }
 
@@ -6916,7 +6986,9 @@ function spawnWolf(x, y, z, tamed = false) {
 function updateWolves(dt) {
   for (let i = wolves.length - 1; i >= 0; i--) {
     const w = wolves[i];
-    w.y = findEntityGround(w.x, w.y, w.z);
+    const targetWG = findEntityGround(w.x, w.y, w.z);
+    if (w.y > targetWG) w.y = Math.max(targetWG, w.y - 12 * dt);
+    else if (w.y < targetWG) w.y = Math.min(targetWG, w.y + 7 * dt);
     w.attackCooldown -= dt;
 
     // 尾巴高度随剩余生命值动态升降（满血高高扬起，濒死下垂）
@@ -7062,7 +7134,9 @@ function updateHorses(dt) {
     const h = horses[i];
     if (player.ridingHorse === h) continue;
 
-    h.y = findEntityGround(h.x, h.y, h.z);
+    const targetHG = findEntityGround(h.x, h.y, h.z);
+    if (h.y > targetHG) h.y = Math.max(targetHG, h.y - 12 * dt);
+    else if (h.y < targetHG) h.y = Math.min(targetHG, h.y + 7 * dt);
     if (Math.random() < 0.015) h.heading += (Math.random() - 0.5) * 1.5;
 
     const nx = h.x + Math.sin(h.heading) * h.speed * dt;
@@ -7334,7 +7408,9 @@ function killRavager(i) {
 function updateRavagers(dt) {
   for (let i = ravagers.length - 1; i >= 0; i--) {
     const r = ravagers[i];
-    r.y = findEntityGround(r.x, r.y, r.z);
+    const targetRG = findEntityGround(r.x, r.y, r.z);
+    if (r.y > targetRG) r.y = Math.max(targetRG, r.y - 12 * dt);
+    else if (r.y < targetRG) r.y = Math.min(targetRG, r.y + 7 * dt);
     r.attackCooldown -= dt;
 
     if (r.stunned > 0) {
@@ -7510,7 +7586,9 @@ function updatePillagers(dt) {
     const p = pillagers[i];
     p.hurtT -= dt;
     p.shootCooldown -= dt;
-    p.y = findEntityGround(p.x, p.y, p.z);
+    const targetPG = findEntityGround(p.x, p.y, p.z);
+    if (p.y > targetPG) p.y = Math.max(targetPG, p.y - 12 * dt);
+    else if (p.y < targetPG) p.y = Math.min(targetPG, p.y + 7 * dt);
 
     // 索敌：优先玩家、驻村铁傀儡、村民
     let target = null, minDist = 24;
@@ -7851,21 +7929,33 @@ function updateWanderingTrader(dt) {
   }
 
   const tr = wanderingTrader;
-  tr.y = findEntityGround(tr.x, tr.y, tr.z);
+  const targetTG = findEntityGround(tr.x, tr.y, tr.z);
+  if (tr.y > targetTG) tr.y = Math.max(targetTG, tr.y - 12 * dt);
+  else if (tr.y < targetTG) tr.y = Math.min(targetTG, tr.y + 7 * dt);
 
-  const isNight = timeOfDay >= 0.48 || timeOfDay < 0.20;
-  if (isNight && !tr.invisible) {
+  // 流浪商人饮用药水智能判定：
+  // 1. 周围 10 格内遭遇敌对怪物威胁（僵尸、骷髅、劫掠者、蜘蛛）
+  // 2. 日落黄昏夜幕降临（timeOfDay >= 0.48）
+  // 3. 满足以上任一条件喝隐身药水；破晓天明且无怪物威胁时喝牛奶重现
+  let threatened = false;
+  for (const z of zombies) { if (Math.hypot(z.x - tr.x, z.z - tr.z) < 10) { threatened = true; break; } }
+  if (!threatened) for (const s of skeletons) { if (Math.hypot(s.x - tr.x, s.z - tr.z) < 10) { threatened = true; break; } }
+  if (!threatened) for (const p of pillagers) { if (Math.hypot(p.x - tr.x, p.z - tr.z) < 12) { threatened = true; break; } }
+  if (!threatened) for (const sp of spiders) { if (Math.hypot(sp.x - tr.x, sp.z - tr.z) < 10) { threatened = true; break; } }
+
+  const shouldBeInvisible = (timeOfDay >= 0.48) || threatened;
+  if (shouldBeInvisible && !tr.invisible) {
     tr.invisible = true;
     tr.g.visible = false;
-    tone(260, 520, 0.25, 'sine', 0.2);
+    tone(260, 520, 0.25, 'square', 0.18);
     spawnParticles(tr.x, tr.y + 1.2, tr.z, 0x8a2be2, 20);
-    toast('🧪 夜幕降临，流浪商人饮下了隐形药水避开怪物的视线');
-  } else if (!isNight && tr.invisible) {
+    toast(threatened ? '🧪 遭遇怪物逼近！流浪商人迅速饮下隐形药水藏匿' : '🧪 黄昏降临，流浪商人饮下隐形药水避开怪物的视线');
+  } else if (!shouldBeInvisible && tr.invisible) {
     tr.invisible = false;
     tr.g.visible = true;
-    tone(440, 330, 0.2, 'triangle', 0.2);
+    tone(440, 330, 0.2, 'square', 0.18);
     spawnParticles(tr.x, tr.y + 1.2, tr.z, 0xffffff, 20);
-    toast('🥛 黎明破晓，流浪商人饮用牛奶解除隐形重新显形');
+    toast('🥛 黎明破晓且四周安全，流浪商人饮用牛奶解除隐形重新显形');
   }
 
   tr.timer -= dt;
@@ -7880,10 +7970,11 @@ function updateWanderingTrader(dt) {
     const nx = tr.x + Math.sin(tr.heading) * tr.speed * dt;
     const nz = tr.z + Math.cos(tr.heading) * tr.speed * dt;
     const tg = findEntityGround(nx, tr.y, nz);
-    if (Math.abs(tg - tr.y) <= 1 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
-      tr.x = nx; tr.z = nz;
+    if (Math.abs(tg - tr.y) <= 1.05 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
+      tr.x = nx; tr.z = nz; tr.y = tg;
     } else {
       tr.isIdle = true;
+      tr.heading += Math.PI * 0.5 + (Math.random() - 0.5);
     }
   }
 
@@ -7892,7 +7983,9 @@ function updateWanderingTrader(dt) {
 
   for (let idx = 0; idx < traderLlamas.length; idx++) {
     const lm = traderLlamas[idx];
-    lm.y = findEntityGround(lm.x, lm.y, lm.z);
+    const targetLG = findEntityGround(lm.x, lm.y, lm.z);
+    if (lm.y > targetLG) lm.y = Math.max(targetLG, lm.y - 12 * dt);
+    else if (lm.y < targetLG) lm.y = Math.min(targetLG, lm.y + 7 * dt);
     const targetOffset = idx === 0 ? 2.2 : 3.8;
     const tx = tr.x - Math.sin(tr.heading) * targetOffset;
     const tz = tr.z - Math.cos(tr.heading) * targetOffset;
@@ -9580,152 +9673,173 @@ function ensureNoise() {
   }
   return noiseBuf;
 }
-// 短促音调（柔和包裹）
-function tone(f0, f1, dur, type, vol, delay) {
+// 8-bit 复古脉冲/方波音调合成器（经典 FC/GameBoy 风格）
+function tone(f0, f1, dur, type = 'square', vol = 0.08, delay = 0) {
   if (!ensureAudio()) return;
   const t = audioCtx.currentTime + (delay || 0);
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-  o.type = type || 'triangle';
+  o.type = (type === 'sine' ? 'square' : (type || 'square'));
   o.frequency.setValueAtTime(f0, t);
-  o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
-  g.gain.setValueAtTime(vol || 0.10, t);
+  if (f1 && f1 !== f0) {
+    // 8-bit 经典线性步进式快速滑音，质感干脆
+    o.frequency.linearRampToValueAtTime(Math.max(20, f1), t + dur * 0.85);
+  }
+  // 8-bit 离散快速衰减包络
+  g.gain.setValueAtTime((vol || 0.08) * 0.82, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   o.connect(g); g.connect(masterGain);
-  o.start(t); o.stop(t + dur + 0.03);
+  o.start(t); o.stop(t + dur + 0.02);
 }
-// 噪声爆发（复用同一缓冲区，避免每次分配）
+// 8-bit 经典快速琶音生成器（Chiptune Arpeggios）
+function chiptuneArp(notes, stepDur = 0.045, type = 'square', vol = 0.08) {
+  if (!ensureAudio()) return;
+  notes.forEach((f, idx) => {
+    tone(f, f, stepDur * 1.15, type, vol, idx * stepDur);
+  });
+}
+// 8-bit 噪声打击（击打、脚步、爆炸、喷溅）
 function burst(dur, vol, freq, type, delay) {
   if (!ensureAudio() || !ensureNoise()) return;
   const t = audioCtx.currentTime + (delay || 0);
   const src = audioCtx.createBufferSource();
   src.buffer = noiseBuf;
-  src.playbackRate.value = 0.8 + Math.random() * 0.4;
+  src.playbackRate.value = 0.9 + Math.random() * 0.3;
   const f = audioCtx.createBiquadFilter();
   f.type = type || 'lowpass';
   f.frequency.value = freq || 800;
   const g = audioCtx.createGain();
-  g.gain.setValueAtTime(vol || 0.08, t);
+  g.gain.setValueAtTime((vol || 0.08) * 0.9, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   src.connect(f); f.connect(g); g.connect(masterGain);
   src.start(t, Math.random() * 0.25, dur);
 }
-// —— 具体音效 ——
-/* 破坏/放置音：使用柔和温润的三角波与正弦泛音，杜绝生硬的人工刺耳蜂鸣 */
+// —— 具体 8-bit 音效库 ——
+/* 破坏/放置音：8-bit 质感方波与三角波搭配 */
 function matTone(id) {
   if (id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK ||
       id === B.SANDSTONE || id === B.QUARTZ || id === B.FURNACE || id === B.COAL || id === B.IRON ||
       id === B.GOLD || id === B.DIAMOND || id === B.REDSTONE_ORE || id === B.LAPIS_ORE ||
       id === B.EMERALD_ORE || id === B.COPPER_ORE || id === B.BASALT || id === B.MAGMA ||
-      id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK) return [175, 0.08, 'triangle'];
-  if (id === B.SAND || id === B.GRAVEL || id === B.DIRT || id === B.GRASS || id === B.SNOW) return [215, 0.065, 'triangle'];
+      id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK) return [180, 0.065, 'square'];
+  if (id === B.SAND || id === B.GRAVEL || id === B.DIRT || id === B.GRASS || id === B.SNOW) return [140, 0.055, 'triangle'];
   if (id === B.LOG || id === B.PLANKS || id === B.BIRCH_LOG || id === B.SPRUCE_LOG ||
-      id === B.JUNGLE_LOG || id === B.ACACIA_LOG || id === B.BAMBOO || id === B.BOOKSHELF || id === B.HAY_BALE) return [235, 0.08, 'triangle'];
-  if (id === B.PUMPKIN || id === B.JACK_O_LANTERN || id === B.MELON || id === B.TNT) return [215, 0.07, 'triangle'];
+      id === B.JUNGLE_LOG || id === B.ACACIA_LOG || id === B.BAMBOO || id === B.BOOKSHELF || id === B.HAY_BALE) return [220, 0.06, 'square'];
+  if (id === B.PUMPKIN || id === B.JACK_O_LANTERN || id === B.MELON || id === B.TNT) return [200, 0.06, 'triangle'];
   if (id === B.LEAVES || id === B.BIRCH_LEAVES || id === B.SPRUCE_LEAVES ||
-      id === B.JUNGLE_LEAVES || id === B.ACACIA_LEAVES || id === B.CHERRY_LEAVES || id === B.CHERRY_PETALS || id === B.MAPLE_LEAVES) return [460, 0.045, 'sine'];
-  if (id === B.GLASS || id === B.ICE || id === B.GLOWSTONE) return [740, 0.05, 'sine'];
-  return [195, 0.06, 'triangle'];
+      id === B.JUNGLE_LEAVES || id === B.ACACIA_LEAVES || id === B.CHERRY_LEAVES || id === B.CHERRY_PETALS || id === B.MAPLE_LEAVES) return [440, 0.04, 'square'];
+  if (id === B.GLASS || id === B.ICE || id === B.GLOWSTONE) return [880, 0.045, 'square'];
+  return [195, 0.055, 'square'];
 }
 function playPop(id) {
-  const [f, d, type] = matTone(id);
-  const jitter = 0.92 + Math.random() * 0.16;
-  tone(f * jitter, f * 0.35, d, type, 0.10);
-  if (f > 450) tone(f * 1.4 * jitter, f * 0.8, d * 0.5, 'sine', 0.035);
+  const [f] = matTone(id);
+  const jitter = 0.95 + Math.random() * 0.10;
+  chiptuneArp([f * jitter, f * 1.5 * jitter], 0.03, 'square', 0.07);
 }
-/* 放置方块：沉稳实感顿挫 */
+/* 放置方块：8-bit 顿挫声 */
 function playPlace(id) {
   const [f, d, type] = matTone(id);
   const jitter = 0.95 + Math.random() * 0.10;
-  tone(f * 0.85 * jitter, f * 0.52, d * 0.8, type, 0.09);
-  burst(0.035, 0.035, f > 400 ? 900 : 480, 'lowpass');
+  tone(f * 0.85 * jitter, f * 0.45, d * 0.8, type, 0.08);
+  burst(0.025, 0.04, f > 400 ? 900 : 450, 'lowpass');
 }
-/* 脚步声：真实步距交替双脚，分材质细腻发声，左右脚微调音色节奏 */
+/* 脚步声：8-bit 颗粒点跳感 */
 function playStep(matId, inWater, isRightFoot) {
   if (inWater) {
-    burst(0.045, 0.035, isRightFoot ? 780 : 720, 'lowpass');
+    burst(0.04, 0.035, isRightFoot ? 750 : 700, 'lowpass');
     return;
   }
-  const footMod = isRightFoot ? 1.07 : 0.94;
+  const footMod = isRightFoot ? 1.08 : 0.94;
   const jitter = (0.95 + Math.random() * 0.1) * footMod;
   if (isLog(matId) || matId === B.PLANKS || matId === B.BOOKSHELF) {
-    burst(0.026, 0.024, 600 * jitter, 'bandpass');
-    tone(130 * footMod, 95 * footMod, 0.032, 'triangle', 0.025);
+    burst(0.022, 0.025, 600 * jitter, 'bandpass');
+    tone(140 * footMod, 95 * footMod, 0.028, 'triangle', 0.03);
   } else if (matId === B.SAND || matId === B.GRAVEL) {
-    burst(0.038, 0.032, 850 * jitter, 'bandpass');
-    setTimeout(() => burst(0.018, 0.016, 1100 * jitter, 'highpass'), 24);
+    burst(0.032, 0.03, 850 * jitter, 'bandpass');
   } else if (matId === B.SNOW) {
-    burst(0.035, 0.028, 980 * jitter, 'lowpass');
+    burst(0.03, 0.026, 920 * jitter, 'lowpass');
   } else if (matId === B.STONE || matId === B.COBBLE || matId === B.STONE_BRICK || matId === B.BRICK || matId === B.QUARTZ || matId === B.BEDROCK) {
-    burst(0.024, 0.025, 1250 * jitter, 'bandpass');
-    tone(220 * footMod, 180 * footMod, 0.02, 'sine', 0.015);
+    burst(0.02, 0.025, 1200 * jitter, 'bandpass');
+    tone(220 * footMod, 160 * footMod, 0.02, 'square', 0.015);
   } else {
-    burst(0.032, 0.024, 460 * jitter, 'lowpass');
+    burst(0.026, 0.022, 450 * jitter, 'lowpass');
   }
 }
-/* 起跳音效：极其微弱的起跃掠空感 */
 function playJump() {
-  burst(0.026, 0.020, 520, 'lowpass');
+  tone(160, 320, 0.06, 'triangle', 0.06);
 }
-/* 落地音效：仅在实质坠落着陆时发声，柔和低沉 */
 function playLand(matId) {
-  burst(0.055, 0.046, 360, 'lowpass');
+  burst(0.045, 0.045, 360, 'lowpass');
+  tone(120, 60, 0.05, 'triangle', 0.06);
 }
-function playBreak() { tone(160, 45, 0.16, 'triangle', 0.12); }
-function playSplash() { burst(0.24, 0.12, 1100); tone(420, 160, 0.16, 'sine', 0.04); }
+function playBreak() {
+  tone(180, 50, 0.11, 'square', 0.12);
+  burst(0.06, 0.05, 550, 'lowpass');
+}
+function playSplash() {
+  burst(0.18, 0.10, 1100);
+  tone(440, 180, 0.12, 'square', 0.05);
+}
 function playEat() {
-  burst(0.045, 0.06, 950);
-  setTimeout(() => { burst(0.035, 0.05, 1100); }, 90);
+  chiptuneArp([330, 220], 0.04, 'square', 0.07);
+  burst(0.03, 0.05, 950);
 }
 function playGoldenApple() {
-  tone(523.25, 659.25, 0.18, 'triangle', 0.16);
-  setTimeout(() => tone(659.25, 783.99, 0.18, 'triangle', 0.16), 110);
-  setTimeout(() => tone(783.99, 1046.5, 0.35, 'sine', 0.22), 220);
+  chiptuneArp([523, 659, 784, 1046, 1318], 0.055, 'square', 0.12);
 }
 function playShieldBlock() {
-  burst(0.08, 0.05, 1600, 'bandpass');
-  tone(880, 440, 0.15, 'triangle', 0.22);
+  burst(0.07, 0.05, 1600, 'bandpass');
+  tone(880, 440, 0.12, 'square', 0.18);
 }
-function playHurt() { tone(210, 85, 0.22, 'sawtooth', 0.16); }
-function playZombieHit() { burst(0.07, 0.1, 620); tone(150, 90, 0.1, 'triangle', 0.08); }
-function playZombieDeath() { tone(140, 40, 0.3, 'sawtooth', 0.14); burst(0.2, 0.08, 520); }
-function playGrow() { tone(430, 760, 0.16, 'sine', 0.05); }
-function playClick() { tone(640, 520, 0.05, 'sine', 0.05); }
+function playHurt() {
+  tone(340, 100, 0.14, 'square', 0.16);
+  burst(0.04, 0.06, 800, 'lowpass');
+}
+function playZombieHit() {
+  burst(0.06, 0.08, 620);
+  tone(160, 80, 0.09, 'square', 0.08);
+}
+function playZombieDeath() {
+  tone(160, 40, 0.25, 'square', 0.14);
+  burst(0.16, 0.08, 480);
+}
+function playGrow() {
+  chiptuneArp([440, 660, 880], 0.04, 'square', 0.07);
+}
+function playClick() {
+  tone(880, 1320, 0.03, 'square', 0.06);
+}
 function playChestOpen() {
-  tone(160, 240, 0.16, 'triangle', 0.14);
-  setTimeout(() => tone(240, 310, 0.14, 'triangle', 0.12), 80);
+  chiptuneArp([220, 330, 440], 0.045, 'square', 0.09);
 }
 function playChestClose() {
-  tone(260, 150, 0.15, 'triangle', 0.14);
-  burst(0.04, 0.05, 340, 'lowpass');
+  chiptuneArp([440, 330, 220], 0.04, 'square', 0.09);
+  burst(0.03, 0.04, 340, 'lowpass');
 }
 function playDoorOpen() {
-  tone(280, 420, 0.14, 'sawtooth', 0.12);
-  burst(0.04, 0.03, 720, 'bandpass');
+  tone(320, 480, 0.09, 'square', 0.09);
 }
 function playDoorClose() {
-  tone(400, 200, 0.16, 'sawtooth', 0.14);
-  burst(0.06, 0.04, 500, 'lowpass');
+  tone(480, 240, 0.10, 'square', 0.10);
+  burst(0.04, 0.04, 450, 'lowpass');
 }
 function playSizzle() {
-  burst(0.16, 0.08, 2200, 'bandpass');
-  tone(280, 200, 0.12, 'sawtooth', 0.06);
+  burst(0.14, 0.08, 2200, 'bandpass');
+  tone(280, 180, 0.10, 'square', 0.06);
 }
 function playTeleport() {
-  tone(160, 640, 0.18, 'sine', 0.16);
-  setTimeout(() => tone(640, 320, 0.22, 'sine', 0.14), 60);
-  burst(0.08, 0.04, 1800, 'bandpass');
+  chiptuneArp([220, 440, 880, 1760], 0.035, 'square', 0.10);
+  burst(0.06, 0.04, 1600, 'bandpass');
 }
 function playEndermanStare() {
-  tone(380, 240, 0.45, 'sawtooth', 0.22);
-  burst(0.15, 0.08, 480, 'lowpass');
+  tone(420, 220, 0.35, 'square', 0.18);
+  burst(0.12, 0.07, 480, 'lowpass');
 }
 function playSpiderHiss() {
-  burst(0.20, 0.12, 1400, 'bandpass');
-  tone(180, 110, 0.16, 'sawtooth', 0.10);
+  burst(0.18, 0.10, 1400, 'bandpass');
+  tone(220, 110, 0.12, 'square', 0.09);
 }
 function playFishCatch() {
-  tone(440, 660, 0.14, 'triangle', 0.18);
-  setTimeout(() => tone(660, 880, 0.18, 'sine', 0.22), 80);
+  chiptuneArp([440, 554, 659, 880], 0.045, 'square', 0.12);
 }
 
 // —— 木门开关状态 ——
