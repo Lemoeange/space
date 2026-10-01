@@ -394,6 +394,10 @@
           <span style="font-size:12px; color:#ddd;">胸甲</span>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
+          <div id="slotLeggings" class="slot" style="width:40px; height:40px; cursor:pointer;" title="腿部防具（点击穿脱）"></div>
+          <span style="font-size:12px; color:#ddd;">护腿</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
           <div id="slotBoots" class="slot" style="width:40px; height:40px; cursor:pointer;" title="足部防具（点击穿脱）"></div>
           <span style="font-size:12px; color:#ddd;">靴子</span>
         </div>
@@ -491,7 +495,8 @@ const B = {
   MILK_BUCKET:125, IRON_HELMET:126, IRON_CHESTPLATE:127, DIAMOND_HELMET:128, DIAMOND_CHESTPLATE:129,
   IRON_BOOTS:130, DIAMOND_BOOTS:131, HEALING_POTION:132, SPEED_POTION:133,
   FIRE_CHARGE:134, GOLDEN_CARROT:135, COMPASS:136, CLOCK:137,
-  ENCHANTED_GOLDEN_APPLE:138, COOKIE:139, FIREWORK_ROCKET:140
+  ENCHANTED_GOLDEN_APPLE:138, COOKIE:139, FIREWORK_ROCKET:140,
+  IRON_LEGGINGS:141, DIAMOND_LEGGINGS:142, EXPERIENCE_BOTTLE:143, ENDER_EYE:144
 };
 
 function mulberry32(a) {
@@ -8659,11 +8664,11 @@ function updatePrimedTnt(dt) {
 
 function explodeTnt(ex, ey, ez) {
   playExplosionSound();
-  spawnParticles(ex, ey, ez, 0xff5511, 24);
-  spawnParticles(ex, ey, ez, 0xffcc33, 20);
-  spawnParticles(ex, ey, ez, 0x555555, 18);
+  spawnParticles(ex, ey, ez, 0xff5511, 48);
+  spawnParticles(ex, ey, ez, 0xffcc33, 40);
+  spawnParticles(ex, ey, ez, 0x555555, 36);
 
-  const radius = 3.2;
+  const radius = 6.4;
   const r2 = radius * radius;
   const minX = Math.floor(ex - radius), maxX = Math.ceil(ex + radius);
   const minY = Math.max(1, Math.floor(ey - radius)), maxY = Math.min(HEIGHT - 1, Math.ceil(ey + radius));
@@ -8679,12 +8684,12 @@ function explodeTnt(ex, ey, ez) {
           const bid = world.getBlock(x, y, z);
           if (bid !== B.AIR && bid !== B.BEDROCK) {
             if (bid === B.TNT) {
-              // 连锁爆破：波及的 TNT 不被破坏，而是被点燃引信并受冲击波抛射！
+              // 连锁爆破：波及的 TNT 不被破坏，而是被点燃引信并受冲击波抛射！连锁引信设定为 0.7 - 1.0 秒
               const dist = Math.sqrt(d2) || 1;
-              const flingX = (dx / dist) * (4.0 + Math.random() * 3.0);
-              const flingY = 2.5 + Math.random() * 3.0;
-              const flingZ = (dz / dist) * (4.0 + Math.random() * 3.0);
-              const chainFuse = 0.35 + Math.random() * 0.40;
+              const flingX = (dx / dist) * (4.0 + Math.random() * 3.5);
+              const flingY = 2.8 + Math.random() * 3.5;
+              const flingZ = (dz / dist) * (4.0 + Math.random() * 3.5);
+              const chainFuse = 0.70 + Math.random() * 0.30;
               primeTnt(x, y, z, chainFuse, flingX, flingY, flingZ);
             } else {
               world.setBlock(x, y, z, B.AIR);
@@ -9091,6 +9096,61 @@ function updateEnderPearls(dt) {
         if (!player.fly) damagePlayer(2);
         toast('🔮 空间折跃瞬移！');
       }
+    }
+  }
+}
+
+/* ============================ 👁️ 末影之眼浮空寻路系统 (Eye of Ender) ============================ */
+const enderEyes = [];
+const enderEyeGeo = new THREE.SphereGeometry(0.18, 12, 12);
+const enderEyeMat = new THREE.MeshBasicMaterial({ color: 0x16a085 });
+
+function launchEnderEye() {
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const spawnPos = camera.position.clone().addScaledVector(dir, 0.5);
+  const mesh = new THREE.Mesh(enderEyeGeo, enderEyeMat);
+  mesh.position.copy(spawnPos);
+  scene.add(mesh);
+  tone(520, 880, 0.25, 'sine', 0.2);
+
+  const targetX = 0, targetZ = 0;
+  const toCenter = new THREE.Vector3(targetX - spawnPos.x, 0, targetZ - spawnPos.z).normalize();
+  const flyVel = toCenter.multiplyScalar(9.0).add(new THREE.Vector3(0, 4.5, 0));
+
+  enderEyes.push({
+    mesh,
+    pos: spawnPos,
+    vel: flyVel,
+    age: 0,
+    life: 2.5
+  });
+  toast('👁️ 末影之眼凌空漂浮！正朝远方神秘村庄与遗迹指引方向…');
+}
+
+function updateEnderEyes(dt) {
+  for (let i = enderEyes.length - 1; i >= 0; i--) {
+    const ee = enderEyes[i];
+    ee.age += dt;
+    ee.vel.y -= 3.5 * dt;
+    ee.vel.x *= 0.98;
+    ee.vel.z *= 0.98;
+    ee.pos.addScaledVector(ee.vel, dt);
+    ee.mesh.position.copy(ee.pos);
+
+    if (Math.random() < 0.6) {
+      spawnParticles(ee.pos.x, ee.pos.y, ee.pos.z, 0x8e44ad, 2);
+    }
+
+    if (ee.age >= ee.life) {
+      spawnParticles(ee.pos.x, ee.pos.y, ee.pos.z, 0x2ecc71, 16);
+      spawnParticles(ee.pos.x, ee.pos.y, ee.pos.z, 0x9b59b6, 16);
+      playPop();
+      if (Math.random() < 0.65) {
+        dropItem(B.ENDER_EYE, ee.pos.x, ee.pos.y, ee.pos.z);
+      }
+      scene.remove(ee.mesh);
+      enderEyes.splice(i, 1);
     }
   }
 }
@@ -9900,7 +9960,7 @@ const TOOL_DURABILITY = {
 };
 // 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌不可放置）
 function isPlaceable(id) {
-  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.COMPASS || id === B.CLOCK || id === B.FIREWORK_ROCKET) return false;
+  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.COMPASS || id === B.CLOCK || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE) return false;
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.MELON_SLICE) return false;
   if (isFood(id)) return false;   // 食物不可放置
   return true;
@@ -10625,12 +10685,14 @@ const NAMES = {
   [B.IRON_BOOTS]: '铁靴子', [B.DIAMOND_BOOTS]: '钻石靴子', [B.HEALING_POTION]: '治疗药水', [B.SPEED_POTION]: '迅捷药水',
   [B.FIRE_CHARGE]: '火焰弹', [B.GOLDEN_CARROT]: '金胡萝卜', [B.COMPASS]: '指南针', [B.CLOCK]: '时钟',
   [B.ENCHANTED_GOLDEN_APPLE]: '附魔金苹果', [B.COOKIE]: '曲奇', [B.FIREWORK_ROCKET]: '烟花火箭',
+  [B.IRON_LEGGINGS]: '铁护腿', [B.DIAMOND_LEGGINGS]: '钻石护腿', [B.EXPERIENCE_BOTTLE]: '附魔之瓶', [B.ENDER_EYE]: '末影之眼',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 function isHelmet(id) { return id === B.IRON_HELMET || id === B.DIAMOND_HELMET; }
 function isChestplate(id) { return id === B.IRON_CHESTPLATE || id === B.DIAMOND_CHESTPLATE; }
+function isLeggings(id) { return id === B.IRON_LEGGINGS || id === B.DIAMOND_LEGGINGS; }
 function isBoots(id) { return id === B.IRON_BOOTS || id === B.DIAMOND_BOOTS; }
-function isArmor(id) { return isHelmet(id) || isChestplate(id) || isBoots(id); }
+function isArmor(id) { return isHelmet(id) || isChestplate(id) || isLeggings(id) || isBoots(id); }
 function isPotion(id) { return id === B.HEALING_POTION || id === B.SPEED_POTION; }
 function getArmorPoints() {
   let pts = 0;
@@ -10639,6 +10701,8 @@ function getArmorPoints() {
   else if (player.armor.helmet === B.DIAMOND_HELMET) pts += 3;
   if (player.armor.chestplate === B.IRON_CHESTPLATE) pts += 6;
   else if (player.armor.chestplate === B.DIAMOND_CHESTPLATE) pts += 8;
+  if (player.armor.leggings === B.IRON_LEGGINGS) pts += 5;
+  else if (player.armor.leggings === B.DIAMOND_LEGGINGS) pts += 6;
   if (player.armor.boots === B.IRON_BOOTS) pts += 2;
   else if (player.armor.boots === B.DIAMOND_BOOTS) pts += 3;
   return pts;
@@ -10732,8 +10796,10 @@ const RECIPES = [
   { out: B.IRON_HELMET, n: 1, need: [[B.IRON_INGOT, 5]] },
   { out: B.IRON_CHESTPLATE, n: 1, need: [[B.IRON_INGOT, 8]] },
   { out: B.IRON_BOOTS, n: 1, need: [[B.IRON_INGOT, 4]] },
+  { out: B.IRON_LEGGINGS, n: 1, need: [[B.IRON_INGOT, 7]] },
   { out: B.DIAMOND_HELMET, n: 1, need: [[B.DIAMOND, 5]] },
   { out: B.DIAMOND_CHESTPLATE, n: 1, need: [[B.DIAMOND, 8]] },
+  { out: B.DIAMOND_LEGGINGS, n: 1, need: [[B.DIAMOND, 7]] },
   { out: B.DIAMOND_BOOTS, n: 1, need: [[B.DIAMOND, 4]] },
   { out: B.HEALING_POTION, n: 1, need: [[B.APPLE, 1], [B.WATER_BUCKET, 1]] },
   { out: B.SPEED_POTION, n: 1, need: [[B.WHEAT, 2], [B.WATER_BUCKET, 1]] },
@@ -10744,6 +10810,8 @@ const RECIPES = [
   { out: B.ENCHANTED_GOLDEN_APPLE, n: 1, need: [[B.APPLE, 1], [B.GOLD_BLOCK, 8]] },
   { out: B.COOKIE, n: 8, need: [[B.WHEAT, 1], [B.CHARCOAL, 1]] },
   { out: B.FIREWORK_ROCKET, n: 3, need: [[B.GUNPOWDER, 1], [B.STRING, 1]] },
+  { out: B.EXPERIENCE_BOTTLE, n: 3, need: [[B.EMERALD, 1], [B.WATER_BUCKET, 1]] },
+  { out: B.ENDER_EYE, n: 1, need: [[B.ENDER_PEARL, 1], [B.FIRE_CHARGE, 1]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -11388,12 +11456,36 @@ function makeItemIcon(id) {
     ctx.fillStyle = '#e74c3c'; ctx.beginPath(); ctx.moveTo(16, 4); ctx.lineTo(11, 11); ctx.lineTo(21, 11); ctx.fill();
     ctx.fillStyle = '#3498db'; ctx.fillRect(13, 15, 6, 3);
     ctx.fillStyle = '#f39c12'; ctx.fillRect(15, 25, 2, 4);
+  } else if (id === B.IRON_LEGGINGS) {
+    // 铁护腿：加厚金属膝铠与护腿
+    ctx.fillStyle = '#8a9298'; ctx.fillRect(8, 6, 16, 5); ctx.fillRect(8, 11, 6, 16); ctx.fillRect(18, 11, 6, 16);
+    ctx.fillStyle = '#dcdde1'; ctx.fillRect(9, 7, 14, 3); ctx.fillRect(9, 11, 4, 14); ctx.fillRect(19, 11, 4, 14);
+    ctx.fillStyle = '#f5f6fa'; ctx.fillRect(9, 15, 4, 3); ctx.fillRect(19, 15, 4, 3);
+  } else if (id === B.DIAMOND_LEGGINGS) {
+    // 钻石护腿：璀璨钻石重装战裙与护腿
+    ctx.fillStyle = '#1b7b85'; ctx.fillRect(8, 6, 16, 5); ctx.fillRect(8, 11, 6, 16); ctx.fillRect(18, 11, 6, 16);
+    ctx.fillStyle = '#4dedf4'; ctx.fillRect(9, 7, 14, 3); ctx.fillRect(9, 11, 4, 14); ctx.fillRect(19, 11, 4, 14);
+    ctx.fillStyle = '#bdfaff'; ctx.fillRect(9, 15, 4, 3); ctx.fillRect(19, 15, 4, 3);
+  } else if (id === B.EXPERIENCE_BOTTLE) {
+    // 附魔之瓶：透明细颈烧瓶 + 翡翠绿魔光经验原液 + 闪烁星芒
+    ctx.fillStyle = '#f5cd79'; ctx.fillRect(14, 5, 4, 3);
+    ctx.fillStyle = '#d0d8e0'; ctx.fillRect(13, 8, 6, 4); ctx.fillRect(10, 12, 12, 14);
+    ctx.fillStyle = '#2ecc71'; ctx.fillRect(11, 13, 10, 12);
+    ctx.fillStyle = '#a8e6cf'; ctx.fillRect(13, 15, 4, 4);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(18, 13, 2, 2);
+  } else if (id === B.ENDER_EYE) {
+    // 末影之眼：深邃翡翠绿球体 + 幽黑瞳孔与炽焰流光
+    ctx.fillStyle = '#0a3d34'; ctx.beginPath(); ctx.arc(16, 16, 11, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#16a085'; ctx.beginPath(); ctx.arc(16, 16, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2ecc71'; ctx.beginPath(); ctx.arc(16, 16, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#061a15'; ctx.fillRect(15, 11, 2, 10);
+    ctx.fillStyle = '#e74c3c'; ctx.fillRect(14, 15, 4, 2);
   }
   return cv;
 }
 function makeIcon(id) {
   if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD && id !== B.CROSSBOW && id !== B.SHEARS && id !== B.FLINT_AND_STEEL)) return makeToolIcon(id);
-  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.GOLDEN_CARROT || id === B.COMPASS || id === B.CLOCK || id === B.ENCHANTED_GOLDEN_APPLE || id === B.COOKIE || id === B.FIREWORK_ROCKET) return makeItemIcon(id);
+  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.GOLDEN_CARROT || id === B.COMPASS || id === B.CLOCK || id === B.ENCHANTED_GOLDEN_APPLE || id === B.COOKIE || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
   return makeIconCanvas(id);
 }
@@ -11630,6 +11722,38 @@ function buildInventory() {
           toast(`🛡️ 穿戴了【${itemName(player.armor.chestplate)}】！`);
         } else {
           toast('💡 请先在快捷栏选中胸甲，再点击此处装备');
+        }
+      }
+      refreshHotbar();
+      updateArmorBar();
+      buildInventory();
+    };
+  }
+  const leggingsEl = document.getElementById('slotLeggings');
+  if (leggingsEl) {
+    leggingsEl.innerHTML = '';
+    if (player.armor && player.armor.leggings) {
+      leggingsEl.appendChild(makeIcon(player.armor.leggings));
+      leggingsEl.title = `【已佩戴】${itemName(player.armor.leggings)}（点击脱下防具）`;
+    } else {
+      leggingsEl.innerHTML = '<span style="font-size:18px; opacity:0.35;">👖</span>';
+      leggingsEl.title = '腿部防具槽（快捷栏选中护腿点击此处装备）';
+    }
+    leggingsEl.onclick = () => {
+      if (player.armor && player.armor.leggings) {
+        addItem(player.armor.leggings, 1);
+        player.armor.leggings = null;
+        playPop();
+      } else {
+        const cur = hotbar[selected];
+        if (cur && isLeggings(cur.id)) {
+          if (!player.armor) player.armor = { helmet: null, chestplate: null, leggings: null, boots: null };
+          player.armor.leggings = cur.id;
+          if (cur.count > 1) cur.count--; else hotbar[selected] = null;
+          tone(450, 700, 0.08, 'triangle', 0.25);
+          toast(`🛡️ 穿戴了【${itemName(player.armor.leggings)}】！`);
+        } else {
+          toast('💡 请先在快捷栏选中护腿，再点击此处装备');
         }
       }
       refreshHotbar();
@@ -12881,13 +13005,16 @@ function onMousedown(btn) {
     if (sel && isArmor(sel.id)) {
       const aid = sel.id;
       let oldPiece = null;
-      if (!player.armor) player.armor = { helmet: null, chestplate: null, boots: null };
+      if (!player.armor) player.armor = { helmet: null, chestplate: null, leggings: null, boots: null };
       if (isHelmet(aid)) {
         oldPiece = player.armor.helmet;
         player.armor.helmet = aid;
       } else if (isChestplate(aid)) {
         oldPiece = player.armor.chestplate;
         player.armor.chestplate = aid;
+      } else if (isLeggings(aid)) {
+        oldPiece = player.armor.leggings;
+        player.armor.leggings = aid;
       } else if (isBoots(aid)) {
         oldPiece = player.armor.boots;
         player.armor.boots = aid;
@@ -13052,6 +13179,31 @@ function onMousedown(btn) {
       if (!player.fly) removeItem(B.FIREWORK_ROCKET, 1);
       refreshHotbar();
       launchFirework(origin, dir);
+      return;
+    }
+
+    // 手持附魔之瓶投掷：砸地破碎迸发充沛经验球
+    if (sel && sel.id === B.EXPERIENCE_BOTTLE) {
+      if (!player.fly) removeItem(B.EXPERIENCE_BOTTLE, 1);
+      refreshHotbar();
+      burst(0.08, 0.15, 2400, 'highpass');
+      tone(850, 320, 0.09, 'triangle', 0.22);
+      spawnParticles(player.pos.x, player.pos.y + 0.8, player.pos.z, 0x2ecc71, 24);
+      spawnParticles(player.pos.x, player.pos.y + 0.8, player.pos.z, 0xf1c40f, 16);
+      const orbCount = 5 + Math.floor(Math.random() * 5);
+      for (let k = 0; k < orbCount; k++) {
+        spawnXpOrb(player.pos.x + (Math.random() - 0.5) * 1.5, player.pos.y + 0.5 + Math.random() * 0.8, player.pos.z + (Math.random() - 0.5) * 1.5, 3 + Math.floor(Math.random() * 4));
+      }
+      playPop();
+      toast('✨ 掷碎了【附魔之瓶】！四溢的翡翠经验球瞬间汇入体内！');
+      return;
+    }
+
+    // 手持末影之眼投掷：空中飞旋指引
+    if (sel && sel.id === B.ENDER_EYE) {
+      if (!player.fly) removeItem(B.ENDER_EYE, 1);
+      refreshHotbar();
+      launchEnderEye();
       return;
     }
 
@@ -13267,6 +13419,7 @@ function animate() {
     updateFireCharges(dt);
     updateFireworks(dt);
     updateEnderPearls(dt);
+    updateEnderEyes(dt);
     updateFishing(dt);
     updateArrows(dt);
     if (bowCharging) bowChargeTime += dt;
