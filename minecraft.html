@@ -343,7 +343,7 @@
 <div id="menu">
   <div class="box">
     <h1>⛏️ 我的世界 <span class="tag">Web 复刻</span></h1>
-    <div class="sub">经验等级与磁吸经验球 · 忠诚猎犬协同战斗 · 驯马策马疾驰 · 穿墙透视高亮边框 · 光灵箭 · 狂暴劫掠兽 · 治愈僵尸村民 · 村庄突袭</div>
+    <div class="sub">原版镂空通透树叶 · 逼真八足双节爬行蜘蛛 · 忠诚猎犬协同撕咬 · 驯马策马疾驰 · 铁桶水桶流体 · 机械弩 · 穿墙高亮边框 · 村庄突袭</div>
     <div class="keys">
       <span><b>W A S D</b> 移动 / 策马奔腾</span>
       <span><b>鼠标</b> 视角</span>
@@ -356,7 +356,7 @@
       <span><b>V</b> 望远镜放大</span>
       <span><b>0</b> 切换昼夜</span>
       <span><b>左键</b> 破坏方块 / 攻击</span>
-      <span><b>右键</b> 放置/交易/骑马/驯狼/举盾/射箭</span>
+      <span><b>右键</b> 放置/交互/骑马/驯狼/剪羊毛/修傀儡/举盾/射弩/舀水</span>
       <span><b>中键</b> 选取方块</span>
       <span><b>Esc</b> 暂停菜单</span>
     </div>
@@ -469,7 +469,8 @@ const B = {
   CAMPFIRE:105, DOOR:106,
   ENDER_PEARL:107, COBWEB:108, STRING:109,
   FISHING_ROD:110, SPIDER_EYE:111, EMERALD:112, TOTEM_OF_UNDYING:113, SPECTRAL_ARROW:114,
-  SADDLE:115, BUCKET:116, WATER_BUCKET:117, CROSSBOW:118
+  SADDLE:115, BUCKET:116, WATER_BUCKET:117, CROSSBOW:118,
+  SHEARS:119, FLINT_AND_STEEL:120
 };
 
 function mulberry32(a) {
@@ -1171,14 +1172,19 @@ function makeAtlas() {
     else put(T.furnace, x, y, 250, 92, 36);
   }
   /* ===== 材质统一打磨：只叠加/覆盖像素，不增删图块，图集结构与图层索引不变 ===== */
-  // 1) 五种树叶：加深色"透光缺口"与亮边，破掉均匀噪点
-  const leafTiles = [
-    [T.leaves, 24, 76, 22], [T.birchLeaves, 40, 92, 26], [T.spruceLeaves, 16, 60, 14],
-    [T.jungleLeaves, 20, 80, 22], [T.acaciaLeaves, 38, 88, 24],
+  // 1) 树叶原版精致镂空点阵（约 18% 斑驳透光孔，既保留高拟真树叶透气感，又完全过滤内部多余重叠面）
+  const allLeafTiles = [
+    T.leaves, T.birchLeaves, T.spruceLeaves, T.jungleLeaves, T.acaciaLeaves, T.cherryLeaves, T.mapleLeaves
   ];
-  leafTiles.forEach(([tile, dr, dg, db], k) => {
-    speck(tile, [dr, dg, db], 24, 31 + k * 5);
-    speck(tile, [Math.min(255, dr + 74), Math.min(255, dg + 82), Math.min(255, db + 52)], 13, 41 + k * 5);
+  allLeafTiles.forEach((tile, k) => {
+    speck(tile, [24, 76, 22], 24, 31 + k * 5);
+    const r = rng(tile, 88);
+    for (let y = 0; y < TILE; y++) {
+      for (let x = 0; x < TILE; x++) {
+        const isCutout = (((x ^ y) & 3) === 0 && r() < 0.62) || (r() < 0.08);
+        if (isCutout) put(tile, x, y, 0, 0, 0, 0); // alpha = 0 镂空透明孔隙
+      }
+    }
   });
   // 2) 石头系：补暗点/亮点，去掉"塑料感"
   speck(T.cobble, [88, 88, 88], 36, 61);
@@ -1956,7 +1962,7 @@ function tileOf(id) {
   }
 }
 
-const opaqueMat = new THREE.MeshStandardMaterial({ map: atlas.tex, vertexColors: true, roughness: 0.88, metalness: 0.02 });
+const opaqueMat = new THREE.MeshStandardMaterial({ map: atlas.tex, vertexColors: true, roughness: 0.88, metalness: 0.02, alphaTest: 0.35 });
 const cutoutMat = new THREE.MeshStandardMaterial({ map: atlas.tex, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.88, metalness: 0.02 });
 const torchMat = new THREE.MeshBasicMaterial({ map: atlas.tex, alphaTest: 0.45, side: THREE.DoubleSide });   // 无光照，自发光
 
@@ -3808,6 +3814,7 @@ const BLOCK_COLORS = {
   [B.ENDER_PEARL]: 0x228b8b, [B.COBWEB]: 0xeeeeee, [B.STRING]: 0xe4e4e4,
   [B.FISHING_ROD]: 0x8a5228, [B.SPIDER_EYE]: 0xa01828, [B.EMERALD]: 0x17dd62, [B.TOTEM_OF_UNDYING]: 0xf5c827, [B.SPECTRAL_ARROW]: 0xffea00,
   [B.SADDLE]: 0x8d5b32, [B.BUCKET]: 0xd8dcde, [B.WATER_BUCKET]: 0x2277bb, [B.CROSSBOW]: 0x8a623c,
+  [B.SHEARS]: 0xdcdde1, [B.FLINT_AND_STEEL]: 0x8a9298,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -5270,7 +5277,7 @@ function spawnEnderman(x, z) {
   scene.add(g);
   endermen.push({
     g, head, body, legs, arms,
-    x, z, hp: 10, heading: 0,
+    x, z, hp: 8, heading: 0,
     angry: false, teleCooldown: 1.0, attackCooldown: 0, hurtT: 0, phase: Math.random() * 6
   });
 }
@@ -5414,34 +5421,75 @@ let spiderSpawnTimer = 10;
 const spiderFaceMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [30, 28, 34], 101, paintSpiderFace) });
 const spiderSkinMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [30, 28, 34], 102, paintSpiderSkin) });
 const spiderHeadMats = [spiderSkinMat, spiderSkinMat, spiderSkinMat, spiderSkinMat, spiderSkinMat, spiderFaceMat];
+const spiderEyeMat = new THREE.MeshBasicMaterial({ color: 0xff1122 }); // 猩红夜视发光复眼
 
-const spiderHeadGeo = new THREE.BoxGeometry(0.50, 0.38, 0.45);
-const spiderAbdomenGeo = new THREE.BoxGeometry(0.70, 0.52, 0.80);
-const spiderLegGeo = new THREE.BoxGeometry(0.08, 0.08, 0.65);
+const spiderHeadGeo = new THREE.BoxGeometry(0.44, 0.32, 0.40);
+const spiderThoraxGeo = new THREE.BoxGeometry(0.36, 0.28, 0.36);
+const spiderAbdomenGeo = new THREE.BoxGeometry(0.68, 0.48, 0.82);
+const spiderFangGeo = new THREE.BoxGeometry(0.08, 0.12, 0.10);
+const spiderUpperLegGeo = new THREE.BoxGeometry(0.08, 0.08, 0.42);
+const spiderLowerLegGeo = new THREE.BoxGeometry(0.07, 0.07, 0.46);
 
 function spawnSpider(x, z) {
   const g = new THREE.Group();
+
+  // 1. 中部胸节（8条腿着生中心）
+  const thorax = new THREE.Mesh(spiderThoraxGeo, spiderSkinMat);
+  thorax.position.set(0, 0.32, 0.05); thorax.castShadow = true; thorax.receiveShadow = true;
+  g.add(thorax);
+
+  // 2. 头部与口器獠牙
   const head = new THREE.Mesh(spiderHeadGeo, spiderHeadMats);
-  head.position.set(0, 0.30, 0.38); head.castShadow = true; head.receiveShadow = true; g.add(head);
+  head.position.set(0, 0.30, 0.40); head.castShadow = true; head.receiveShadow = true;
+  g.add(head);
+
+  for (const fx of [-0.10, 0.10]) {
+    const fang = new THREE.Mesh(spiderFangGeo, spiderSkinMat);
+    fang.position.set(fx, -0.16, 0.16);
+    fang.rotation.x = 0.25;
+    head.add(fang);
+  }
+
+  // 猩红发光主眼
+  for (const ex of [-0.11, 0.11]) {
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.02), spiderEyeMat);
+    eye.position.set(ex, 0.02, 0.21);
+    head.add(eye);
+  }
+
+  // 3. 丰满后腹部（纺锤形织网丝囊）
   const abdomen = new THREE.Mesh(spiderAbdomenGeo, spiderSkinMat);
-  abdomen.position.set(0, 0.36, -0.28); abdomen.castShadow = true; abdomen.receiveShadow = true; g.add(abdomen);
+  abdomen.position.set(0, 0.38, -0.48); abdomen.castShadow = true; abdomen.receiveShadow = true;
+  g.add(abdomen);
 
-  const legs = [];
+  // 4. 原版经典 8 只双节屈膝折角长足（4对）
+  const legBases = [];
   for (let i = 0; i < 4; i++) {
-    const lz = -0.15 + i * 0.18;
-    const lLeg = new THREE.Mesh(spiderLegGeo, spiderSkinMat);
-    lLeg.position.set(-0.35, 0.28, lz);
-    lLeg.rotation.z = Math.PI * 0.22;
-    lLeg.rotation.y = (i - 1.5) * 0.25;
-    lLeg.castShadow = true; lLeg.receiveShadow = true;
-    g.add(lLeg); legs.push(lLeg);
+    const lz = -0.12 + i * 0.16;
+    for (const side of [-1, 1]) {
+      const legBase = new THREE.Group();
+      legBase.position.set(side * 0.18, 0.32, lz);
 
-    const rLeg = new THREE.Mesh(spiderLegGeo, spiderSkinMat);
-    rLeg.position.set(0.35, 0.28, lz);
-    rLeg.rotation.z = -Math.PI * 0.22;
-    rLeg.rotation.y = -(i - 1.5) * 0.25;
-    rLeg.castShadow = true; rLeg.receiveShadow = true;
-    g.add(rLeg); legs.push(rLeg);
+      // 上腿节（向斜上方拱起）
+      const upper = new THREE.Mesh(spiderUpperLegGeo, spiderSkinMat);
+      upper.position.set(side * 0.20, 0.08, 0);
+      upper.rotation.z = side * -0.55;
+      upper.castShadow = true;
+      legBase.add(upper);
+
+      // 下腿节（从膝关节折曲向下触地）
+      const lower = new THREE.Mesh(spiderLowerLegGeo, spiderSkinMat);
+      lower.position.set(side * 0.38, -0.06, 0);
+      lower.rotation.z = side * 0.70;
+      lower.castShadow = true;
+      legBase.add(lower);
+
+      const defaultYaw = (i - 1.5) * 0.26 * (side === 1 ? -1 : 1);
+      legBase.rotation.y = defaultYaw;
+
+      g.add(legBase);
+      legBases.push({ base: legBase, side, index: i, defaultYaw });
+    }
   }
 
   const gy = findGround(Math.floor(x), Math.floor(z));
@@ -5449,9 +5497,9 @@ function spawnSpider(x, z) {
   scene.add(g);
 
   spiders.push({
-    g, head, abdomen, legs,
+    g, head, thorax, abdomen, legs: legBases,
     x, y: gy, z,
-    hp: 8, heading: 0,
+    hp: 6, heading: 0, // 优化：生命值下调至 6，战斗更爽快
     angry: false, climbing: false,
     attackCooldown: 0, leapCooldown: 1.0, hurtT: 0,
     velY: 0, phase: Math.random() * 6
@@ -5563,12 +5611,14 @@ function updateSpiders(dt) {
     s.g.position.set(s.x, s.y, s.z);
     s.g.rotation.y = s.heading + Math.PI;
 
-    s.phase += dt * (s.angry ? 10.0 : 4.5);
-    s.legs.forEach((leg, idx) => {
-      const dirMult = (idx % 2 === 0 ? 1 : -1);
-      const phaseOffset = Math.floor(idx / 2) * 0.7;
-      const swing = Math.sin(s.phase + phaseOffset) * 0.35 * dirMult;
-      leg.rotation.y = (Math.floor(idx / 2) - 1.5) * 0.25 + swing;
+    s.phase += dt * (s.angry ? 11.0 : 5.0);
+    s.legs.forEach((legObj) => {
+      const { base, side, index, defaultYaw } = legObj;
+      const diagonalPair = (index % 2 === 0 ? 1 : -1) * (side === 1 ? 1 : -1);
+      const swing = Math.sin(s.phase * 1.2 + (diagonalPair > 0 ? 0 : Math.PI)) * 0.32;
+      const lift = Math.max(0, Math.cos(s.phase * 1.2 + (diagonalPair > 0 ? 0 : Math.PI))) * 0.16;
+      base.rotation.y = defaultYaw + swing;
+      base.position.y = 0.32 + lift;
     });
   }
 }
@@ -7067,12 +7117,14 @@ function applyGlowing(mob, duration = 12.0) {
           line.scale.set(1.08, 1.08, 1.08);
           line.renderOrder = 9999;
           line._isGlowingPart = true;
+          line.raycast = () => {}; // 绝不阻挡射线检测与攻击判定
           child.add(line);
 
           const sil = new THREE.Mesh(child.geometry, glowingSilMat);
           sil.scale.set(1.04, 1.04, 1.04);
           sil.renderOrder = 9998;
           sil._isGlowingPart = true;
+          sil.raycast = () => {}; // 绝不阻挡射线检测与攻击判定
           child.add(sil);
 
           mob._glowingMeshes.push(line, sil);
@@ -7249,7 +7301,7 @@ function spawnRavager(x, y, z) {
   const rav = {
     g, headGroup, legs,
     x, y, z,
-    hp: 60, maxHp: 60,
+    hp: 35, maxHp: 35,
     heading: Math.random() * Math.PI * 2,
     speed: 1.6,
     attackCooldown: 2.0,
@@ -7410,8 +7462,8 @@ function spawnPillager(x, y, z, isCaptain = false) {
   pillagers.push({
     g, head, robe, arms, legs, banner,
     x, y, z,
-    hp: isCaptain ? 32 : 24,
-    maxHp: isCaptain ? 32 : 24,
+    hp: isCaptain ? 18 : 14,
+    maxHp: isCaptain ? 18 : 14,
     isCaptain,
     heading: Math.random() * Math.PI * 2,
     speed: isCaptain ? 1.9 : 1.6,
@@ -7437,10 +7489,15 @@ function killPillager(i) {
       dropItem(B.TOTEM_OF_UNDYING, p.x, p.y + 0.5, p.z);
       toast('✨ 掠夺者队长掉落了传说中的【不死图腾】！');
     }
-    badOmenTimer = 240;
-    playRaidHorn();
-    spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0x7e2d96, 30);
-    toast('☠️ 击败了掠夺者队长！获得了「不祥之兆」！若进入村庄将触发袭击！');
+    // 袭击进行中击败突击小队长不再重新施加不祥之兆
+    if (!raidActive) {
+      badOmenTimer = 240;
+      playRaidHorn();
+      spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0x7e2d96, 30);
+      toast('☠️ 击败了掠夺者队长！获得了「不祥之兆」！若进入村庄将触发袭击！');
+    } else {
+      toast('⚔️ 击破了袭击突击小队长！');
+    }
   }
 
   spawnXpOrb(p.x, p.y + 0.5, p.z, p.isCaptain ? 10 : 5);
@@ -9173,7 +9230,7 @@ const TOOL_DURABILITY = {
 };
 // 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌不可放置）
 function isPlaceable(id) {
-  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW) return false;
+  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL) return false;
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.MELON_SLICE) return false;
   if (isFood(id)) return false;   // 食物不可放置
   return true;
@@ -9801,6 +9858,7 @@ const NAMES = {
   [B.FISHING_ROD]: '钓鱼竿', [B.SPIDER_EYE]: '蜘蛛眼',
   [B.EMERALD]: '绿宝石', [B.TOTEM_OF_UNDYING]: '不死图腾', [B.SPECTRAL_ARROW]: '光灵箭',
   [B.SADDLE]: '马鞍', [B.BUCKET]: '铁桶', [B.WATER_BUCKET]: '水桶', [B.CROSSBOW]: '机械弩',
+  [B.SHEARS]: '剪刀', [B.FLINT_AND_STEEL]: '打火石',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 // —— 食物：恢复饥饿值 ——
@@ -9871,6 +9929,8 @@ const RECIPES = [
   { out: B.FISHING_ROD, n: 1, need: [[B.STICK, 3], [B.STRING, 2]] },
   { out: B.BUCKET, n: 1, need: [[B.IRON_INGOT, 3]] },
   { out: B.CROSSBOW, n: 1, need: [[B.STICK, 3], [B.STRING, 2], [B.IRON_INGOT, 1]] },
+  { out: B.SHEARS, n: 1, need: [[B.IRON_INGOT, 2]] },
+  { out: B.FLINT_AND_STEEL, n: 1, need: [[B.IRON_INGOT, 1], [B.GRAVEL, 1]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -10381,12 +10441,33 @@ function makeItemIcon(id) {
     ctx.fillRect(8, 13, 16, 1);
     ctx.fillStyle = '#e1b12c';
     ctx.fillRect(15, 14, 2, 3);
+  } else if (id === B.SHEARS) {
+    // 剪刀：双锋交叉铁刃与枢轴
+    ctx.fillStyle = '#dcdde1';
+    ctx.fillRect(10, 8, 4, 10);
+    ctx.fillRect(18, 8, 4, 10);
+    ctx.fillRect(12, 16, 8, 3);
+    ctx.fillStyle = '#718093';
+    ctx.fillRect(10, 18, 4, 6);
+    ctx.fillRect(18, 18, 4, 6);
+    ctx.fillStyle = '#2f3640';
+    ctx.fillRect(15, 17, 2, 2);
+  } else if (id === B.FLINT_AND_STEEL) {
+    // 打火石：C形铁制火镰 + 黑色燧石
+    ctx.fillStyle = '#dcdde1';
+    ctx.fillRect(8, 8, 4, 14);
+    ctx.fillRect(8, 8, 12, 4);
+    ctx.fillRect(8, 18, 12, 4);
+    ctx.fillStyle = '#2f3542';
+    ctx.fillRect(16, 12, 8, 8);
+    ctx.fillStyle = '#ffa502';
+    ctx.fillRect(13, 11, 2, 2);
   }
   return cv;
 }
 function makeIcon(id) {
-  if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD && id !== B.CROSSBOW)) return makeToolIcon(id);
-  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW) return makeItemIcon(id);
+  if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD && id !== B.CROSSBOW && id !== B.SHEARS && id !== B.FLINT_AND_STEEL)) return makeToolIcon(id);
+  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
   return makeIconCanvas(id);
 }
@@ -11345,6 +11426,19 @@ function onMousedown(btn) {
           return;
         }
       }
+      // 右键打火石 → 引燃 TNT、营火或地面
+      if (sel && sel.id === B.FLINT_AND_STEEL) {
+        if (hit.id === B.TNT) {
+          igniteTNT(hit.x, hit.y, hit.z);
+          tone(600, 240, 0.15, 'sawtooth', 0.25);
+          toast('💥 打火石引燃了 TNT！即将引爆！');
+          return;
+        }
+        tone(720, 360, 0.1, 'sawtooth', 0.2);
+        spawnParticles(hit.x + 0.5, hit.y + 1.0, hit.z + 0.5, 0xff7700, 20);
+        toast('🔥 擦出烈焰火花！');
+        return;
+      }
       // 右键储物箱 → 打开箱子（最高优先级，绝不被周围村民误抢）
       if (hit.id === B.CHEST) {
         if (tradeOpen) closeTradeUI();
@@ -11634,6 +11728,24 @@ function onMousedown(btn) {
     // 准星右键牲畜（灰狼骨头驯服 / 饲养繁育）
     const targetAnimal = raycastTargetEntity(origin, dir, animals, 4.2, blockDist, 0.55, 1.2);
     if (targetAnimal) {
+      // 剪刀剪羊毛
+      if (sel && sel.id === B.SHEARS && targetAnimal.kind && targetAnimal.kind.name === 'sheep') {
+        if (!targetAnimal.sheared) {
+          targetAnimal.sheared = true;
+          const woolCount = 1 + Math.floor(Math.random() * 2);
+          for (let k = 0; k < woolCount; k++) {
+            dropItem(B.WOOL, targetAnimal.x, targetAnimal.g.position.y + 0.6, targetAnimal.z);
+          }
+          playPop();
+          tone(520, 720, 0.08, 'triangle', 0.2);
+          spawnParticles(targetAnimal.x, targetAnimal.g.position.y + 0.6, targetAnimal.z, 0xeae6df, 16);
+          toast(`✂️ 成功剪下 ${woolCount} 团羊毛！`);
+          return;
+        } else {
+          toast('🐑 刚被剪过毛的绵羊还没有长出新毛');
+          return;
+        }
+      }
       // 骨头驯狼
       if (sel && sel.id === B.BONE && targetAnimal.kind && targetAnimal.kind.name === 'wolf' && !targetAnimal.tamed) {
         if (!player.fly) removeItem(B.BONE, 1);
