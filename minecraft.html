@@ -1172,7 +1172,7 @@ function makeAtlas() {
     else put(T.furnace, x, y, 250, 92, 36);
   }
   /* ===== 材质统一打磨：只叠加/覆盖像素，不增删图块，图集结构与图层索引不变 ===== */
-  // 1) 树叶原版精致镂空点阵（约 18% 斑驳透光孔，既保留高拟真树叶透气感，又完全过滤内部多余重叠面）
+  // 1) 树叶精致透光镂空点阵（85% 丰满叶冠不透明度，约 15% 错落斑驳透光孔）
   const allLeafTiles = [
     T.leaves, T.birchLeaves, T.spruceLeaves, T.jungleLeaves, T.acaciaLeaves, T.cherryLeaves, T.mapleLeaves
   ];
@@ -1181,8 +1181,8 @@ function makeAtlas() {
     const r = rng(tile, 88);
     for (let y = 0; y < TILE; y++) {
       for (let x = 0; x < TILE; x++) {
-        const isCutout = (((x ^ y) & 3) === 0 && r() < 0.62) || (r() < 0.08);
-        if (isCutout) put(tile, x, y, 0, 0, 0, 0); // alpha = 0 镂空透明孔隙
+        const isCutout = (((x ^ y) & 3) === 0 && r() < 0.60);
+        if (isCutout) put(tile, x, y, 0, 0, 0, 0); // alpha = 0 透光镂空孔隙（85% 实体度）
       }
     }
   });
@@ -1980,6 +1980,12 @@ function useArrayTexture(mat) {
 useArrayTexture(opaqueMat);
 useArrayTexture(cutoutMat);
 useArrayTexture(torchMat);
+
+// 实心地形与树木专用深度阴影材质：全实心深度投射（无 alphaTest 破碎采样），树冠与地形投射如之前一般浓密完整、边界柔和的真实阴影，杜绝模糊与千疮百孔
+const solidDepthMat = new THREE.MeshDepthMaterial({
+  depthPacking: THREE.RGBADepthPacking
+});
+opaqueMat.customDepthMaterial = solidDepthMat;
 
 // 植物/镂空方块专用深度阴影材质（采样 2D 数组纹理，准确镂空阴影）
 const cutoutDepthMat = new THREE.MeshDepthMaterial({
@@ -3319,7 +3325,17 @@ function buildOpaqueGreedy(c, A, baseX, baseZ, yMax, colTop, getB, solid) {
         const id = c.blocks[ly * 256 + lz * 16 + lx];
         if (isSeeThrough(id)) continue;   // 空气/水/玻璃/植物/火把/睡莲
         const bx = baseX + lx, bz = baseZ + lz;
-        if (!isSeeThrough(getB(bx + f.dir[0], ly + f.dir[1], bz + f.dir[2]))) continue;
+        const nb = getB(bx + f.dir[0], ly + f.dir[1], bz + f.dir[2]);
+        const isLeafNeighbor = isLeaf(nb);
+        const isSelfLeaf = isLeaf(id);
+        if (!isSeeThrough(nb)) {
+          // 智能面剔除判定：
+          // 1. 若自身是树叶，且邻居也是树叶或实体方块：剔除（树叶内部面与贴木面不渲染，保持极致性能）
+          // 2. 若自身是普通实体方块，且邻居不是树叶：剔除（常规实体间面剔除）
+          // 3. 特别注意：若自身是实体方块（如树干、地表），而邻居是半透镂空树叶时，绝对不能剔除该面！
+          //    保证玩家透过镂空树叶看树干时树干完整无缺，绝不需要挖开树叶才能看到树干！
+          if (isSelfLeaf || !isLeafNeighbor) continue;
+        }
         let tile = tileOf(id)[f.face];
         if (id === B.CHEST && f.face === 'side' && f.dir[2] === 1) tile = atlas.T.chestFront;
         const under = undergroundFactor(colTop, lx, lz, ly);
@@ -5418,7 +5434,8 @@ let spiderSpawnTimer = 10;
 
 const spiderFaceMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [30, 28, 34], 101, paintSpiderFace) });
 const spiderSkinMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [30, 28, 34], 102, paintSpiderSkin) });
-const spiderHeadMats = [spiderSkinMat, spiderSkinMat, spiderSkinMat, spiderSkinMat, spiderSkinMat, spiderFaceMat];
+// 头部材质数组：索引 4 为 +Z 面（正前方），绘制凶悍蜘蛛面孔
+const spiderHeadMats = [spiderSkinMat, spiderSkinMat, spiderSkinMat, spiderSkinMat, spiderFaceMat, spiderSkinMat];
 const spiderEyeMat = new THREE.MeshBasicMaterial({ color: 0xff1122 }); // 猩红夜视发光复眼
 
 const spiderHeadGeo = new THREE.BoxGeometry(0.44, 0.32, 0.40);
@@ -5607,7 +5624,7 @@ function updateSpiders(dt) {
     }
 
     s.g.position.set(s.x, s.y, s.z);
-    s.g.rotation.y = s.heading + Math.PI;
+    s.g.rotation.y = s.heading; // 修正朝向：头部与毒牙正面朝向玩家与行进方向，绝不背对玩家倒退走
 
     s.phase += dt * (s.angry ? 11.0 : 5.0);
     s.legs.forEach((legObj) => {
@@ -6268,23 +6285,44 @@ function buildVillage(c) {
     }
   };
 
-  // —— 道路地表自适应铺设与路基支撑 ——
-  const pavePath = (x, z) => {
-    // 保护村庄中央水井与广场中心核心区（绝对不铺路覆盖破坏或堵塞水井）
-    if (x >= cx8 - 3 && x <= cx8 + 3 && z >= cz8 - 3 && z <= cz8 + 3) return;
-    let sy = 0;
-    for (let y = HEIGHT - 2; y >= 1; y--) {
-      const b = world.getBlock(x, y, z);
-      if (isSolid(b) && b !== B.LOG && b !== B.PLANKS && b !== B.DOOR && b !== B.GLASS) { sy = y; break; }
-    }
-    if (sy < 1) return;
-    world.setBlock(x, sy, z, ((x * 5 + z * 11) % 4 === 0) ? B.COBBLE : B.GRAVEL);
-    world.setBlock(x, sy + 1, z, B.AIR);
-    world.setBlock(x, sy + 2, z, B.AIR);
-    world.setBlock(x, sy + 3, z, B.AIR);
-    for (let y = sy - 1; y >= Math.max(1, sy - 6); y--) {
-      if (isSolid(world.getBlock(x, y, z))) break;
-      world.setBlock(x, y, z, B.COBBLE);
+  // —— 智能平滑道路铺设系统 ——
+  // 1. 沿行进方向逐格平滑延伸，高度变化严格限制在最多 ±1 格，杜绝 2 格以上断崖
+  // 2. 双格宽道路截面强制绝对同高，绝不出现左右倾斜或错层
+  // 3. 上方清理 3 格空气净空，下方深层加固圆石地基支撑
+  const paveSmoothStrip = (steps, startY = gy) => {
+    let curY = startY;
+    for (const step of steps) {
+      const inProtectedWell = step.some(([x, z]) => (x >= cx8 - 3 && x <= cx8 + 3 && z >= cz8 - 3 && z <= cz8 + 3));
+      if (inProtectedWell) continue;
+
+      let avgGround = 0;
+      for (const [x, z] of step) {
+        let sy = 0;
+        for (let y = HEIGHT - 2; y >= 1; y--) {
+          const b = world.getBlock(x, y, z);
+          if (isSolid(b) && b !== B.LOG && b !== B.PLANKS && b !== B.DOOR && b !== B.GLASS && !isLeaf(b)) {
+            sy = y; break;
+          }
+        }
+        avgGround += sy;
+      }
+      avgGround = Math.round(avgGround / step.length);
+
+      if (avgGround > curY) curY += 1;
+      else if (avgGround < curY) curY -= 1;
+
+      for (const [x, z] of step) {
+        const mat = ((x * 5 + z * 11) % 4 === 0) ? B.COBBLE : B.GRAVEL;
+        world.setBlock(x, curY, z, mat);
+        world.setBlock(x, curY + 1, z, B.AIR);
+        world.setBlock(x, curY + 2, z, B.AIR);
+        world.setBlock(x, curY + 3, z, B.AIR);
+        for (let y = curY - 1; y >= Math.max(1, curY - 10); y--) {
+          const cur = world.getBlock(x, y, z);
+          if (isSolid(cur) && cur !== B.LOG && cur !== B.PLANKS && cur !== B.DOOR && cur !== B.GLASS && !isLeaf(cur)) break;
+          world.setBlock(x, y, z, B.COBBLE);
+        }
+      }
     }
   };
 
@@ -6549,23 +6587,53 @@ function buildVillage(c) {
   world.setBlock(ranX - 2, gy + 1, ranZ + 2, B.HAY_BALE);
   clearDoorway(ranX - 3, ranZ, gy, -1, 0, 3);
 
-  // 9. 纵横延申的大道网络 (Extended Roads & Lighting)
-  // 南北主干大道 (-22 到 +22，两格宽)
-  for (let dz = -22; dz <= 22; dz++) {
-    for (const dx of [0, -1]) pavePath(cx8 + dx, cz8 + dz);
-  }
-  // 东西主干大道 (-22 到 +22，两格宽)
-  for (let dx = -22; dx <= 22; dx++) {
-    for (const dz of [0, 1]) pavePath(cx8 + dx, cz8 + dz);
-  }
-  // 支线延伸小道（直通各建筑大门门前台阶）
-  for (let dz = 4; dz <= 9; dz++) { pavePath(cx8, cz8 + dz); pavePath(cx8 - 1, cz8 + dz); } // 教堂大道
-  for (let dx = -14; dx <= -1; dx++) { pavePath(cx8 + dx, cz8 + 9); }                        // 图书馆支道
-  for (let dx = 0; dx <= 14; dx++) { pavePath(cx8 + dx, cz8 - 5); }                         // 铁匠铺支道
-  for (let dx = -14; dx <= -1; dx++) { pavePath(cx8 + dx, cz8 - 6); }                        // 木屋支道
-  for (let dx = 0; dx <= 14; dx++) { pavePath(cx8 + dx, cz8 + 10); }                        // 洋房支道
-  for (let dx = 0; dx <= 14; dx++) { pavePath(cx8 + dx, cz8 - 16); }                        // 牧场支道
-  for (let dz = -22; dz <= -10; dz++) { pavePath(cx8, cz8 + dz); pavePath(cx8 - 1, cz8 + dz); } // 农田小径
+  // 9. 纵横延申的大道网络 (Extended Roads & Lighting - 全程平滑无断崖)
+  // 南北主干大道（由广场中心向北、向南平滑延展，双格同高）
+  const northRoad = [];
+  for (let dz = 4; dz <= 22; dz++) northRoad.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
+  paveSmoothStrip(northRoad, gy);
+
+  const southRoad = [];
+  for (let dz = -4; dz >= -22; dz--) southRoad.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
+  paveSmoothStrip(southRoad, gy);
+
+  // 东西主干大道（由广场中心向东、向西平滑延展，双格同高）
+  const eastRoad = [];
+  for (let dx = 4; dx <= 22; dx++) eastRoad.push([[cx8 + dx, cz8], [cx8 + dx, cz8 + 1]]);
+  paveSmoothStrip(eastRoad, gy);
+
+  const westRoad = [];
+  for (let dx = -4; dx >= -22; dx--) westRoad.push([[cx8 + dx, cz8], [cx8 + dx, cz8 + 1]]);
+  paveSmoothStrip(westRoad, gy);
+
+  // 支线延伸小道（直通各建筑大门门前台阶，平缓缓坡）
+  const churchBranch = [];
+  for (let dz = 4; dz <= 9; dz++) churchBranch.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
+  paveSmoothStrip(churchBranch, gy);
+
+  const libBranch = [];
+  for (let dx = -1; dx >= -14; dx--) libBranch.push([[cx8 + dx, cz8 + 9]]);
+  paveSmoothStrip(libBranch, gy);
+
+  const smithBranch = [];
+  for (let dx = 0; dx <= 14; dx++) smithBranch.push([[cx8 + dx, cz8 - 5]]);
+  paveSmoothStrip(smithBranch, gy);
+
+  const cotBranch = [];
+  for (let dx = -1; dx >= -14; dx--) cotBranch.push([[cx8 + dx, cz8 - 6]]);
+  paveSmoothStrip(cotBranch, gy);
+
+  const thBranch = [];
+  for (let dx = 0; dx <= 14; dx++) thBranch.push([[cx8 + dx, cz8 + 10]]);
+  paveSmoothStrip(thBranch, gy);
+
+  const ranBranch = [];
+  for (let dx = 0; dx <= 14; dx++) ranBranch.push([[cx8 + dx, cz8 - 16]]);
+  paveSmoothStrip(ranBranch, gy);
+
+  const farmBranch = [];
+  for (let dz = -10; dz >= -22; dz--) farmBranch.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
+  paveSmoothStrip(farmBranch, gy);
 
   // 街道火把立柱路灯
   for (const [lx, lz] of [[-6, -6], [6, -6], [-6, 6], [6, 6], [0, -18], [0, 19], [-18, 0], [18, 0]]) {
@@ -9294,7 +9362,7 @@ const mouse = { dx: 0, dy: 0, down: [false, false, false] };
 function playerAABB(pos) {
   return { minX: pos.x - player.halfW, maxX: pos.x + player.halfW, minY: pos.y, maxY: pos.y + player.height, minZ: pos.z - player.halfW, maxZ: pos.z + player.halfW };
 }
-function isCrossPlant(id) { return id === B.FLOWER_RED || id === B.FLOWER_YELLOW || id === B.GRASS_TALL || id === B.MUSHROOM_RED || id === B.MUSHROOM_BROWN || id === B.FERN || id === B.WHEAT_CROP || id === B.WHEAT_CROP_MATURE || id === B.BAMBOO || id === B.COBWEB; }
+function isCrossPlant(id) { return id === B.FLOWER_RED || id === B.FLOWER_YELLOW || id === B.GRASS_TALL || id === B.MUSHROOM_RED || id === B.MUSHROOM_BROWN || id === B.FERN || id === B.WHEAT_CROP || id === B.WHEAT_CROP_MATURE || id === B.BAMBOO || id === B.SUGARCANE || id === B.COBWEB; }
 function isPetals(id) { return id === B.CHERRY_PETALS; }
 function isLog(id) { return id === B.LOG || id === B.BIRCH_LOG || id === B.SPRUCE_LOG || id === B.JUNGLE_LOG || id === B.ACACIA_LOG || id === B.CHERRY_LOG; }
 function isLeaf(id) { return id === B.LEAVES || id === B.BIRCH_LEAVES || id === B.SPRUCE_LEAVES || id === B.JUNGLE_LEAVES || id === B.ACACIA_LEAVES || id === B.CHERRY_LEAVES || id === B.MAPLE_LEAVES; }
