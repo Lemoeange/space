@@ -105,27 +105,22 @@
     backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   }
   #menu .box {
-    max-width: 620px; padding: 32px 36px;
-    background: rgba(18, 26, 38, 0.75); border: 1px solid rgba(255, 255, 255, 0.12);
+    max-width: 520px; width: 92vw; max-height: 88vh; padding: 22px 26px; box-sizing: border-box; overflow-y: auto;
+    background: rgba(18, 26, 38, 0.85); border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 16px; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), 0 0 40px rgba(95, 178, 122, 0.1);
   }
-  #menu h1 { font-size: 36px; letter-spacing: 1.5px; margin-bottom: 8px; font-weight: 800; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
-  #menu .sub {
-    color: #a0c4de; margin-bottom: 22px; font-size: 13.5px; line-height: 1.6;
-    background: rgba(255, 255, 255, 0.04); padding: 8px 14px; border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-  }
+  #menu h1 { font-size: 28px; letter-spacing: 1px; margin-bottom: 12px; font-weight: 800; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
   #menu .tag { color: var(--accent); }
   #menu .keys {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; text-align: left;
-    font-size: 13px; margin: 0 auto 22px; width: max-content;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; text-align: left;
+    font-size: 13px; margin: 0 auto 18px; width: 100%; max-width: 460px; box-sizing: border-box;
   }
   #menu .keys span {
     display: flex; align-items: center; gap: 6px;
-    background: rgba(255, 255, 255, 0.04); padding: 5px 12px; border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.05); padding: 5px 10px; border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.07); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  #menu .keys b { color: #ffd479; font-weight: 700; min-width: 58px; }
+  #menu .keys b { color: #ffd479; font-weight: 700; min-width: 48px; }
   #menu .play {
     display: inline-block; padding: 12px 32px; border-radius: 10px;
     background: linear-gradient(135deg, #5fb27a, #388e3c); color: #fff;
@@ -347,22 +342,21 @@
 <div id="menu">
   <div class="box">
     <h1>⛏️ 我的世界 <span class="tag">Web 复刻</span></h1>
-    <div class="sub">原版镂空通透树叶 · 逼真八足双节爬行蜘蛛 · 忠诚猎犬协同撕咬 · 驯马策马疾驰 · 铁桶水桶流体 · 机械弩 · 穿墙高亮边框 · 村庄突袭</div>
     <div class="keys">
-      <span><b>W A S D</b> 移动 / 策马奔腾</span>
-      <span><b>鼠标</b> 视角</span>
-      <span><b>空格</b> 跳跃 / 骑马腾跃</span>
-      <span><b>Shift</b> 潜行 / 骑马下马</span>
-      <span><b>F</b> 创造模式</span>
-      <span><b>Ctrl</b> 疾跑</span>
-      <span><b>E</b> 背包 / 合成</span>
-      <span><b>1-9</b> 选择物品栏</span>
-      <span><b>V</b> 望远镜放大</span>
-      <span><b>0</b> 切换昼夜</span>
+      <span><b>W A S D</b> 移动 / 骑马</span>
+      <span><b>鼠标</b> 旋转视角</span>
+      <span><b>空格</b> 跳跃 / 腾跃</span>
+      <span><b>Shift</b> 潜行 / 下马</span>
+      <span><b>E</b> 打开背包与合成</span>
+      <span><b>F</b> 切换创造模式</span>
+      <span><b>1-9</b> 快捷选择物品</span>
+      <span><b>Ctrl</b> 疾跑冲刺</span>
       <span><b>左键</b> 破坏方块 / 攻击</span>
-      <span><b>右键</b> 放置/交互/骑马/驯狼/剪羊毛/修傀儡/举盾/射弩/舀水</span>
-      <span><b>中键</b> 选取方块</span>
-      <span><b>Esc</b> 暂停菜单</span>
+      <span><b>右键</b> 放置方块 / 交互使用</span>
+      <span><b>V</b> 望远镜长焦放大</span>
+      <span><b>中键</b> 快捷选取方块</span>
+      <span><b>0</b> 切换昼夜时间</span>
+      <span><b>Esc</b> 暂停 / 关闭界面</span>
     </div>
     <div class="play">点击进入世界</div>
     <div class="loading" id="loading">正在加载引擎…</div>
@@ -398,6 +392,10 @@
         <div style="display:flex; align-items:center; gap:8px;">
           <div id="slotChestplate" class="slot" style="width:40px; height:40px; cursor:pointer;" title="胸部防具（点击穿脱）"></div>
           <span style="font-size:12px; color:#ddd;">胸甲</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div id="slotBoots" class="slot" style="width:40px; height:40px; cursor:pointer;" title="足部防具（点击穿脱）"></div>
+          <span style="font-size:12px; color:#ddd;">靴子</span>
         </div>
       </div>
       <div id="invGrid" style="flex:1;"></div>
@@ -490,7 +488,8 @@ const B = {
   SADDLE:115, BUCKET:116, WATER_BUCKET:117, CROSSBOW:118,
   SHEARS:119, FLINT_AND_STEEL:120,
   MAPLE_LOG:121, SAPLING:122, MAPLE_SAPLING:123, CHERRY_SAPLING:124,
-  MILK_BUCKET:125, IRON_HELMET:126, IRON_CHESTPLATE:127, DIAMOND_HELMET:128, DIAMOND_CHESTPLATE:129
+  MILK_BUCKET:125, IRON_HELMET:126, IRON_CHESTPLATE:127, DIAMOND_HELMET:128, DIAMOND_CHESTPLATE:129,
+  IRON_BOOTS:130, DIAMOND_BOOTS:131, HEALING_POTION:132, SPEED_POTION:133
 };
 
 function mulberry32(a) {
@@ -626,17 +625,21 @@ function surfaceHeight(x, z) {
 function isCave(x, y, z) {
   if (y < 5) return false;
   x += WX; z += WZ;
+  // 洞穴生成概率减少一半：宏观区域噪声遮罩（仅 50% 区域允许生成连贯洞穴网络）
+  const caveMask = P.cave.fbm2(x * 0.015, z * 0.015);
+  if (caveMask < 0.50) return false;
+
   const depth = Math.min(1, Math.max(0, (76 - y) / 54));   // 0 = 浅, 1 = 深
   // 1) 长隧道
   const f = 0.021;
   const n1 = P.cave.fbm3(x * f, y * f * 1.25, z * f, 3);
   const n2 = P.cave.fbm3(x * f + 131, y * f * 1.25 + 57, z * f + 89, 3);
-  const t = 0.070 + 0.050 * depth;                         // 越深隧道越粗
+  const t = 0.065 + 0.045 * depth;                         // 越深隧道越宽
   if (Math.abs(n1) < t && Math.abs(n2) < t) return true;
   // 2) 大洞穴：低频 + 横向更宽，只在中深层出现
-  if (y < 54) {
+  if (y < 52) {
     const big = P.cave.fbm3(x * 0.016, y * 0.030, z * 0.016, 3);
-    if (big > 0.30 - 0.07 * depth) return true;
+    if (big > 0.35 - 0.06 * depth) return true;
   }
   return false;
 }
@@ -5982,6 +5985,152 @@ function updateIronGolems(dt) {
   }
 }
 
+/* ============================ ⛄ 雪傀儡生态与建造系统 (Snow Golems) ============================ */
+const snowGolems = [];
+const snowGolemMat = new THREE.MeshLambertMaterial({ color: 0xf5f6fa });
+const snowStickMat = new THREE.MeshLambertMaterial({ color: 0x5a3a22 });
+const snowPumpkinMat = new THREE.MeshLambertMaterial({ color: 0xe67e22 });
+
+const snowBaseGeo = new THREE.BoxGeometry(0.7, 0.6, 0.7);
+const snowChestGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+const snowHeadGeo = new THREE.BoxGeometry(0.42, 0.42, 0.42);
+const snowArmGeo = new THREE.BoxGeometry(0.48, 0.07, 0.07);
+
+function spawnSnowGolem(x, y, z) {
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(snowBaseGeo, snowGolemMat);
+  base.position.set(0, 0.3, 0); base.castShadow = true; base.receiveShadow = true; g.add(base);
+
+  const chest = new THREE.Mesh(snowChestGeo, snowGolemMat);
+  chest.position.set(0, 0.8, 0); chest.castShadow = true; chest.receiveShadow = true; g.add(chest);
+
+  const head = new THREE.Mesh(snowHeadGeo, snowPumpkinMat);
+  head.position.set(0, 1.25, 0); head.castShadow = true; head.receiveShadow = true; g.add(head);
+
+  const armL = new THREE.Mesh(snowArmGeo, snowStickMat);
+  armL.position.set(-0.45, 0.85, 0); armL.rotation.z = 0.25; g.add(armL);
+
+  const armR = new THREE.Mesh(snowArmGeo, snowStickMat);
+  armR.position.set(0.45, 0.85, 0); armR.rotation.z = -0.25; g.add(armR);
+
+  g.position.set(x, y, z);
+  scene.add(g);
+
+  snowGolems.push({
+    g, head, chest, base, armL, armR,
+    x, y, z,
+    hp: 12, maxHp: 12,
+    heading: 0,
+    attackCooldown: 0,
+    hurtT: 0,
+    phase: 0
+  });
+
+  tone(340, 520, 0.16, 'sine', 0.16);
+  burst(0.10, 0.12, 850, 'lowpass');
+  spawnParticles(x, y + 0.8, z, 0xffffff, 25);
+  toast('⛄ 仪式唤醒了可爱的【雪傀儡】！它将向怪物掷雪球守护你！');
+}
+
+function checkSnowGolemSpawn(px, py, pz) {
+  if (py < 2) return false;
+  if (world.getBlock(px, py - 1, pz) === B.SNOW && world.getBlock(px, py - 2, pz) === B.SNOW) {
+    world.setBlock(px, py, pz, B.AIR);
+    world.setBlock(px, py - 1, pz, B.AIR);
+    world.setBlock(px, py - 2, pz, B.AIR);
+    enqueueAround(px, py, pz);
+    enqueueAround(px, py - 1, pz);
+    enqueueAround(px, py - 2, pz);
+    spawnSnowGolem(px + 0.5, py - 2, pz + 0.5);
+    return true;
+  }
+  return false;
+}
+
+function updateSnowGolems(dt) {
+  for (let i = snowGolems.length - 1; i >= 0; i--) {
+    const s = snowGolems[i];
+    s.hurtT -= dt;
+    s.attackCooldown -= dt;
+
+    if (s.hp <= 0) {
+      scene.remove(s.g);
+      spawnParticles(s.x, s.y + 0.8, s.z, 0xffffff, 20);
+      const drops = 3 + Math.floor(Math.random() * 4);
+      for (let k = 0; k < drops; k++) dropItem(B.SNOWBALL, s.x, s.y + 0.5, s.z);
+      snowGolems.splice(i, 1);
+      toast('❄️ 雪傀儡融化了…留下了白雪球');
+      continue;
+    }
+
+    // 寻找 12 格内的敌对生物
+    let target = null, minDist = 12.0;
+    const findHostile = (list, kind) => {
+      for (const m of list) {
+        if (!m || m.dead || m.hp <= 0) continue;
+        const d = Math.hypot(m.x - s.x, m.z - s.z);
+        if (d < minDist) { minDist = d; target = { mob: m, kind }; }
+      }
+    };
+    findHostile(zombies, 'zombie');
+    findHostile(skeletons, 'skeleton');
+    findHostile(spiders, 'spider');
+    findHostile(pillagers, 'pillager');
+    findHostile(ravagers, 'ravager');
+
+    if (target) {
+      const m = target.mob;
+      const dxm = m.x - s.x, dzm = m.z - s.z;
+      s.heading = Math.atan2(dxm, dzm);
+
+      if (minDist > 3.0) {
+        const speed = 1.6;
+        const nx = s.x + Math.sin(s.heading) * speed * dt;
+        const nz = s.z + Math.cos(s.heading) * speed * dt;
+        const tg = findEntityGround(nx, s.y, nz);
+        if (Math.abs(tg - s.y) <= 1.0) { s.x = nx; s.z = nz; }
+      }
+
+      if (s.attackCooldown <= 0) {
+        s.attackCooldown = 0.9;
+        tone(520, 260, 0.05, 'sine', 0.12);
+        burst(0.02, 0.08, 1200, 'bandpass');
+        spawnParticles(s.x, s.y + 1.2, s.z, 0xffffff, 8);
+        m.hp -= 2;
+        m.hurtT = 0.25;
+        m.x += Math.sin(s.heading) * 0.8;
+        m.z += Math.cos(s.heading) * 0.8;
+        spawnParticles(m.x, s.y + 0.8, m.z, 0xffffff, 14);
+
+        if (m.hp <= 0) {
+          if (target.kind === 'zombie') { const idx = zombies.indexOf(m); if (idx >= 0) killZombie(idx); }
+          else if (target.kind === 'skeleton') { const idx = skeletons.indexOf(m); if (idx >= 0) killSkeleton(idx); }
+          else if (target.kind === 'spider') { const idx = spiders.indexOf(m); if (idx >= 0) killSpider(idx); }
+          else if (target.kind === 'pillager') { const idx = pillagers.indexOf(m); if (idx >= 0) killPillager(idx); }
+          else if (target.kind === 'ravager') { const idx = ravagers.indexOf(m); if (idx >= 0) killRavager(idx); }
+        }
+      }
+    } else {
+      if (Math.random() < 0.012) s.heading += (Math.random() - 0.5) * 2.0;
+      const dp = Math.hypot(player.pos.x - s.x, player.pos.z - s.z);
+      if (dp > 16) {
+        s.heading = Math.atan2(player.pos.x - s.x, player.pos.z - s.z);
+        const nx = s.x + Math.sin(s.heading) * 1.0 * dt;
+        const nz = s.z + Math.cos(s.heading) * 1.0 * dt;
+        const tg = findEntityGround(nx, s.y, nz);
+        if (Math.abs(tg - s.y) <= 1.0) { s.x = nx; s.z = nz; }
+      }
+    }
+
+    s.g.position.set(s.x, s.y, s.z);
+    s.g.rotation.y = s.heading + Math.PI;
+
+    s.phase += dt * 3.0;
+    s.armL.rotation.x = Math.sin(s.phase) * 0.4;
+    s.armR.rotation.x = -Math.sin(s.phase) * 0.4;
+  }
+}
+
 /* ============================ 👨‍🌾 村庄与村民生态系统 (Villages & Villager Trading) ============================ */
 const villagers = [];
 const villageCenters = new Set();
@@ -8432,11 +8581,11 @@ const tntEntityMats = [tntMatSide, tntMatSide, tntMatTop, tntMatSide, tntMatSide
 const tntWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
 function playExplosionSound() {
-  burst(0.35, 0.45, 180, 'lowpass');
-  tone(80, 20, 0.4, 'sawtooth', 0.22);
+  burst(0.42, 0.48, 220, 'lowpass');
+  tone(65, 20, 0.45, 'triangle', 0.35);
 }
 function playFuseSound() {
-  tone(1200, 800, 0.08, 'sawtooth', 0.05);
+  burst(0.14, 0.08, 3400, 'bandpass');
 }
 
 function primeTnt(bx, by, bz) {
@@ -8802,14 +8951,16 @@ arrowGeo.rotateX(Math.PI / 2);
 const arrowMat = new THREE.MeshLambertMaterial({ color: 0x9c7a4e });
 
 function playBowDraw() {
-  tone(160, 240, 0.22, 'triangle', 0.08);
+  burst(0.08, 0.035, 1200, 'bandpass');
+  tone(160, 260, 0.16, 'sine', 0.04);
 }
 function playBowShoot() {
-  tone(440, 180, 0.12, 'sawtooth', 0.14);
-  burst(0.08, 0.10, 650, 'bandpass');
+  tone(440, 180, 0.09, 'triangle', 0.22);
+  burst(0.03, 0.14, 1600, 'bandpass');
 }
 function playArrowHitBlock() {
-  tone(240, 120, 0.08, 'triangle', 0.15);
+  burst(0.03, 0.14, 1100, 'bandpass');
+  tone(240, 110, 0.04, 'triangle', 0.12);
 }
 
 function shootArrow(power) {
@@ -9304,7 +9455,8 @@ const player = {
   xp: 0,
   level: 0,
   ridingHorse: null,
-  armor: { helmet: null, chestplate: null },
+  armor: { helmet: null, chestplate: null, boots: null },
+  speedPotionTimer: 0,
   absorption: 0,
 };
 let maxFallY = null;   // 摔落起点高度（用于计算摔落伤害）
@@ -9351,9 +9503,10 @@ function addPlayerXp(amount) {
     needed = getXpNeededForLevel(player.level);
   }
   if (leveledUp) {
-    tone(440, 660, 0.25, 'triangle', 0.25);
-    setTimeout(() => tone(660, 880, 0.35, 'triangle', 0.25), 180);
-    setTimeout(() => tone(880, 1320, 0.45, 'sine', 0.30), 380);
+    const bells = [523.25, 659.25, 783.99, 1046.50];
+    bells.forEach((f, idx) => {
+      tone(f, f, 0.45, 'sine', 0.18, idx * 0.07);
+    });
     spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0x80ff20, 30);
     toast(`🎉 升级了！当前经验等级: Lv ${player.level}`);
   }
@@ -9594,7 +9747,7 @@ const TOOL_DURABILITY = {
 };
 // 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌不可放置）
 function isPlaceable(id) {
-  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id)) return false;
+  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id)) return false;
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.MELON_SLICE) return false;
   if (isFood(id)) return false;   // 食物不可放置
   return true;
@@ -9763,6 +9916,12 @@ function updatePlayer(dt) {
 
   const water = feetInWater();   // 游泳物理按脚部是否在水中判断
   let speed = player.fly ? 16 : (player.sprint ? 7.5 : 4.5);
+  if (player.armor && player.armor.boots === B.IRON_BOOTS) speed *= 1.10;
+  else if (player.armor && player.armor.boots === B.DIAMOND_BOOTS) speed *= 1.16;
+  if (player.speedPotionTimer && player.speedPotionTimer > 0) {
+    speed *= 1.35;
+    player.speedPotionTimer = Math.max(0, player.speedPotionTimer - dt);
+  }
   if (player.blocking) speed *= 0.6; // 举盾格挡时稳步防守减速
   if (keys['ShiftLeft'] || keys['ShiftRight']) speed = player.fly ? 10 : 2.2;
   if (water) speed *= 0.6;
@@ -9822,7 +9981,13 @@ function updatePlayer(dt) {
       }
       if (maxFallY !== null) {
         const fallDist = maxFallY - player.pos.y;
-        if (fallDist > 3 && !feetInWater()) damagePlayer(Math.floor(fallDist - 3));
+        if (fallDist > 3 && !feetInWater()) {
+          let fallDmg = Math.floor(fallDist - 3);
+          if (player.armor && player.armor.boots === B.DIAMOND_BOOTS) {
+            fallDmg = Math.max(1, Math.floor(fallDmg * 0.5));
+          }
+          damagePlayer(fallDmg);
+        }
         maxFallY = null;
       }
     } else if (player.vel.y < 0) {
@@ -9944,182 +10109,231 @@ function ensureNoise() {
   }
   return noiseBuf;
 }
-// 8-bit 复古脉冲/方波音调合成器（经典 FC/GameBoy 风格）
-function tone(f0, f1, dur, type = 'square', vol = 0.08, delay = 0) {
+// 原版 MC 纯正自然音调合成器（正弦波/三角波/自然平滑指数衰减）
+function tone(f0, f1, dur, type = 'sine', vol = 0.08, delay = 0) {
   if (!ensureAudio()) return;
   const t = audioCtx.currentTime + (delay || 0);
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-  o.type = (type === 'sine' ? 'square' : (type || 'square'));
-  o.frequency.setValueAtTime(f0, t);
+  o.type = type || 'sine';
+  o.frequency.setValueAtTime(Math.max(20, f0), t);
   if (f1 && f1 !== f0) {
-    // 8-bit 经典线性步进式快速滑音，质感干脆
-    o.frequency.linearRampToValueAtTime(Math.max(20, f1), t + dur * 0.85);
+    o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur * 0.9);
   }
-  // 8-bit 离散快速衰减包络
-  g.gain.setValueAtTime((vol || 0.08) * 0.82, t);
+  g.gain.setValueAtTime(Math.max(0.0001, (vol || 0.08)), t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   o.connect(g); g.connect(masterGain);
   o.start(t); o.stop(t + dur + 0.02);
 }
-// 8-bit 经典快速琶音生成器（Chiptune Arpeggios）
-function chiptuneArp(notes, stepDur = 0.045, type = 'square', vol = 0.08) {
+// 原版自然和弦琶音
+function playArp(notes, stepDur = 0.05, type = 'sine', vol = 0.08) {
   if (!ensureAudio()) return;
   notes.forEach((f, idx) => {
-    tone(f, f, stepDur * 1.15, type, vol, idx * stepDur);
+    tone(f, f, stepDur * 1.6, type, vol, idx * stepDur);
   });
 }
-// 8-bit 噪声打击（击打、脚步、爆炸、喷溅）
+function chiptuneArp(notes, stepDur = 0.045, type = 'sine', vol = 0.08) {
+  playArp(notes, stepDur, type, vol);
+}
+// 真实多频段质感打击（击打、脚步、爆炸、喷溅）
 function burst(dur, vol, freq, type, delay) {
   if (!ensureAudio() || !ensureNoise()) return;
   const t = audioCtx.currentTime + (delay || 0);
   const src = audioCtx.createBufferSource();
   src.buffer = noiseBuf;
-  src.playbackRate.value = 0.9 + Math.random() * 0.3;
+  src.playbackRate.value = 0.95 + Math.random() * 0.15;
   const f = audioCtx.createBiquadFilter();
   f.type = type || 'lowpass';
   f.frequency.value = freq || 800;
   const g = audioCtx.createGain();
-  g.gain.setValueAtTime((vol || 0.08) * 0.9, t);
+  g.gain.setValueAtTime(Math.max(0.0001, (vol || 0.08)), t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   src.connect(f); f.connect(g); g.connect(masterGain);
   src.start(t, Math.random() * 0.25, dur);
 }
-// —— 具体 8-bit 音效库 ——
-/* 破坏/放置音：8-bit 质感方波与三角波搭配 */
-function matTone(id) {
-  if (id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK ||
-      id === B.SANDSTONE || id === B.QUARTZ || id === B.FURNACE || id === B.COAL || id === B.IRON ||
-      id === B.GOLD || id === B.DIAMOND || id === B.REDSTONE_ORE || id === B.LAPIS_ORE ||
-      id === B.EMERALD_ORE || id === B.COPPER_ORE || id === B.BASALT || id === B.MAGMA ||
-      id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK) return [180, 0.065, 'square'];
-  if (id === B.SAND || id === B.GRAVEL || id === B.DIRT || id === B.GRASS || id === B.SNOW) return [140, 0.055, 'triangle'];
-  if (id === B.LOG || id === B.PLANKS || id === B.BIRCH_LOG || id === B.SPRUCE_LOG ||
-      id === B.JUNGLE_LOG || id === B.ACACIA_LOG || id === B.BAMBOO || id === B.BOOKSHELF || id === B.HAY_BALE) return [220, 0.06, 'square'];
-  if (id === B.PUMPKIN || id === B.JACK_O_LANTERN || id === B.MELON || id === B.TNT) return [200, 0.06, 'triangle'];
-  if (id === B.LEAVES || id === B.BIRCH_LEAVES || id === B.SPRUCE_LEAVES ||
-      id === B.JUNGLE_LEAVES || id === B.ACACIA_LEAVES || id === B.CHERRY_LEAVES || id === B.CHERRY_PETALS || id === B.MAPLE_LEAVES) return [440, 0.04, 'square'];
-  if (id === B.GLASS || id === B.ICE || id === B.GLOWSTONE) return [880, 0.045, 'square'];
-  return [195, 0.055, 'square'];
+// —— 原版 MC 纯正材质音效库 ——
+function isStoneMat(id) {
+  return id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK ||
+         id === B.SANDSTONE || id === B.QUARTZ || id === B.FURNACE || isOre(id) || id === B.BASALT || id === B.MAGMA ||
+         id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.BEDROCK;
 }
+function isWoodMat(id) {
+  return isLog(id) || id === B.PLANKS || id === B.BOOKSHELF || id === B.CHEST || id === B.DOOR || id === B.LADDER;
+}
+function isPlantMat(id) {
+  return isLeaf(id) || isCrossPlant(id) || id === B.HAY_BALE;
+}
+function isEarthMat(id) {
+  return id === B.DIRT || id === B.GRASS || id === B.SAND || id === B.GRAVEL || id === B.SNOW;
+}
+
+/* 原版经典圆润气泡拾取物品音（Pop） */
 function playPop(id) {
-  const [f] = matTone(id);
-  const jitter = 0.95 + Math.random() * 0.10;
-  chiptuneArp([f * jitter, f * 1.5 * jitter], 0.03, 'square', 0.07);
+  if (!ensureAudio()) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  const pitchMod = 0.94 + Math.random() * 0.14;
+  o.type = 'sine';
+  o.frequency.setValueAtTime(480 * pitchMod, t);
+  o.frequency.exponentialRampToValueAtTime(1020 * pitchMod, t + 0.045);
+  g.gain.setValueAtTime(0.14, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.065);
+  o.connect(g); g.connect(masterGain);
+  o.start(t); o.stop(t + 0.07);
 }
-/* 放置方块：8-bit 顿挫声 */
+
+/* 放置方块：原版厚重敲击声 */
 function playPlace(id) {
-  const [f, d, type] = matTone(id);
-  const jitter = 0.95 + Math.random() * 0.10;
-  tone(f * 0.85 * jitter, f * 0.45, d * 0.8, type, 0.08);
-  burst(0.025, 0.04, f > 400 ? 900 : 450, 'lowpass');
+  if (isStoneMat(id)) {
+    tone(120, 60, 0.05, 'triangle', 0.12);
+    burst(0.03, 0.08, 1200, 'bandpass');
+  } else if (isWoodMat(id)) {
+    tone(160, 95, 0.06, 'triangle', 0.14);
+    burst(0.03, 0.06, 750, 'lowpass');
+  } else if (isPlantMat(id)) {
+    burst(0.04, 0.08, 650, 'lowpass');
+  } else if (id === B.GLASS || id === B.ICE) {
+    tone(1400, 900, 0.03, 'sine', 0.08);
+    burst(0.02, 0.06, 2200, 'highpass');
+  } else if (id === B.WOOL || id === B.BED) {
+    burst(0.03, 0.05, 350, 'lowpass');
+  } else {
+    burst(0.04, 0.08, 450, 'lowpass');
+  }
 }
-/* 脚步声：8-bit 颗粒点跳感 */
+
+/* 破坏方块：原版清脆破碎声 */
+function playBreak(id) {
+  if (isStoneMat(id)) {
+    burst(0.06, 0.14, 1300, 'bandpass');
+    burst(0.08, 0.16, 260, 'lowpass');
+  } else if (isWoodMat(id)) {
+    burst(0.06, 0.12, 850, 'bandpass');
+    tone(180, 90, 0.06, 'triangle', 0.10);
+  } else if (isPlantMat(id)) {
+    burst(0.05, 0.09, 850, 'bandpass');
+  } else if (id === B.GLASS || id === B.ICE) {
+    burst(0.08, 0.15, 2800, 'highpass');
+    tone(1200, 1800, 0.04, 'sine', 0.08);
+  } else if (id === B.WOOL || id === B.BED) {
+    burst(0.03, 0.05, 350, 'lowpass');
+  } else {
+    burst(0.06, 0.11, 800, 'bandpass');
+    tone(120, 70, 0.05, 'triangle', 0.08);
+  }
+}
+
+/* 脚步声：真实材质质感脚步 */
 function playStep(matId, inWater, isRightFoot) {
   if (player.fly) return; // 创造/飞行模式完全静音，绝无走路声
   if (inWater) {
-    burst(0.04, 0.035, isRightFoot ? 750 : 700, 'lowpass');
+    burst(0.04, 0.04, isRightFoot ? 750 : 700, 'lowpass');
     return;
   }
-  const footMod = isRightFoot ? 1.08 : 0.94;
+  const footMod = isRightFoot ? 1.05 : 0.95;
   const jitter = (0.95 + Math.random() * 0.1) * footMod;
-  if (isLog(matId) || matId === B.PLANKS || matId === B.BOOKSHELF) {
-    burst(0.022, 0.025, 600 * jitter, 'bandpass');
-    tone(140 * footMod, 95 * footMod, 0.028, 'triangle', 0.03);
+  if (isWoodMat(matId)) {
+    tone(150 * footMod, 100 * footMod, 0.025, 'triangle', 0.04);
+    burst(0.02, 0.04, 650 * jitter, 'bandpass');
   } else if (matId === B.SAND || matId === B.GRAVEL) {
-    burst(0.032, 0.03, 850 * jitter, 'bandpass');
+    burst(0.028, 0.045, 950 * jitter, 'bandpass');
   } else if (matId === B.SNOW) {
-    burst(0.03, 0.026, 920 * jitter, 'lowpass');
-  } else if (matId === B.STONE || matId === B.COBBLE || matId === B.STONE_BRICK || matId === B.BRICK || matId === B.QUARTZ || matId === B.BEDROCK) {
-    burst(0.02, 0.025, 1200 * jitter, 'bandpass');
-    tone(220 * footMod, 160 * footMod, 0.02, 'square', 0.015);
+    burst(0.025, 0.03, 850 * jitter, 'lowpass');
+  } else if (isStoneMat(matId)) {
+    burst(0.025, 0.06, 1400 * jitter, 'bandpass');
+    tone(130 * footMod, 80 * footMod, 0.02, 'triangle', 0.03);
+  } else if (isPlantMat(matId)) {
+    burst(0.025, 0.035, 550 * jitter, 'lowpass');
   } else {
-    burst(0.026, 0.022, 450 * jitter, 'lowpass');
+    burst(0.025, 0.035, 600 * jitter, 'lowpass');
   }
 }
 function playJump() {
   if (player.fly) return;
-  tone(160, 320, 0.06, 'triangle', 0.06);
+  tone(160, 240, 0.06, 'triangle', 0.06);
 }
 function playLand(matId) {
   if (player.fly) return;
-  burst(0.045, 0.045, 360, 'lowpass');
-  tone(120, 60, 0.05, 'triangle', 0.06);
-}
-function playBreak() {
-  tone(180, 50, 0.11, 'square', 0.12);
-  burst(0.06, 0.05, 550, 'lowpass');
+  burst(0.045, 0.08, 360, 'lowpass');
+  tone(120, 60, 0.05, 'triangle', 0.08);
 }
 function playSplash() {
-  burst(0.18, 0.10, 1100);
-  tone(440, 180, 0.12, 'square', 0.05);
+  burst(0.18, 0.12, 1100);
+  tone(380, 160, 0.10, 'sine', 0.08);
 }
 function playEat() {
-  chiptuneArp([330, 220], 0.04, 'square', 0.07);
-  burst(0.03, 0.05, 950);
+  burst(0.035, 0.12, 1400, 'bandpass');
+  tone(240, 180, 0.03, 'triangle', 0.06);
 }
 function playGoldenApple() {
-  chiptuneArp([523, 659, 784, 1046, 1318], 0.055, 'square', 0.12);
+  playArp([523, 659, 784, 1046, 1318], 0.055, 'sine', 0.14);
 }
 function playDrink() {
-  burst(0.06, 0.08, 1200, 'bandpass');
-  tone(320, 240, 0.12, 'sine', 0.15);
-  setTimeout(() => tone(280, 200, 0.14, 'sine', 0.15), 140);
-  setTimeout(() => tone(360, 480, 0.18, 'triangle', 0.18), 300);
+  tone(240, 360, 0.05, 'sine', 0.10);
+  tone(300, 440, 0.06, 'sine', 0.10, 0.10);
 }
 function playShieldBlock() {
-  burst(0.07, 0.05, 1600, 'bandpass');
-  tone(880, 440, 0.12, 'square', 0.18);
+  tone(540, 270, 0.12, 'triangle', 0.22);
+  burst(0.05, 0.18, 1600, 'bandpass');
 }
 function playHurt() {
-  tone(340, 100, 0.14, 'square', 0.16);
-  burst(0.04, 0.06, 800, 'lowpass');
+  if (!ensureAudio()) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(140, t);
+  o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+  g.gain.setValueAtTime(0.24, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+  o.connect(g); g.connect(masterGain);
+  o.start(t); o.stop(t + 0.15);
+  burst(0.06, 0.16, 280, 'lowpass');
 }
 function playZombieHit() {
   burst(0.06, 0.08, 620);
-  tone(160, 80, 0.09, 'square', 0.08);
+  tone(140, 70, 0.09, 'triangle', 0.08);
 }
 function playZombieDeath() {
-  tone(160, 40, 0.25, 'square', 0.14);
+  tone(140, 40, 0.25, 'triangle', 0.14);
   burst(0.16, 0.08, 480);
 }
 function playGrow() {
-  chiptuneArp([440, 660, 880], 0.04, 'square', 0.07);
+  playArp([440, 660, 880], 0.04, 'sine', 0.09);
 }
 function playClick() {
-  tone(880, 1320, 0.03, 'square', 0.06);
+  tone(880, 1320, 0.025, 'triangle', 0.06);
 }
 function playChestOpen() {
-  chiptuneArp([220, 330, 440], 0.045, 'square', 0.09);
+  tone(180, 340, 0.18, 'sine', 0.11);
 }
 function playChestClose() {
-  chiptuneArp([440, 330, 220], 0.04, 'square', 0.09);
-  burst(0.03, 0.04, 340, 'lowpass');
+  tone(280, 140, 0.12, 'sine', 0.12);
+  burst(0.03, 0.10, 400, 'lowpass');
 }
 function playDoorOpen() {
-  tone(320, 480, 0.09, 'square', 0.09);
+  tone(220, 380, 0.12, 'triangle', 0.12);
 }
 function playDoorClose() {
-  tone(480, 240, 0.10, 'square', 0.10);
-  burst(0.04, 0.04, 450, 'lowpass');
+  tone(340, 160, 0.10, 'triangle', 0.12);
+  burst(0.04, 0.15, 380, 'lowpass');
 }
 function playSizzle() {
   burst(0.14, 0.08, 2200, 'bandpass');
-  tone(280, 180, 0.10, 'square', 0.06);
+  tone(280, 180, 0.10, 'sine', 0.06);
 }
 function playTeleport() {
-  chiptuneArp([220, 440, 880, 1760], 0.035, 'square', 0.10);
+  playArp([220, 440, 880, 1760], 0.035, 'sine', 0.10);
   burst(0.06, 0.04, 1600, 'bandpass');
 }
 function playEndermanStare() {
-  tone(420, 220, 0.35, 'square', 0.18);
+  tone(420, 220, 0.35, 'triangle', 0.18);
   burst(0.12, 0.07, 480, 'lowpass');
 }
 function playSpiderHiss() {
   burst(0.18, 0.10, 1400, 'bandpass');
-  tone(220, 110, 0.12, 'square', 0.09);
+  tone(220, 110, 0.12, 'sawtooth', 0.08);
 }
 function playFishCatch() {
-  chiptuneArp([440, 554, 659, 880], 0.045, 'square', 0.12);
+  playArp([440, 554, 659, 880], 0.045, 'sine', 0.12);
 }
 
 // —— 木门开关状态 ——
@@ -10255,11 +10469,14 @@ const NAMES = {
   [B.SHEARS]: '剪刀', [B.FLINT_AND_STEEL]: '打火石',
   [B.MAPLE_LOG]: '枫木原木', [B.SAPLING]: '橡树树苗', [B.MAPLE_SAPLING]: '枫树树苗', [B.CHERRY_SAPLING]: '樱花树苗',
   [B.MILK_BUCKET]: '牛奶桶', [B.IRON_HELMET]: '铁头盔', [B.IRON_CHESTPLATE]: '铁胸甲', [B.DIAMOND_HELMET]: '钻石头盔', [B.DIAMOND_CHESTPLATE]: '钻石胸甲',
+  [B.IRON_BOOTS]: '铁靴子', [B.DIAMOND_BOOTS]: '钻石靴子', [B.HEALING_POTION]: '治疗药水', [B.SPEED_POTION]: '迅捷药水',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 function isHelmet(id) { return id === B.IRON_HELMET || id === B.DIAMOND_HELMET; }
 function isChestplate(id) { return id === B.IRON_CHESTPLATE || id === B.DIAMOND_CHESTPLATE; }
-function isArmor(id) { return isHelmet(id) || isChestplate(id); }
+function isBoots(id) { return id === B.IRON_BOOTS || id === B.DIAMOND_BOOTS; }
+function isArmor(id) { return isHelmet(id) || isChestplate(id) || isBoots(id); }
+function isPotion(id) { return id === B.HEALING_POTION || id === B.SPEED_POTION; }
 function getArmorPoints() {
   let pts = 0;
   if (!player.armor) return 0;
@@ -10267,6 +10484,8 @@ function getArmorPoints() {
   else if (player.armor.helmet === B.DIAMOND_HELMET) pts += 3;
   if (player.armor.chestplate === B.IRON_CHESTPLATE) pts += 6;
   else if (player.armor.chestplate === B.DIAMOND_CHESTPLATE) pts += 8;
+  if (player.armor.boots === B.IRON_BOOTS) pts += 2;
+  else if (player.armor.boots === B.DIAMOND_BOOTS) pts += 3;
   return pts;
 }
 function updateArmorBar() {
@@ -10357,8 +10576,12 @@ const RECIPES = [
   { out: B.FLINT_AND_STEEL, n: 1, need: [[B.IRON_INGOT, 1], [B.GRAVEL, 1]] },
   { out: B.IRON_HELMET, n: 1, need: [[B.IRON_INGOT, 5]] },
   { out: B.IRON_CHESTPLATE, n: 1, need: [[B.IRON_INGOT, 8]] },
+  { out: B.IRON_BOOTS, n: 1, need: [[B.IRON_INGOT, 4]] },
   { out: B.DIAMOND_HELMET, n: 1, need: [[B.DIAMOND, 5]] },
   { out: B.DIAMOND_CHESTPLATE, n: 1, need: [[B.DIAMOND, 8]] },
+  { out: B.DIAMOND_BOOTS, n: 1, need: [[B.DIAMOND, 4]] },
+  { out: B.HEALING_POTION, n: 1, need: [[B.APPLE, 1], [B.WATER_BUCKET, 1]] },
+  { out: B.SPEED_POTION, n: 1, need: [[B.WHEAT, 2], [B.WATER_BUCKET, 1]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -10929,12 +11152,40 @@ function makeItemIcon(id) {
     ctx.fillRect(10, 14, 12, 8);
     ctx.fillStyle = '#0e454b'; ctx.fillRect(12, 6, 8, 5);
     ctx.fillStyle = '#156169'; ctx.fillRect(10, 23, 12, 3);
+  } else if (id === B.IRON_BOOTS) {
+    // 铁靴子：结实战靴外形 + 护踝 + 铁鞋头
+    ctx.fillStyle = '#8a9298'; ctx.fillRect(8, 12, 6, 14); ctx.fillRect(18, 12, 6, 14);
+    ctx.fillRect(6, 20, 8, 6); ctx.fillRect(18, 20, 8, 6);
+    ctx.fillStyle = '#dcdde1'; ctx.fillRect(9, 13, 4, 10); ctx.fillRect(19, 13, 4, 10);
+    ctx.fillRect(7, 21, 6, 4); ctx.fillRect(19, 21, 6, 4);
+    ctx.fillStyle = '#f5f6fa'; ctx.fillRect(7, 21, 2, 2); ctx.fillRect(19, 21, 2, 2);
+  } else if (id === B.DIAMOND_BOOTS) {
+    // 钻石靴子：璀璨青翠钻石靴 + 晶莹高光
+    ctx.fillStyle = '#1b7b85'; ctx.fillRect(8, 12, 6, 14); ctx.fillRect(18, 12, 6, 14);
+    ctx.fillRect(6, 20, 8, 6); ctx.fillRect(18, 20, 8, 6);
+    ctx.fillStyle = '#4dedf4'; ctx.fillRect(9, 13, 4, 10); ctx.fillRect(19, 13, 4, 10);
+    ctx.fillRect(7, 21, 6, 4); ctx.fillRect(19, 21, 6, 4);
+    ctx.fillStyle = '#bdfaff'; ctx.fillRect(7, 21, 2, 2); ctx.fillRect(19, 21, 2, 2);
+  } else if (id === B.HEALING_POTION) {
+    // 治疗药水：透明水晶药水瓶 + 炽热鲜红药液 + 软木塞
+    ctx.fillStyle = '#8c5028'; ctx.fillRect(14, 5, 4, 3);
+    ctx.fillStyle = '#d0d8e0'; ctx.fillRect(13, 8, 6, 4); ctx.fillRect(10, 12, 12, 14);
+    ctx.fillStyle = '#ff2a4b'; ctx.fillRect(11, 13, 10, 12);
+    ctx.fillStyle = '#ff758f'; ctx.fillRect(12, 14, 4, 4);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(18, 13, 2, 2);
+  } else if (id === B.SPEED_POTION) {
+    // 迅捷药水：透明水晶药水瓶 + 湛蓝极速药液 + 软木塞
+    ctx.fillStyle = '#8c5028'; ctx.fillRect(14, 5, 4, 3);
+    ctx.fillStyle = '#d0d8e0'; ctx.fillRect(13, 8, 6, 4); ctx.fillRect(10, 12, 12, 14);
+    ctx.fillStyle = '#00d2d3'; ctx.fillRect(11, 13, 10, 12);
+    ctx.fillStyle = '#54a0ff'; ctx.fillRect(12, 14, 4, 4);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(18, 13, 2, 2);
   }
   return cv;
 }
 function makeIcon(id) {
   if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD && id !== B.CROSSBOW && id !== B.SHEARS && id !== B.FLINT_AND_STEEL)) return makeToolIcon(id);
-  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id)) return makeItemIcon(id);
+  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id)) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
   return makeIconCanvas(id);
 }
@@ -11178,6 +11429,38 @@ function buildInventory() {
       buildInventory();
     };
   }
+  const bootsEl = document.getElementById('slotBoots');
+  if (bootsEl) {
+    bootsEl.innerHTML = '';
+    if (player.armor && player.armor.boots) {
+      bootsEl.appendChild(makeIcon(player.armor.boots));
+      bootsEl.title = `【已佩戴】${itemName(player.armor.boots)}（点击脱下防具）`;
+    } else {
+      bootsEl.innerHTML = '<span style="font-size:18px; opacity:0.35;">👢</span>';
+      bootsEl.title = '足部防具槽（快捷栏选中靴子点击此处装备）';
+    }
+    bootsEl.onclick = () => {
+      if (player.armor && player.armor.boots) {
+        addItem(player.armor.boots, 1);
+        player.armor.boots = null;
+        playPop();
+      } else {
+        const cur = hotbar[selected];
+        if (cur && isBoots(cur.id)) {
+          if (!player.armor) player.armor = { helmet: null, chestplate: null, boots: null };
+          player.armor.boots = cur.id;
+          if (cur.count > 1) cur.count--; else hotbar[selected] = null;
+          tone(450, 700, 0.08, 'triangle', 0.25);
+          toast(`🛡️ 穿戴了【${itemName(player.armor.boots)}】！`);
+        } else {
+          toast('💡 请先在快捷栏选中靴子，再点击此处装备');
+        }
+      }
+      refreshHotbar();
+      updateArmorBar();
+      buildInventory();
+    };
+  }
 
   invGrid.innerHTML = '';
   for (let i = 0; i < INV_SIZE; i++) {
@@ -11276,7 +11559,7 @@ function closeInventory() {
 }
 function toggleInventory() {
   if (inventoryOpen) closeInventory();
-  else if (locked) openInventory();
+  else if (started) openInventory();
 }
 // —— 熔炉 UI ——
 function buildFurnaceUI() {
@@ -11816,10 +12099,18 @@ document.addEventListener('keydown', (e) => {
     toast(player.fly ? '✨ 已开启创造模式（自由翱翔，无伤害）' : '🚶 已切换为生存模式');
   }
   if (e.code === 'KeyN') { timeOfDay = 0.24; }                 // 跳到白天
-  if (e.code === 'KeyE') {
+  if (e.code === 'KeyE' || e.key === 'e' || e.key === 'E') {
+    e.preventDefault();
     if (tradeOpen) { closeTradeUI(); return; }
     if (chestOpen) { closeChest(); return; }
+    if (furnaceOpen) { closeFurnace(); return; }
     toggleInventory();
+    return;
+  }
+  if (e.code === 'Tab' || e.key === 'Tab') {
+    e.preventDefault();
+    toast('🎒 背包快捷键为 [E] 键');
+    return;
   }
   if (e.code === 'KeyQ') {
     // Q 键丢出手持物品
@@ -12372,16 +12663,19 @@ function onMousedown(btn) {
     if (sel && isArmor(sel.id)) {
       const aid = sel.id;
       let oldPiece = null;
-      if (!player.armor) player.armor = { helmet: null, chestplate: null };
+      if (!player.armor) player.armor = { helmet: null, chestplate: null, boots: null };
       if (isHelmet(aid)) {
         oldPiece = player.armor.helmet;
         player.armor.helmet = aid;
       } else if (isChestplate(aid)) {
         oldPiece = player.armor.chestplate;
         player.armor.chestplate = aid;
+      } else if (isBoots(aid)) {
+        oldPiece = player.armor.boots;
+        player.armor.boots = aid;
       }
-      tone(450, 700, 0.08, 'square', 0.25);
-      setTimeout(() => tone(650, 900, 0.09, 'triangle', 0.25), 80);
+      tone(450, 700, 0.08, 'triangle', 0.25);
+      setTimeout(() => tone(650, 900, 0.09, 'sine', 0.25), 80);
       spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0xdcdde1, 14);
       if (sel.count > 1) {
         sel.count--;
@@ -12424,6 +12718,29 @@ function onMousedown(btn) {
       updateHearts();
       spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0xffd700, 24);
       toast('✨ 享用了神圣金苹果！获得了 2 颗吸收金心与生命恢复！');
+      return;
+    }
+
+    // 手持治疗药水饮用
+    if (sel && sel.id === B.HEALING_POTION) {
+      if (!player.fly) removeItem(B.HEALING_POTION, 1);
+      refreshHotbar();
+      playDrink();
+      player.hp = Math.min(20, player.hp + 8);
+      updateHearts();
+      spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0xff2a4b, 24);
+      toast('🧪 畅饮治疗药水！瞬间恢复了 8 点生命值（4 颗心）！');
+      return;
+    }
+
+    // 手持迅捷药水饮用
+    if (sel && sel.id === B.SPEED_POTION) {
+      if (!player.fly) removeItem(B.SPEED_POTION, 1);
+      refreshHotbar();
+      playDrink();
+      player.speedPotionTimer = 45; // 45 秒加速
+      spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0x00d2d3, 24);
+      toast('⚡ 畅饮迅捷药水！获得了 45 秒超凡疾行移速（迅捷 II）！');
       return;
     }
 
@@ -12494,7 +12811,9 @@ function onMousedown(btn) {
     enqueueAround(px, py, pz);
     playPlace(sid);
     if (sid === B.PUMPKIN || sid === B.JACK_O_LANTERN) {
-      checkIronGolemSpawn(px, py, pz);
+      if (!checkIronGolemSpawn(px, py, pz)) {
+        checkSnowGolemSpawn(px, py, pz);
+      }
     }
     if (sid !== B.WATER) {                          // 水是无限水源，不消耗
       sel.count--;
@@ -12621,6 +12940,7 @@ function animate() {
     updateEndermen(dt);
     updateSpiders(dt);
     updateIronGolems(dt);
+    updateSnowGolems(dt);
     updateVillagers(dt);
     updatePillagers(dt);
     updateRavagers(dt);
