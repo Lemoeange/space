@@ -1920,21 +1920,6 @@ function makeAtlas() {
   // 3. 樱花树苗（粉嫩樱花幼株）
   drawSaplingTile(T.cherrySapling, [[248, 162, 186], [236, 134, 164], [255, 210, 226], [220, 110, 142]], [90, 52, 48]);
 
-  // —— 全树叶 85% 丰满度精致镂空最终通道（包括枫树叶、樱花树叶等全部 7 种树叶，确保无一漏网）——
-  const allLeafTiles = [
-    T.leaves, T.birchLeaves, T.spruceLeaves, T.jungleLeaves, T.acaciaLeaves, T.cherryLeaves, T.mapleLeaves
-  ];
-  allLeafTiles.forEach((tile, k) => {
-    speck(tile, [24, 76, 22], 24, 31 + k * 5);
-    const r = rng(tile, 88);
-    for (let y = 0; y < TILE; y++) {
-      for (let x = 0; x < TILE; x++) {
-        const isCutout = (((x ^ y) & 3) === 0 && r() < 0.60);
-        if (isCutout) put(tile, x, y, 0, 0, 0, 0); // alpha = 0 透光镂空孔隙（85% 实体度）
-      }
-    }
-  });
-
   ctx.putImageData(img, 0, 0);
   // 3D 渲染改用 2D 纹理数组（每 tile 独立一层，配合 RepeatWrapping 可让单个 tile 跨大四边形循环）
   const layers = ATLAS_TILES;
@@ -2043,7 +2028,7 @@ function tileOf(id) {
   }
 }
 
-const opaqueMat = new THREE.MeshStandardMaterial({ map: atlas.tex, vertexColors: true, roughness: 0.88, metalness: 0.02, alphaTest: 0.35 });
+const opaqueMat = new THREE.MeshStandardMaterial({ map: atlas.tex, vertexColors: true, roughness: 0.88, metalness: 0.02 });
 const cutoutMat = new THREE.MeshStandardMaterial({ map: atlas.tex, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.88, metalness: 0.02 });
 const torchMat = new THREE.MeshBasicMaterial({ map: atlas.tex, alphaTest: 0.45, side: THREE.DoubleSide });   // 无光照，自发光
 
@@ -2061,12 +2046,6 @@ function useArrayTexture(mat) {
 useArrayTexture(opaqueMat);
 useArrayTexture(cutoutMat);
 useArrayTexture(torchMat);
-
-// 实心地形与树木专用深度阴影材质：全实心深度投射（无 alphaTest 破碎采样），树冠与地形投射如之前一般浓密完整、边界柔和的真实阴影，杜绝模糊与千疮百孔
-const solidDepthMat = new THREE.MeshDepthMaterial({
-  depthPacking: THREE.RGBADepthPacking
-});
-opaqueMat.customDepthMaterial = solidDepthMat;
 
 // 植物/镂空方块专用深度阴影材质（采样 2D 数组纹理，准确镂空阴影）
 const cutoutDepthMat = new THREE.MeshDepthMaterial({
@@ -2306,20 +2285,20 @@ sky.frustumCulled = false;
 sky.renderOrder = -1;
 scene.add(sky);
 
-// 光照（电影感：双向昼夜动态阴影 + 暖柔日光 + 冷月光 + 天光半球，加深阴影层次）
-const hemi = new THREE.HemisphereLight(0xc2e0ff, 0x5a5042, 0.38);
+// 光照（电影感：双向昼夜动态阴影 + 暖色日光 + 冷色月光 + 天光半球）
+const hemi = new THREE.HemisphereLight(0xbfd8ff, 0x8a7a5a, 0.7);
 scene.add(hemi);
-const ambient = new THREE.AmbientLight(0xfff2e2, 0.22);   // 适度降低散射光底噪，增强阴影纵深立体感
+const ambient = new THREE.AmbientLight(0xfff2e0, 0.35);   // 均匀环境光：提亮侧面、缩小顶面与侧面的亮度差
 scene.add(ambient);
-const sun = new THREE.DirectionalLight(0xfff5e6, 2.2);
+const sun = new THREE.DirectionalLight(0xffe9c8, 2.0);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);   // 高清阴影图
+sun.shadow.mapSize.set(2048, 2048);   // 分辨率提上来 + 视锥收紧，单方块能分到多得多的阴影纹素
 const sc = sun.shadow.camera;
 sc.left = -96; sc.right = 96; sc.top = 96; sc.bottom = -96; sc.near = 1; sc.far = 400;
 sc.updateProjectionMatrix();
-sun.shadow.bias = 0.00032;            // 适度正偏移，彻底消除斜坡、洞穴顶底与树叶自阴影条纹闪烁（Shadow Acne）
-sun.shadow.normalBias = 0.052;        // 顺滑法线偏移，避免阴影悬浮脱离方块（Peter Panning）
-sun.shadow.radius = 2.0;              // 柔化采样滤波半径，阴影边缘如原版般柔和自然
+sun.shadow.bias = 0.00004;            // 极微小正偏移，彻底消除大面积自阴影锯齿与摩尔纹
+sun.shadow.normalBias = 0.042;        // 严丝合缝的法线偏移，避免阴影悬浮脱离方块（Peter Panning）
+sun.shadow.radius = 2.4;              // 柔化采样滤波半径提升，平滑消除阴影边缘锯齿抖动与台阶跳变
 scene.add(sun);
 scene.add(sun.target);
 
@@ -2329,9 +2308,9 @@ moon.shadow.mapSize.set(2048, 2048);
 const mc = moon.shadow.camera;
 mc.left = -96; mc.right = 96; mc.top = 96; mc.bottom = -96; mc.near = 1; mc.far = 400;
 mc.updateProjectionMatrix();
-moon.shadow.bias = 0.00032;
-moon.shadow.normalBias = 0.052;
-moon.shadow.radius = 2.0;
+moon.shadow.bias = 0.00004;
+moon.shadow.normalBias = 0.042;
+moon.shadow.radius = 2.4;
 scene.add(moon);
 scene.add(moon.target);
 
@@ -3469,16 +3448,7 @@ function buildOpaqueGreedy(c, A, baseX, baseZ, yMax, colTop, getB, solid) {
         if (isSeeThrough(id)) continue;   // 空气/水/玻璃/植物/火把/睡莲
         const bx = baseX + lx, bz = baseZ + lz;
         const nb = getB(bx + f.dir[0], ly + f.dir[1], bz + f.dir[2]);
-        const isLeafNeighbor = isLeaf(nb);
-        const isSelfLeaf = isLeaf(id);
-        if (!isSeeThrough(nb)) {
-          // 智能面剔除判定：
-          // 1. 若自身是树叶，且邻居也是树叶或实体方块：剔除（树叶内部面与贴木面不渲染，保持极致性能）
-          // 2. 若自身是普通实体方块，且邻居不是树叶：剔除（常规实体间面剔除）
-          // 3. 特别注意：若自身是实体方块（如树干、地表），而邻居是半透镂空树叶时，绝对不能剔除该面！
-          //    保证玩家透过镂空树叶看树干时树干完整无缺，绝不需要挖开树叶才能看到树干！
-          if (isSelfLeaf || !isLeafNeighbor) continue;
-        }
+        if (!isSeeThrough(nb)) continue;
         let tile = tileOf(id)[f.face];
         if (id === B.CHEST && f.face === 'side' && f.dir[2] === 1) tile = atlas.T.chestFront;
         const under = undergroundFactor(colTop, lx, lz, ly);
@@ -3717,7 +3687,7 @@ function buildChunkGeometry(c) {
     const i = lz * 16 + lx;
     for (let y = yMax; y >= 0; y--) {
       const id = c.blocks[y * 256 + i];
-      if (!isSeeThrough(id)) { colTop[i] = y; break; }
+      if (!isSeeThrough(id) && !isLeaf(id)) { colTop[i] = y; break; }
     }
   }
   // 预取 3x3 邻居区块数据，避免网格构建时逐格 Map 查找 + 字符串 key
@@ -12475,17 +12445,16 @@ function animate() {
   waterMat.uniforms.uFogFar.value = scene.fog.far;
   skyMat.uniforms.uTime.value = clock.elapsedTime;   // 星星闪烁
 
-  // 太阳 / 月亮跟随玩家（阴影）；采用整格体素对齐，杜绝旋转帧抖动导致的树叶/洞穴/地表阴影闪烁
-  const lx = Math.round(player.pos.x);
-  const lz = Math.round(player.pos.z);
-  const ly = Math.round(player.pos.y);
-  sun.position.set(lx + sunDir.x * 120, ly + sunDir.y * 120, lz + sunDir.z * 120);
-  sun.target.position.set(lx, ly, lz);
+  // 太阳 / 月亮跟随玩家（阴影）；对齐当前主投射光源的阴影纹素，彻底避免阴影爬行/抖动
+  const activeLightDir = sun.castShadow ? sunDir : moonDir;
+  const sp = snapShadowToTexel(player.pos, activeLightDir);
+  sun.position.set(sp.x + sunDir.x * 120, sp.y + sunDir.y * 120, sp.z + sunDir.z * 120);
+  sun.target.position.set(sp.x, sp.y, sp.z);
   sun.updateMatrixWorld();
   sun.target.updateMatrixWorld();
 
-  moon.position.set(lx + moonDir.x * 120, ly + moonDir.y * 120, lz + moonDir.z * 120);
-  moon.target.position.set(lx, ly, lz);
+  moon.position.set(sp.x + moonDir.x * 120, sp.y + moonDir.y * 120, sp.z + moonDir.z * 120);
+  moon.target.position.set(sp.x, sp.y, sp.z);
   moon.updateMatrixWorld();
   moon.target.updateMatrixWorld();
   sky.position.copy(player.pos);
