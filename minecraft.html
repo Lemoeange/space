@@ -285,6 +285,12 @@
 <div id="sleepFade" style="position:fixed;inset:0;background:#060814;opacity:0;pointer-events:none;transition:opacity 0.65s cubic-bezier(0.4, 0, 0.2, 1);z-index:9999;"></div>
 <div id="totemFlash" style="position:fixed;inset:0;background:radial-gradient(circle, rgba(255,215,0,0.85) 0%, rgba(23,221,98,0.55) 60%, transparent 100%);opacity:0;pointer-events:none;transition:opacity 0.7s cubic-bezier(0.1, 0.9, 0.2, 1);z-index:9998;"></div>
 <div id="crosshair"></div>
+<!-- 望远镜单筒黄铜瞄准刻度遮罩 -->
+<div id="spyglassOverlay" style="display:none; position:fixed; inset:0; pointer-events:none; z-index:9000; box-shadow:inset 0 0 0 100vmax rgba(12,8,4,0.94); border-radius:50%; margin:auto; width:min(70vh, 70vw); height:min(70vh, 70vw); border:8px solid #b8860b;">
+  <div style="position:absolute; inset:0; border:2px dashed rgba(245,200,90,0.35); border-radius:50%;"></div>
+  <div style="position:absolute; left:50%; top:15%; bottom:15%; width:2px; background:rgba(245,200,90,0.45); transform:translateX(-50%);"></div>
+  <div style="position:absolute; top:50%; left:15%; right:15%; height:2px; background:rgba(245,200,90,0.45); transform:translateY(-50%);"></div>
+</div>
 
 <!-- 顶端村庄袭击 BOSS 血条 (Raid HUD) -->
 <div id="raidHUD" style="display:none; position:fixed; top:20px; left:50%; transform:translateX(-50%); width:340px; z-index:900; text-align:center; pointer-events:none; font-family:'Segoe UI',sans-serif;">
@@ -496,7 +502,8 @@ const B = {
   IRON_BOOTS:130, DIAMOND_BOOTS:131, HEALING_POTION:132, SPEED_POTION:133,
   FIRE_CHARGE:134, GOLDEN_CARROT:135, COMPASS:136, CLOCK:137,
   ENCHANTED_GOLDEN_APPLE:138, COOKIE:139, FIREWORK_ROCKET:140,
-  IRON_LEGGINGS:141, DIAMOND_LEGGINGS:142, EXPERIENCE_BOTTLE:143, ENDER_EYE:144
+  IRON_LEGGINGS:141, DIAMOND_LEGGINGS:142, EXPERIENCE_BOTTLE:143, ENDER_EYE:144,
+  SPYGLASS:145, JUKEBOX:146, MUSIC_DISC:147, TRIDENT:148
 };
 
 function mulberry32(a) {
@@ -802,7 +809,7 @@ const { HEIGHT, SEA, B, mulberry32, surfaceHeight, isCave, oreFor, oreNoise, bio
 /* ============================ 常量 ============================ */
 const CHUNK = 16;
 const TILE = 16;
-const ATLAS_TILES = 100;
+const ATLAS_TILES = 120;
 const ATLAS_W = ATLAS_TILES * TILE;
 const AO_LEVELS = [0.55, 0.7, 0.85, 1.0];
 const VIEW_R = 10;        // 视距（chunk 半径，每格 16 块）
@@ -847,6 +854,7 @@ function makeAtlas() {
   T.cobweb = i++;
   T.mapleLogSide = i++; T.mapleLogTop = i++;
   T.sapling = i++; T.mapleSapling = i++; T.cherrySapling = i++;
+  T.jukeboxTop = i++; T.jukeboxSide = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -1835,6 +1843,27 @@ function makeAtlas() {
   put(T.chestFront, 7, 8, 130, 130, 135); put(T.chestFront, 8, 8, 130, 130, 135);
   put(T.chestFront, 7, 5, 255, 255, 255);
 
+  // —— 唱片机（Jukebox）——
+  fill(T.jukeboxTop, [110, 60, 35], 10, 150);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    if (x === 0 || x === 15 || y === 0 || y === 15) put(T.jukeboxTop, x, y, 65, 30, 15);
+    const dx = x - 7.5, dy = y - 7.5;
+    const r2 = dx * dx + dy * dy;
+    if (r2 <= 22) put(T.jukeboxTop, x, y, 25, 25, 25);
+    if (r2 <= 4) put(T.jukeboxTop, x, y, 220, 180, 50);
+  }
+  fill(T.jukeboxSide, [110, 60, 35], 10, 151);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    if (x === 0 || x === 15 || y === 0 || y === 15) put(T.jukeboxSide, x, y, 65, 30, 15);
+  }
+  put(T.jukeboxSide, 9, 4, 180, 130, 70); put(T.jukeboxSide, 10, 4, 180, 130, 70);
+  put(T.jukeboxSide, 10, 5, 180, 130, 70); put(T.jukeboxSide, 10, 6, 180, 130, 70);
+  put(T.jukeboxSide, 10, 7, 180, 130, 70); put(T.jukeboxSide, 10, 8, 180, 130, 70);
+  put(T.jukeboxSide, 10, 9, 180, 130, 70);
+  put(T.jukeboxSide, 8, 9, 180, 130, 70); put(T.jukeboxSide, 9, 9, 180, 130, 70);
+  put(T.jukeboxSide, 7, 10, 180, 130, 70); put(T.jukeboxSide, 8, 10, 180, 130, 70);
+  put(T.jukeboxSide, 9, 10, 180, 130, 70);
+
   // —— 营火（Campfire）——
   // 顶面：中心赤红灼热炭火木炭 + 外围原木
   fill(T.campfireTop, [42, 38, 36], 8, 140);
@@ -2044,6 +2073,7 @@ function tileOf(id) {
     case B.BED: return { top: atlas.T.bedTop, side: atlas.T.bedSide, bottom: atlas.T.planks };
     case B.FURNACE: return { top: atlas.T.furnace, side: atlas.T.furnace, bottom: atlas.T.furnace };
     case B.CHEST: return { top: atlas.T.chestTop, side: atlas.T.chestSide, bottom: atlas.T.chestTop };
+    case B.JUKEBOX: return { top: atlas.T.jukeboxTop, side: atlas.T.jukeboxSide, bottom: atlas.T.planks };
     case B.CAMPFIRE: return { top: atlas.T.campfireTop, side: atlas.T.campfireSide, bottom: atlas.T.campfireSide };
     case B.DOOR: return { top: atlas.T.doorTop, side: atlas.T.doorBottom, bottom: atlas.T.doorBottom };
     case B.COBWEB: return { top: atlas.T.cobweb, side: atlas.T.cobweb, bottom: atlas.T.cobweb };
@@ -3972,6 +4002,7 @@ const BLOCK_COLORS = {
   [B.SADDLE]: 0x8d5b32, [B.BUCKET]: 0xd8dcde, [B.WATER_BUCKET]: 0x2277bb, [B.CROSSBOW]: 0x8a623c,
   [B.SHEARS]: 0xdcdde1, [B.FLINT_AND_STEEL]: 0x8a9298,
   [B.MAPLE_LOG]: 0x583626, [B.SAPLING]: 0x48982a, [B.MAPLE_SAPLING]: 0xd44022, [B.CHERRY_SAPLING]: 0xf492b4,
+  [B.JUKEBOX]: 0x6e3c23,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -9155,6 +9186,204 @@ function updateEnderEyes(dt) {
   }
 }
 
+/* ============================ 📻 唱片机与 C418 音乐系统 (Jukebox) ============================ */
+let activeJukeboxPos = null;
+let jukeboxAudioNodes = [];
+let jukeboxTimer = null;
+let jukeboxParticleTimer = null;
+
+const CAT_MELODY = [
+  { f: 587.33, d: 0.25 },
+  { f: 659.25, d: 0.25 },
+  { f: 783.99, d: 0.35 },
+  { f: 880.00, d: 0.35 },
+  { f: 783.99, d: 0.25 },
+  { f: 659.25, d: 0.25 },
+  { f: 587.33, d: 0.40 },
+  { f: 493.88, d: 0.35 },
+  { f: 523.25, d: 0.25 },
+  { f: 587.33, d: 0.25 },
+  { f: 659.25, d: 0.35 },
+  { f: 587.33, d: 0.25 },
+  { f: 523.25, d: 0.25 },
+  { f: 440.00, d: 0.50 },
+  { f: 392.00, d: 0.40 },
+  { f: 440.00, d: 0.35 },
+  { f: 523.25, d: 0.35 },
+  { f: 587.33, d: 0.60 },
+];
+
+function stopJukebox() {
+  if (jukeboxTimer) { clearTimeout(jukeboxTimer); jukeboxTimer = null; }
+  if (jukeboxParticleTimer) { clearInterval(jukeboxParticleTimer); jukeboxParticleTimer = null; }
+  for (const n of jukeboxAudioNodes) {
+    try { n.stop(); n.disconnect(); } catch (e) {}
+  }
+  jukeboxAudioNodes = [];
+  activeJukeboxPos = null;
+}
+
+function playJukeboxTrack(bx, by, bz) {
+  stopJukebox();
+  activeJukeboxPos = { x: bx, y: by, z: bz };
+
+  let noteIdx = 0;
+  function scheduleNextNote() {
+    if (!activeJukeboxPos || !audioCtx) return;
+    const note = CAT_MELODY[noteIdx % CAT_MELODY.length];
+    noteIdx++;
+
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(note.f, t);
+
+    const osc2 = audioCtx.createOscillator();
+    const g2 = audioCtx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(note.f * 2, t);
+
+    const dist = Math.hypot(player.pos.x - (bx + 0.5), player.pos.y - (by + 0.5), player.pos.z - (bz + 0.5));
+    const volScale = Math.max(0, Math.min(1, 1 - dist / 35));
+    const baseGain = 0.16 * volScale;
+
+    g.gain.setValueAtTime(baseGain, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + note.d * 1.2);
+    g2.gain.setValueAtTime(baseGain * 0.35, t);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + note.d * 1.1);
+
+    osc.connect(g); g.connect(masterGain);
+    osc2.connect(g2); g2.connect(masterGain);
+
+    osc.start(t); osc.stop(t + note.d * 1.25);
+    osc2.start(t); osc2.stop(t + note.d * 1.15);
+    jukeboxAudioNodes = [osc, osc2];
+
+    jukeboxTimer = setTimeout(scheduleNextNote, note.d * 1000 + 50);
+  }
+
+  scheduleNextNote();
+
+  const NOTE_COLORS = [0xff4757, 0x2ed573, 0x1e90ff, 0xffa502, 0x9b59b6, 0x00d2d3];
+  jukeboxParticleTimer = setInterval(() => {
+    if (!activeJukeboxPos) return;
+    const color = NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)];
+    spawnParticles(activeJukeboxPos.x + 0.5, activeJukeboxPos.y + 1.2, activeJukeboxPos.z + 0.5, color, 4);
+  }, 450);
+}
+
+/* ============================ ⚡ 传奇三叉戟与忠诚回旋系统 (Trident) ============================ */
+const tridents = [];
+const tridentGeo = new THREE.CylinderGeometry(0.03, 0.03, 1.2, 6);
+const tridentHeadGeo = new THREE.BoxGeometry(0.22, 0.35, 0.04);
+const tridentMat = new THREE.MeshLambertMaterial({ color: 0x10ac84 });
+const tridentHeadMat = new THREE.MeshLambertMaterial({ color: 0x70a1ff });
+
+function createTridentMesh() {
+  const g = new THREE.Group();
+  const shaft = new THREE.Mesh(tridentGeo, tridentMat);
+  shaft.rotation.x = Math.PI / 2;
+  const head = new THREE.Mesh(tridentHeadGeo, tridentHeadMat);
+  head.position.z = -0.55;
+  g.add(shaft);
+  g.add(head);
+  return g;
+}
+
+function launchTrident(origin, dir) {
+  const mesh = createTridentMesh();
+  mesh.position.copy(origin);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), dir);
+  scene.add(mesh);
+
+  tone(400, 160, 0.18, 'sawtooth', 0.25);
+  burst(0.12, 0.15, 1600, 'bandpass');
+
+  tridents.push({
+    mesh,
+    pos: origin.clone(),
+    vel: dir.clone().multiplyScalar(32.0),
+    returning: false,
+    life: 5.0
+  });
+  toast('⚡ 掷出了传奇三叉戟！');
+}
+
+function updateTridents(dt) {
+  for (let i = tridents.length - 1; i >= 0; i--) {
+    const tri = tridents[i];
+    tri.life -= dt;
+
+    if (!tri.returning) {
+      tri.vel.y -= 7.0 * dt;
+      tri.pos.addScaledVector(tri.vel, dt);
+      tri.mesh.position.copy(tri.pos);
+
+      if (Math.random() < 0.6) {
+        spawnParticles(tri.pos.x, tri.pos.y, tri.pos.z, 0x70a1ff, 2);
+      }
+
+      const bx = Math.floor(tri.pos.x), by = Math.floor(tri.pos.y), bz = Math.floor(tri.pos.z);
+      let hit = false;
+      if (by >= 0 && by < HEIGHT && world.getBlock(bx, by, bz) !== B.AIR && isSolid(world.getBlock(bx, by, bz))) {
+        hit = true;
+      }
+      if (!hit) {
+        for (let zi = zombies.length - 1; zi >= 0; zi--) {
+          const z = zombies[zi];
+          if (Math.hypot(z.x - tri.pos.x, (z.g.position.y + 0.8) - tri.pos.y, z.z - tri.pos.z) < 0.9) {
+            hit = true;
+            z.hp -= 15;
+            z.hurtT = 0.35;
+            playZombieHit();
+            if (z.hp <= 0) killZombie(zi);
+            break;
+          }
+        }
+      }
+      if (!hit) {
+        for (let si = skeletons.length - 1; si >= 0; si--) {
+          const sk = skeletons[si];
+          if (Math.hypot(sk.x - tri.pos.x, (sk.g.position.y + 0.8) - tri.pos.y, sk.z - tri.pos.z) < 0.9) {
+            hit = true;
+            sk.hp -= 15;
+            sk.hurtT = 0.35;
+            if (sk.hp <= 0) killSkeleton(si);
+            break;
+          }
+        }
+      }
+
+      if (hit || tri.life <= 3.0) {
+        tri.returning = true;
+        tone(300, 800, 0.15, 'sine', 0.2);
+        spawnParticles(tri.pos.x, tri.pos.y, tri.pos.z, 0x1dd1a1, 16);
+      }
+    } else {
+      const pTarget = new THREE.Vector3(player.pos.x, player.pos.y + 1.2, player.pos.z);
+      const toPlayer = pTarget.clone().sub(tri.pos);
+      const dist = toPlayer.length();
+
+      if (dist < 1.2 || tri.life <= 0) {
+        scene.remove(tri.mesh);
+        tridents.splice(i, 1);
+        addItem(B.TRIDENT, 1);
+        refreshHotbar();
+        tone(520, 1040, 0.12, 'triangle', 0.22);
+        toast('🔱 忠诚附魔生效：三叉戟破空飞回手中！');
+        continue;
+      }
+
+      toPlayer.normalize();
+      tri.vel.copy(toPlayer.multiplyScalar(26.0));
+      tri.pos.addScaledVector(tri.vel, dt);
+      tri.mesh.position.copy(tri.pos);
+      tri.mesh.rotation.y += 12 * dt;
+    }
+  }
+}
+
 /* ============================ 弓箭射击系统 ============================ */
 let bowCharging = false;
 let bowChargeTime = 0;
@@ -9960,7 +10189,7 @@ const TOOL_DURABILITY = {
 };
 // 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌不可放置）
 function isPlaceable(id) {
-  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.COMPASS || id === B.CLOCK || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE) return false;
+  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.COMPASS || id === B.CLOCK || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT) return false;
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.MELON_SLICE) return false;
   if (isFood(id)) return false;   // 食物不可放置
   return true;
@@ -10686,6 +10915,7 @@ const NAMES = {
   [B.FIRE_CHARGE]: '火焰弹', [B.GOLDEN_CARROT]: '金胡萝卜', [B.COMPASS]: '指南针', [B.CLOCK]: '时钟',
   [B.ENCHANTED_GOLDEN_APPLE]: '附魔金苹果', [B.COOKIE]: '曲奇', [B.FIREWORK_ROCKET]: '烟花火箭',
   [B.IRON_LEGGINGS]: '铁护腿', [B.DIAMOND_LEGGINGS]: '钻石护腿', [B.EXPERIENCE_BOTTLE]: '附魔之瓶', [B.ENDER_EYE]: '末影之眼',
+  [B.SPYGLASS]: '望远镜', [B.JUKEBOX]: '唱片机', [B.MUSIC_DISC]: '音乐唱片(Cat)', [B.TRIDENT]: '三叉戟',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 function isHelmet(id) { return id === B.IRON_HELMET || id === B.DIAMOND_HELMET; }
@@ -10812,6 +11042,10 @@ const RECIPES = [
   { out: B.FIREWORK_ROCKET, n: 3, need: [[B.GUNPOWDER, 1], [B.STRING, 1]] },
   { out: B.EXPERIENCE_BOTTLE, n: 3, need: [[B.EMERALD, 1], [B.WATER_BUCKET, 1]] },
   { out: B.ENDER_EYE, n: 1, need: [[B.ENDER_PEARL, 1], [B.FIRE_CHARGE, 1]] },
+  { out: B.SPYGLASS, n: 1, need: [[B.IRON_INGOT, 2], [B.GLASS, 1]] },
+  { out: B.JUKEBOX, n: 1, need: [[B.PLANKS, 8], [B.DIAMOND, 1]] },
+  { out: B.MUSIC_DISC, n: 1, need: [[B.COAL, 1], [B.EMERALD, 1]] },
+  { out: B.TRIDENT, n: 1, need: [[B.IRON_INGOT, 3], [B.DIAMOND, 2]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -11480,12 +11714,32 @@ function makeItemIcon(id) {
     ctx.fillStyle = '#2ecc71'; ctx.beginPath(); ctx.arc(16, 16, 7, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#061a15'; ctx.fillRect(15, 11, 2, 10);
     ctx.fillStyle = '#e74c3c'; ctx.fillRect(14, 15, 4, 2);
+  } else if (id === B.SPYGLASS) {
+    // 望远镜：黄铜精制单筒镜身 + 紫水晶透镜
+    ctx.fillStyle = '#b8860b'; ctx.beginPath(); ctx.moveTo(8, 24); ctx.lineTo(24, 8); ctx.lineTo(26, 10); ctx.lineTo(10, 26); ctx.fill();
+    ctx.fillStyle = '#e5b73b'; ctx.fillRect(18, 9, 7, 5);
+    ctx.fillStyle = '#f1c40f'; ctx.fillRect(12, 15, 6, 5);
+    ctx.fillStyle = '#d4ac0d'; ctx.fillRect(7, 20, 5, 5);
+    ctx.fillStyle = '#9b59b6'; ctx.fillRect(23, 7, 3, 3);
+  } else if (id === B.MUSIC_DISC) {
+    // 音乐唱片：纯黑黑胶大唱片 + 翠绿 Cat 标签中心
+    ctx.fillStyle = '#1e272e'; ctx.beginPath(); ctx.arc(16, 16, 12, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2f3542'; ctx.beginPath(); ctx.arc(16, 16, 10, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2ed573'; ctx.beginPath(); ctx.arc(16, 16, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(16, 16, 2, 0, Math.PI * 2); ctx.fill();
+  } else if (id === B.TRIDENT) {
+    // 三叉戟：青翠海洋神兵 + 三股锋利尖刃
+    ctx.fillStyle = '#10ac84'; ctx.fillRect(15, 8, 2, 19);
+    ctx.fillStyle = '#1dd1a1'; ctx.fillRect(12, 7, 8, 3);
+    ctx.fillStyle = '#70a1ff'; ctx.fillRect(15, 2, 2, 7);
+    ctx.fillRect(11, 4, 2, 5); ctx.fillRect(19, 4, 2, 5);
+    ctx.fillStyle = '#c7ecee'; ctx.fillRect(15, 2, 2, 2);
   }
   return cv;
 }
 function makeIcon(id) {
   if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD && id !== B.CROSSBOW && id !== B.SHEARS && id !== B.FLINT_AND_STEEL)) return makeToolIcon(id);
-  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.GOLDEN_CARROT || id === B.COMPASS || id === B.CLOCK || id === B.ENCHANTED_GOLDEN_APPLE || id === B.COOKIE || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE) return makeItemIcon(id);
+  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.GOLDEN_CARROT || id === B.COMPASS || id === B.CLOCK || id === B.ENCHANTED_GOLDEN_APPLE || id === B.COOKIE || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
   return makeIconCanvas(id);
 }
@@ -12243,6 +12497,7 @@ const HARDNESS = {
   [B.COAL_BLOCK]: 2.0, [B.IRON_BLOCK]: 3.0, [B.GOLD_BLOCK]: 2.5, [B.DIAMOND_BLOCK]: 3.5,
   [B.TNT]: 0, [B.SNOWBALL]: 0.1, [B.CHEST]: 1.5, [B.CAMPFIRE]: 1.2, [B.DOOR]: 1.5, [B.COBWEB]: 0.15,
   [B.SAPLING]: 0.1, [B.MAPLE_SAPLING]: 0.1, [B.CHERRY_SAPLING]: 0.1,
+  [B.JUKEBOX]: 1.5,
 };
 function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
 // 破坏掉落物
@@ -12431,6 +12686,13 @@ addEventListener('blur', () => {
 });
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 let isZooming = false;
+function setSpyglassZoom(active) {
+  if (isZooming === active) return;
+  isZooming = active;
+  const overlay = document.getElementById('spyglassOverlay');
+  if (overlay) overlay.style.display = isZooming ? 'block' : 'none';
+  tone(isZooming ? 400 : 750, isZooming ? 750 : 400, 0.08, 'triangle', 0.18);
+}
 document.addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (e.code === 'KeyF') {
@@ -12472,7 +12734,7 @@ document.addEventListener('keydown', (e) => {
       playPop();
     }
   }
-  if (e.code === 'KeyV') isZooming = true;                       // V 键望远镜放大
+  if (e.code === 'KeyV') setSpyglassZoom(true);                       // V 键望远镜放大
   if (e.code === 'KeyP') {                                      // P 键强制重新渲染
     groundCache.clear();
     for (const c of world.chunks.values()) {
@@ -12496,7 +12758,7 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => {
   keys[e.code] = false;
   if (e.code === 'ControlLeft' || e.code === 'ControlRight') player.sprint = false;
-  if (e.code === 'KeyV') isZooming = false;
+  if (e.code === 'KeyV') setSpyglassZoom(false);
 });
 addEventListener('wheel', (e) => {
   if (!locked) return;
@@ -12602,6 +12864,27 @@ function onMousedown(btn) {
             toast(`🍖 营火烹饪完成！获得了香脆的【${itemName(cooked)}】！`);
           }, 2500);
           return;
+        }
+      }
+      // 右键唱片机 → 放入/取出音乐唱片
+      if (hit.id === B.JUKEBOX) {
+        if (activeJukeboxPos && activeJukeboxPos.x === hit.x && activeJukeboxPos.y === hit.y && activeJukeboxPos.z === hit.z) {
+          stopJukebox();
+          dropItem(B.MUSIC_DISC, hit.x + 0.5, hit.y + 1.0, hit.z + 0.5);
+          playPop();
+          toast('📻 停止播放并退出了音乐唱片');
+          return;
+        } else {
+          if (sel && sel.id === B.MUSIC_DISC) {
+            if (!player.fly) removeItem(B.MUSIC_DISC, 1);
+            refreshHotbar();
+            playJukeboxTrack(hit.x, hit.y, hit.z);
+            toast('📻 唱片机正在播放：C418 - "Cat" ♪ (再次右键弹出唱片)');
+            return;
+          } else {
+            toast('💡 手持【音乐唱片】右键放入唱片机播放音乐');
+            return;
+          }
         }
       }
       // 右键 TNT 方块交互（必须手持打火石）
@@ -13207,6 +13490,21 @@ function onMousedown(btn) {
       return;
     }
 
+    // 手持望远镜右键聚焦远望
+    if (sel && sel.id === B.SPYGLASS) {
+      setSpyglassZoom(!isZooming);
+      toast(isZooming ? '🔭 开启单筒望远镜聚焦远望！再次右键或按 V 退出' : '🔭 已收回望远镜');
+      return;
+    }
+
+    // 手持三叉戟投掷
+    if (sel && sel.id === B.TRIDENT) {
+      if (!player.fly) removeItem(B.TRIDENT, 1);
+      refreshHotbar();
+      launchTrident(origin, dir);
+      return;
+    }
+
     // 4. 手持食物进食（未对准任何交互方块与实体时）
     if (sel && isFood(sel.id)) {
       eat(sel);
@@ -13372,8 +13670,8 @@ function animate() {
   requestAnimationFrame(animate);   // 跟随屏幕刷新率，不再空转烧 CPU/电量；游戏速度仍由 dt 保证
   const dt = Math.min(clock.getDelta(), 0.05);
 
-  // 望远镜放大 (Key V)
-  const targetFov = isZooming ? 24 : 75;
+  // 望远镜放大 (5倍聚焦，15° 视野)
+  const targetFov = isZooming ? 15 : 75;
   if (Math.abs(camera.fov - targetFov) > 0.05) {
     camera.fov += (targetFov - camera.fov) * Math.min(1, 16 * dt);
     camera.updateProjectionMatrix();
@@ -13420,6 +13718,7 @@ function animate() {
     updateFireworks(dt);
     updateEnderPearls(dt);
     updateEnderEyes(dt);
+    updateTridents(dt);
     updateFishing(dt);
     updateArrows(dt);
     if (bowCharging) bowChargeTime += dt;
