@@ -503,7 +503,11 @@ const B = {
   FIRE_CHARGE:134, GOLDEN_CARROT:135, COMPASS:136, CLOCK:137,
   ENCHANTED_GOLDEN_APPLE:138, COOKIE:139, FIREWORK_ROCKET:140,
   IRON_LEGGINGS:141, DIAMOND_LEGGINGS:142, EXPERIENCE_BOTTLE:143, ENDER_EYE:144,
-  SPYGLASS:145, JUKEBOX:146, MUSIC_DISC:147, TRIDENT:148
+  SPYGLASS:145, JUKEBOX:146, MUSIC_DISC:147, TRIDENT:148,
+  DIAMOND_PICKAXE:149, DIAMOND_AXE:150, DIAMOND_SHOVEL:151, DIAMOND_SWORD:152,
+  ELYTRA:153, OBSIDIAN:154,
+  NETHERITE_INGOT:155, NETHERITE_SWORD:156, NETHERITE_PICKAXE:157,
+  ENCHANTING_TABLE:158, BEACON:159
 };
 
 function mulberry32(a) {
@@ -809,7 +813,7 @@ const { HEIGHT, SEA, B, mulberry32, surfaceHeight, isCave, oreFor, oreNoise, bio
 /* ============================ 常量 ============================ */
 const CHUNK = 16;
 const TILE = 16;
-const ATLAS_TILES = 120;
+const ATLAS_TILES = 130;
 const ATLAS_W = ATLAS_TILES * TILE;
 const AO_LEVELS = [0.55, 0.7, 0.85, 1.0];
 const VIEW_R = 10;        // 视距（chunk 半径，每格 16 块）
@@ -855,6 +859,9 @@ function makeAtlas() {
   T.mapleLogSide = i++; T.mapleLogTop = i++;
   T.sapling = i++; T.mapleSapling = i++; T.cherrySapling = i++;
   T.jukeboxTop = i++; T.jukeboxSide = i++;
+  T.obsidian = i++;
+  T.enchantTop = i++; T.enchantSide = i++;
+  T.beacon = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -1864,6 +1871,67 @@ function makeAtlas() {
   put(T.jukeboxSide, 7, 10, 180, 130, 70); put(T.jukeboxSide, 8, 10, 180, 130, 70);
   put(T.jukeboxSide, 9, 10, 180, 130, 70);
 
+  // —— 黑曜石（Obsidian）——
+  fill(T.obsidian, [20, 16, 26], 6, 160);
+  const rObs = rng(T.obsidian, 0);
+  for (let y = 0; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      const v = rObs();
+      if (v < 0.08) put(T.obsidian, x, y, 55, 30, 85);
+      else if (v < 0.14) put(T.obsidian, x, y, 78, 45, 115);
+      else if (v > 0.88) put(T.obsidian, x, y, 12, 10, 18);
+    }
+  }
+
+  // —— 附魔台（Enchanting Table）——
+  // 顶面：黑曜石边框 + 绯红丝绒桌布 + 摊开的附魔魔导书与流光符文
+  fill(T.enchantTop, [22, 18, 28], 6, 161);
+  for (let y = 2; y <= 13; y++) {
+    for (let x = 2; x <= 13; x++) {
+      put(T.enchantTop, x, y, 148, 28, 46);
+    }
+  }
+  // 打开的书本（皮革书脊 + 泛黄羊皮纸页）
+  for (let y = 5; y <= 10; y++) {
+    for (let x = 4; x <= 11; x++) {
+      put(T.enchantTop, x, y, 232, 224, 198);
+    }
+  }
+  for (let y = 5; y <= 10; y++) {
+    put(T.enchantTop, 7, y, 92, 42, 22);
+    put(T.enchantTop, 8, y, 92, 42, 22);
+  }
+  put(T.enchantTop, 5, 7, 77, 237, 244); put(T.enchantTop, 6, 8, 77, 237, 244);
+  put(T.enchantTop, 9, 7, 255, 215, 0); put(T.enchantTop, 10, 8, 255, 215, 0);
+
+  // 侧面：黑曜石基座 + 顶部红丝绒垂幔 + 附魔钻石铭文
+  fill(T.enchantSide, [24, 20, 30], 6, 162);
+  for (let x = 0; x < TILE; x++) {
+    put(T.enchantSide, x, 0, 148, 28, 46);
+    put(T.enchantSide, x, 1, 120, 20, 36);
+    if (x % 3 === 0) put(T.enchantSide, x, 2, 148, 28, 46);
+  }
+  put(T.enchantSide, 4, 7, 77, 237, 244); put(T.enchantSide, 5, 8, 77, 237, 244);
+  put(T.enchantSide, 10, 7, 77, 237, 244); put(T.enchantSide, 11, 8, 77, 237, 244);
+
+  // —— 信标（Beacon）——
+  // 水晶透亮琉璃外框 + 黑曜石底座 + 核心幽蓝下界之星能量体
+  fill(T.beacon, [180, 225, 245], 10, 163);
+  for (let x = 0; x < TILE; x++) {
+    put(T.beacon, x, 14, 24, 20, 30);
+    put(T.beacon, x, 15, 18, 14, 24);
+  }
+  for (let y = 3; y <= 11; y++) {
+    for (let x = 3; x <= 11; x++) {
+      const cd = Math.hypot(x - 7.5, y - 7.5);
+      if (cd <= 4.0) {
+        if (cd <= 1.8) put(T.beacon, x, y, 255, 255, 255);
+        else if (cd <= 3.0) put(T.beacon, x, y, 77, 237, 244);
+        else put(T.beacon, x, y, 0, 180, 216);
+      }
+    }
+  }
+
   // —— 营火（Campfire）——
   // 顶面：中心赤红灼热炭火木炭 + 外围原木
   fill(T.campfireTop, [42, 38, 36], 8, 140);
@@ -2074,6 +2142,9 @@ function tileOf(id) {
     case B.FURNACE: return { top: atlas.T.furnace, side: atlas.T.furnace, bottom: atlas.T.furnace };
     case B.CHEST: return { top: atlas.T.chestTop, side: atlas.T.chestSide, bottom: atlas.T.chestTop };
     case B.JUKEBOX: return { top: atlas.T.jukeboxTop, side: atlas.T.jukeboxSide, bottom: atlas.T.planks };
+    case B.OBSIDIAN: return { top: atlas.T.obsidian, side: atlas.T.obsidian, bottom: atlas.T.obsidian };
+    case B.ENCHANTING_TABLE: return { top: atlas.T.enchantTop, side: atlas.T.enchantSide, bottom: atlas.T.obsidian };
+    case B.BEACON: return { top: atlas.T.beacon, side: atlas.T.beacon, bottom: atlas.T.obsidian };
     case B.CAMPFIRE: return { top: atlas.T.campfireTop, side: atlas.T.campfireSide, bottom: atlas.T.campfireSide };
     case B.DOOR: return { top: atlas.T.doorTop, side: atlas.T.doorBottom, bottom: atlas.T.doorBottom };
     case B.COBWEB: return { top: atlas.T.cobweb, side: atlas.T.cobweb, bottom: atlas.T.cobweb };
@@ -3896,6 +3967,20 @@ function enqueueAround(x, y, z) {
 function waterStep(x, y, z) {
   const L = world.getWater(x, y, z);
   if (L === 0) return;
+
+  // 检测水流接触岩浆块生成黑曜石 (Water meets Magma creates Obsidian)
+  const checkDirs = [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
+  for (const [cdx, cdy, cdz] of checkDirs) {
+    const cx = x + cdx, cy = y + cdy, cz = z + cdz;
+    if (cy >= 0 && cy < HEIGHT && world.getBlock(cx, cy, cz) === B.MAGMA) {
+      world.setBlock(cx, cy, cz, B.OBSIDIAN);
+      burst(0.2, 0.15, 1200, 'bandpass');
+      spawnParticles(cx + 0.5, cy + 1.0, cz + 0.5, 0x555555, 14);
+      spawnParticles(cx + 0.5, cy + 1.0, cz + 0.5, 0x22182c, 10);
+      toast('💨 水流冷却了岩浆块，凝固形成了坚不可摧的【黑曜石】！');
+    }
+  }
+
   const belowAir = world.getBlock(x, y - 1, z) === B.AIR;
   const belowWater = world.getWater(x, y - 1, z);
   if (belowAir && belowWater === 0) {
@@ -4002,7 +4087,9 @@ const BLOCK_COLORS = {
   [B.SADDLE]: 0x8d5b32, [B.BUCKET]: 0xd8dcde, [B.WATER_BUCKET]: 0x2277bb, [B.CROSSBOW]: 0x8a623c,
   [B.SHEARS]: 0xdcdde1, [B.FLINT_AND_STEEL]: 0x8a9298,
   [B.MAPLE_LOG]: 0x583626, [B.SAPLING]: 0x48982a, [B.MAPLE_SAPLING]: 0xd44022, [B.CHERRY_SAPLING]: 0xf492b4,
-  [B.JUKEBOX]: 0x6e3c23,
+  [B.JUKEBOX]: 0x6e3c23, [B.OBSIDIAN]: 0x22182c,
+  [B.ENCHANTING_TABLE]: 0x8b1528, [B.BEACON]: 0x00f5d4,
+  [B.NETHERITE_INGOT]: 0x3a3535, [B.NETHERITE_SWORD]: 0x3a3535, [B.NETHERITE_PICKAXE]: 0x3a3535,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -8440,15 +8527,26 @@ function updateWanderingTrader(dt) {
   }
 }
 
-// 攻击伤害（剑 / 徒手）
+// 攻击伤害（剑 / 斧 / 徒手 + 附魔加成）
 function meleeDamage() {
   const s = hotbar[selected];
-  if (s && isSword(s.id)) {
-    if (isIronTier(s.id)) return 8;
-    if (isStoneTier(s.id)) return 6;
-    return 4;   // 木剑
+  let dmg = 1;
+  if (s) {
+    if (isSword(s.id)) {
+      if (isNetheriteTier(s.id)) dmg = 14;
+      else if (isDiamondTier(s.id)) dmg = 11;
+      else if (isIronTier(s.id)) dmg = 8;
+      else if (isStoneTier(s.id)) dmg = 6;
+      else dmg = 4;   // 木剑
+    } else if (isAxe(s.id)) {
+      if (isDiamondTier(s.id)) dmg = 9;
+      else if (isIronTier(s.id)) dmg = 7;
+      else if (isStoneTier(s.id)) dmg = 5;
+      else dmg = 3;
+    }
+    if (s.enchanted) dmg += 4; // 远古附魔额外 +4 魔法伤害！
   }
-  return 1;   // 徒手/其他物品
+  return dmg;
 }
 // 挥剑攻击（视角锥内 3.6 格）
 // 命中检测 + 击退（不推进墙里，避免被 findGround 抬升到上一层）
@@ -8713,7 +8811,7 @@ function explodeTnt(ex, ey, ez) {
         const d2 = dx * dx + dy * dy + dz * dz;
         if (d2 <= r2) {
           const bid = world.getBlock(x, y, z);
-          if (bid !== B.AIR && bid !== B.BEDROCK) {
+          if (bid !== B.AIR && bid !== B.BEDROCK && bid !== B.OBSIDIAN) {
             if (bid === B.TNT) {
               // 连锁爆破：波及的 TNT 不被破坏，而是被点燃引信并受冲击波抛射！连锁引信设定为 0.7 - 1.0 秒
               const dist = Math.sqrt(d2) || 1;
@@ -9384,6 +9482,85 @@ function updateTridents(dt) {
   }
 }
 
+/* ============================ 🌟 信标与通天光柱系统 (Beacon & Sky Beam) ============================ */
+const activeBeacons = new Map(); // "x,y,z" -> { group, x, y, z }
+const beaconBeamGeo = new THREE.CylinderGeometry(0.32, 0.32, 160, 16, 1, true);
+beaconBeamGeo.translate(0, 80, 0);
+const beaconBeamMat = new THREE.MeshBasicMaterial({
+  color: 0x00f5d4,
+  transparent: true,
+  opacity: 0.55,
+  side: THREE.DoubleSide,
+  depthWrite: false
+});
+const beaconCoreGeo = new THREE.CylinderGeometry(0.12, 0.12, 160, 12, 1, true);
+beaconCoreGeo.translate(0, 80, 0);
+const beaconCoreMat = new THREE.MeshBasicMaterial({
+  color: 0xffffff,
+  transparent: true,
+  opacity: 0.85,
+  side: THREE.DoubleSide,
+  depthWrite: false
+});
+
+function addBeaconBeam(bx, by, bz) {
+  const k = `${bx},${by},${bz}`;
+  if (activeBeacons.has(k)) return;
+  const group = new THREE.Group();
+  const beam = new THREE.Mesh(beaconBeamGeo, beaconBeamMat);
+  const core = new THREE.Mesh(beaconCoreGeo, beaconCoreMat);
+  group.add(beam);
+  group.add(core);
+  group.position.set(bx + 0.5, by + 1.0, bz + 0.5);
+  scene.add(group);
+  activeBeacons.set(k, { group, x: bx, y: by, z: bz });
+  tone(520, 1040, 0.3, 'sine', 0.25);
+  toast('🌟 信标已激活！璀璨通天光柱直插云霄，赐予庇护恩典！');
+}
+
+function removeBeaconBeam(bx, by, bz) {
+  const k = `${bx},${by},${bz}`;
+  const b = activeBeacons.get(k);
+  if (b) {
+    scene.remove(b.group);
+    activeBeacons.delete(k);
+  }
+}
+
+let beaconAuraTimer = 0;
+function updateBeacons(dt) {
+  if (activeBeacons.size === 0) return;
+  beaconAuraTimer += dt;
+  for (const b of activeBeacons.values()) {
+    b.group.rotation.y += 0.8 * dt;
+  }
+  // 检查玩家是否处于任意信标 32 格光环范围内
+  let inRange = false;
+  for (const b of activeBeacons.values()) {
+    const dist = Math.hypot(player.pos.x - (b.x + 0.5), player.pos.z - (b.z + 0.5));
+    if (dist <= 32) {
+      inRange = true;
+      if (Math.random() < 0.25) {
+        spawnParticles(player.pos.x + (Math.random() - 0.5) * 0.8, player.pos.y + 0.8, player.pos.z + (Math.random() - 0.5) * 0.8, 0x00f5d4, 1);
+      }
+      break;
+    }
+  }
+  if (inRange) {
+    // 永久迅捷 II 加成（1.35x 移速）
+    player.speedPotionTimer = Math.max(player.speedPotionTimer || 0, 2.0);
+    // 每 3 秒缓慢恢复 1 点生命
+    if (beaconAuraTimer >= 3.0) {
+      if (player.hp < 20) {
+        player.hp = Math.min(20, player.hp + 1);
+        updateHearts();
+        tone(600, 900, 0.1, 'triangle', 0.15);
+      }
+    }
+  }
+  if (beaconAuraTimer >= 3.0) beaconAuraTimer = 0;
+}
+
 /* ============================ 弓箭射击系统 ============================ */
 let bowCharging = false;
 let bowChargeTime = 0;
@@ -9897,7 +10074,8 @@ const player = {
   xp: 0,
   level: 0,
   ridingHorse: null,
-  armor: { helmet: null, chestplate: null, boots: null },
+  armor: { helmet: null, chestplate: null, leggings: null, boots: null },
+  gliding: false,
   speedPotionTimer: 0,
   absorption: 0,
 };
@@ -10167,10 +10345,10 @@ function isLeaf(id) { return id === B.LEAVES || id === B.BIRCH_LEAVES || id === 
 function isTorch(id) { return id === B.TORCH; }
 function isLilyPad(id) { return id === B.LILY_PAD; }
 function isLadder(id) { return id === B.LADDER; }
-function isPickaxe(id) { return id === B.WOOD_PICKAXE || id === B.STONE_PICKAXE || id === B.IRON_PICKAXE; }
-function isAxe(id) { return id === B.WOOD_AXE || id === B.STONE_AXE || id === B.IRON_AXE; }
-function isShovel(id) { return id === B.WOOD_SHOVEL || id === B.STONE_SHOVEL || id === B.IRON_SHOVEL; }
-function isSword(id) { return id === B.WOOD_SWORD || id === B.STONE_SWORD || id === B.IRON_SWORD; }
+function isPickaxe(id) { return id === B.WOOD_PICKAXE || id === B.STONE_PICKAXE || id === B.IRON_PICKAXE || id === B.DIAMOND_PICKAXE || id === B.NETHERITE_PICKAXE; }
+function isAxe(id) { return id === B.WOOD_AXE || id === B.STONE_AXE || id === B.IRON_AXE || id === B.DIAMOND_AXE; }
+function isShovel(id) { return id === B.WOOD_SHOVEL || id === B.STONE_SHOVEL || id === B.IRON_SHOVEL || id === B.DIAMOND_SHOVEL; }
+function isSword(id) { return id === B.WOOD_SWORD || id === B.STONE_SWORD || id === B.IRON_SWORD || id === B.DIAMOND_SWORD || id === B.NETHERITE_SWORD; }
 function isBow(id) { return id === B.BOW; }
 function isShield(id) { return id === B.SHIELD; }
 function isFishingRod(id) { return id === B.FISHING_ROD; }
@@ -10180,16 +10358,20 @@ function isTool(id) { return isPickaxe(id) || isAxe(id) || isShovel(id) || isSwo
 function isWoodTier(id) { return id === B.WOOD_PICKAXE || id === B.WOOD_AXE || id === B.WOOD_SHOVEL || id === B.WOOD_SWORD; }
 function isStoneTier(id) { return id === B.STONE_PICKAXE || id === B.STONE_AXE || id === B.STONE_SHOVEL || id === B.STONE_SWORD; }
 function isIronTier(id) { return id === B.IRON_PICKAXE || id === B.IRON_AXE || id === B.IRON_SHOVEL || id === B.IRON_SWORD; }
-// 工具耐久上限（木 60 / 石 130 / 铁 250 / 弓 100 / 盾 180 / 钓竿 64）
+function isDiamondTier(id) { return id === B.DIAMOND_PICKAXE || id === B.DIAMOND_AXE || id === B.DIAMOND_SHOVEL || id === B.DIAMOND_SWORD; }
+function isNetheriteTier(id) { return id === B.NETHERITE_PICKAXE || id === B.NETHERITE_SWORD; }
+// 工具耐久上限（木 60 / 石 130 / 铁 250 / 钻石 1561 / 下界合金 2031 / 弓 100 / 盾 180 / 钓竿 64）
 const TOOL_DURABILITY = {
   [B.WOOD_PICKAXE]: 60, [B.WOOD_AXE]: 60, [B.WOOD_SHOVEL]: 60, [B.WOOD_SWORD]: 60,
   [B.STONE_PICKAXE]: 130, [B.STONE_AXE]: 130, [B.STONE_SHOVEL]: 130, [B.STONE_SWORD]: 130,
   [B.IRON_PICKAXE]: 250, [B.IRON_AXE]: 250, [B.IRON_SHOVEL]: 250, [B.IRON_SWORD]: 250,
+  [B.DIAMOND_PICKAXE]: 1561, [B.DIAMOND_AXE]: 1561, [B.DIAMOND_SHOVEL]: 1561, [B.DIAMOND_SWORD]: 1561,
+  [B.NETHERITE_PICKAXE]: 2031, [B.NETHERITE_SWORD]: 2031,
   [B.BOW]: 100, [B.SHIELD]: 180, [B.FISHING_ROD]: 64,
 };
 // 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌不可放置）
 function isPlaceable(id) {
-  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.COMPASS || id === B.CLOCK || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT) return false;
+  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.COMPASS || id === B.CLOCK || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT || id === B.ELYTRA || id === B.NETHERITE_INGOT) return false;
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.MELON_SLICE) return false;
   if (isFood(id)) return false;   // 食物不可放置
   return true;
@@ -10385,8 +10567,25 @@ function updatePlayer(dt) {
     player.pos.addScaledVector(player.vel, dt);
     if (player.pos.y < 2) player.pos.y = 2;
     player.onGround = false;
+    player.gliding = false;
   } else {
     const ladder = onLadder();
+    const wearingElytra = player.armor && player.armor.chestplate === B.ELYTRA;
+
+    if (player.gliding) {
+      if (player.onGround || water || ladder) {
+        player.gliding = false;
+      }
+    } else if (wearingElytra && !player.onGround && !water && !ladder) {
+      // 滞空下落时按跳跃键 Space 展开鞘翅
+      if (keys['Space'] && player.vel.y < 1.5) {
+        player.gliding = true;
+        maxFallY = null;
+        tone(320, 520, 0.15, 'sawtooth', 0.2);
+        toast('🦅 展翅高飞！进入鞘翅滑翔状态（视角俯冲加速/仰角抬升）！');
+      }
+    }
+
     if (ladder) {
       maxFallY = null; // 攀爬梯子不累计摔落伤害
       if (keys['Space']) {
@@ -10396,6 +10595,35 @@ function updatePlayer(dt) {
       } else {
         player.vel.y = 0; // 悬停在梯子上
       }
+    } else if (player.gliding) {
+      const camDir = new THREE.Vector3();
+      camera.getWorldDirection(camDir);
+      let spd = Math.hypot(player.vel.x, player.vel.z);
+      if (spd < 11) spd = 11;
+
+      if (camDir.y < -0.15) {
+        // 俯冲加速
+        spd = Math.min(32, spd + Math.abs(camDir.y) * 16 * dt);
+      } else if (camDir.y > 0.15) {
+        // 仰角爬升，损耗速度换取升力
+        spd = Math.max(5, spd - camDir.y * 13 * dt);
+      } else {
+        spd = Math.max(11, spd - 0.7 * dt);
+      }
+
+      const hLen = Math.hypot(camDir.x, camDir.z) || 1;
+      const hx = camDir.x / hLen, hz = camDir.z / hLen;
+      player.vel.x = THREE.MathUtils.lerp(player.vel.x, hx * spd, Math.min(1, 4.0 * dt));
+      player.vel.z = THREE.MathUtils.lerp(player.vel.z, hz * spd, Math.min(1, 4.0 * dt));
+
+      const targetVy = camDir.y * spd - (camDir.y > 0 ? 0.9 : 0.3);
+      player.vel.y = THREE.MathUtils.lerp(player.vel.y, targetVy, Math.min(1, 3.5 * dt));
+      player.vel.y = Math.max(player.vel.y, -28);
+
+      if (Math.random() < 0.45) {
+        spawnParticles(player.pos.x + (Math.random() - 0.5) * 0.8, player.pos.y + 0.6, player.pos.z + (Math.random() - 0.5) * 0.8, 0xf5f6fa, 2);
+      }
+      maxFallY = null;
     } else {
       const g = water ? -8 : -25;
       player.vel.y += g * dt;
@@ -10417,6 +10645,10 @@ function updatePlayer(dt) {
 
     // 落地反馈与摔落伤害追踪（仅在真正下坠着陆速度 < -5.5 时发声，小坡/阶梯不误触发）
     if (player.onGround) {
+      if (player.gliding) {
+        player.gliding = false;
+        maxFallY = null;
+      }
       if (!prevOnGround && fallVel < -5.5) {
         const gx = Math.floor(player.pos.x), gy = Math.floor(player.pos.y - 0.1), gz = Math.floor(player.pos.z);
         playLand(world.getBlock(gx, gy, gz));
@@ -10916,10 +11148,14 @@ const NAMES = {
   [B.ENCHANTED_GOLDEN_APPLE]: '附魔金苹果', [B.COOKIE]: '曲奇', [B.FIREWORK_ROCKET]: '烟花火箭',
   [B.IRON_LEGGINGS]: '铁护腿', [B.DIAMOND_LEGGINGS]: '钻石护腿', [B.EXPERIENCE_BOTTLE]: '附魔之瓶', [B.ENDER_EYE]: '末影之眼',
   [B.SPYGLASS]: '望远镜', [B.JUKEBOX]: '唱片机', [B.MUSIC_DISC]: '音乐唱片(Cat)', [B.TRIDENT]: '三叉戟',
+  [B.DIAMOND_PICKAXE]: '钻石镐', [B.DIAMOND_AXE]: '钻石斧', [B.DIAMOND_SHOVEL]: '钻石锹', [B.DIAMOND_SWORD]: '钻石剑',
+  [B.ELYTRA]: '鞘翅', [B.OBSIDIAN]: '黑曜石',
+  [B.NETHERITE_INGOT]: '下界合金锭', [B.NETHERITE_SWORD]: '下界合金剑', [B.NETHERITE_PICKAXE]: '下界合金镐',
+  [B.ENCHANTING_TABLE]: '附魔台', [B.BEACON]: '信标',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 function isHelmet(id) { return id === B.IRON_HELMET || id === B.DIAMOND_HELMET; }
-function isChestplate(id) { return id === B.IRON_CHESTPLATE || id === B.DIAMOND_CHESTPLATE; }
+function isChestplate(id) { return id === B.IRON_CHESTPLATE || id === B.DIAMOND_CHESTPLATE || id === B.ELYTRA; }
 function isLeggings(id) { return id === B.IRON_LEGGINGS || id === B.DIAMOND_LEGGINGS; }
 function isBoots(id) { return id === B.IRON_BOOTS || id === B.DIAMOND_BOOTS; }
 function isArmor(id) { return isHelmet(id) || isChestplate(id) || isLeggings(id) || isBoots(id); }
@@ -11046,6 +11282,17 @@ const RECIPES = [
   { out: B.JUKEBOX, n: 1, need: [[B.PLANKS, 8], [B.DIAMOND, 1]] },
   { out: B.MUSIC_DISC, n: 1, need: [[B.COAL, 1], [B.EMERALD, 1]] },
   { out: B.TRIDENT, n: 1, need: [[B.IRON_INGOT, 3], [B.DIAMOND, 2]] },
+  { out: B.DIAMOND_PICKAXE, n: 1, need: [[B.DIAMOND, 3], [B.STICK, 2]] },
+  { out: B.DIAMOND_AXE, n: 1, need: [[B.DIAMOND, 3], [B.STICK, 2]] },
+  { out: B.DIAMOND_SHOVEL, n: 1, need: [[B.DIAMOND, 1], [B.STICK, 2]] },
+  { out: B.DIAMOND_SWORD, n: 1, need: [[B.DIAMOND, 2], [B.STICK, 1]] },
+  { out: B.ELYTRA, n: 1, need: [[B.STRING, 4], [B.ENDER_EYE, 2], [B.DIAMOND, 2]] },
+  { out: B.OBSIDIAN, n: 1, need: [[B.WATER_BUCKET, 1], [B.MAGMA, 1]] },
+  { out: B.NETHERITE_INGOT, n: 1, need: [[B.GOLD_INGOT, 4], [B.DIAMOND, 1]] },
+  { out: B.NETHERITE_SWORD, n: 1, need: [[B.DIAMOND_SWORD, 1], [B.NETHERITE_INGOT, 1]] },
+  { out: B.NETHERITE_PICKAXE, n: 1, need: [[B.DIAMOND_PICKAXE, 1], [B.NETHERITE_INGOT, 1]] },
+  { out: B.ENCHANTING_TABLE, n: 1, need: [[B.OBSIDIAN, 4], [B.DIAMOND, 2], [B.BOOKSHELF, 1]] },
+  { out: B.BEACON, n: 1, need: [[B.OBSIDIAN, 3], [B.DIAMOND, 1], [B.GLASS, 5]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -11180,13 +11427,15 @@ function makeToolIcon(id) {
   let head, headDark;
   if (isWoodTier(id)) { head = '#c89a5e'; headDark = '#96692f'; }
   else if (isStoneTier(id)) { head = '#9a9a9a'; headDark = '#6a6a6a'; }
-  else { head = '#d8dde4'; headDark = '#9aa2ac'; }
+  else if (isIronTier(id)) { head = '#d8dde4'; headDark = '#9aa2ac'; }
+  else if (isDiamondTier(id)) { head = '#4dedf4'; headDark = '#1b7b85'; }
+  else { head = '#443e42'; headDark = '#231f22'; }
   function line(x0, y0, x1, y1, w, color) {
     ctx.fillStyle = color;
     const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
     for (let s = 0; s <= steps; s++) {
       const x = Math.round(x0 + (x1 - x0) * s / steps);
-      const y = Math.round(y0 + (y1 - y0) * s / steps);
+      y = Math.round(y0 + (y1 - y0) * s / steps);
       ctx.fillRect(x - (w >> 1), y - (w >> 1), w, w);
     }
   }
@@ -11199,7 +11448,7 @@ function makeToolIcon(id) {
   line(8, 24, 24, 8, 1, handleLight);
   if (isSword(id)) {
     line(21, 11, 29, 3, 5, head);            // 剑刃（沿手柄方向延伸）
-    line(21, 11, 29, 3, 2, '#ffffff');
+    line(21, 11, 29, 3, 2, isNetheriteTier(id) ? '#746870' : '#ffffff');
     ctx.fillStyle = headDark;
     ctx.fillRect(19, 13, 9, 4);              // 护手
     ctx.fillStyle = handle;
@@ -11734,20 +11983,51 @@ function makeItemIcon(id) {
     ctx.fillStyle = '#70a1ff'; ctx.fillRect(15, 2, 2, 7);
     ctx.fillRect(11, 4, 2, 5); ctx.fillRect(19, 4, 2, 5);
     ctx.fillStyle = '#c7ecee'; ctx.fillRect(15, 2, 2, 2);
+  } else if (id === B.ELYTRA) {
+    // 鞘翅：优雅张开的深灰幽紫滑翔翼翼翅 + 骨架
+    ctx.fillStyle = '#4b4b5c';
+    ctx.beginPath();
+    ctx.moveTo(16, 8); ctx.lineTo(6, 14); ctx.lineTo(10, 26); ctx.lineTo(16, 21); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(16, 8); ctx.lineTo(26, 14); ctx.lineTo(22, 26); ctx.lineTo(16, 21); ctx.fill();
+    ctx.fillStyle = '#68687a';
+    ctx.beginPath();
+    ctx.moveTo(16, 10); ctx.lineTo(8, 15); ctx.lineTo(11, 24); ctx.lineTo(16, 20); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(16, 10); ctx.lineTo(24, 15); ctx.lineTo(21, 24); ctx.lineTo(16, 20); ctx.fill();
+    ctx.fillStyle = '#8f8fa0';
+    ctx.fillRect(15, 6, 2, 6);
+    ctx.fillStyle = '#9b59b6';
+    ctx.fillRect(11, 16, 2, 6); ctx.fillRect(19, 16, 2, 6);
+  } else if (id === B.NETHERITE_INGOT) {
+    // 下界合金锭：沉稳幽暗重金属锭身 + 乌金棱角与冷光折射
+    ctx.fillStyle = '#201d1f'; ctx.fillRect(8, 11, 16, 10);
+    ctx.fillStyle = '#423c40'; ctx.fillRect(9, 12, 14, 8);
+    ctx.fillStyle = '#5c5459'; ctx.fillRect(10, 12, 12, 3);
+    ctx.fillStyle = '#312c2f'; ctx.fillRect(9, 17, 14, 3);
+    ctx.fillStyle = '#6b6167'; ctx.fillRect(10, 13, 3, 2);
   }
   return cv;
 }
 function makeIcon(id) {
   if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD && id !== B.CROSSBOW && id !== B.SHEARS && id !== B.FLINT_AND_STEEL)) return makeToolIcon(id);
-  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.GOLDEN_CARROT || id === B.COMPASS || id === B.CLOCK || id === B.ENCHANTED_GOLDEN_APPLE || id === B.COOKIE || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT) return makeItemIcon(id);
+  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.GOLDEN_CARROT || id === B.COMPASS || id === B.CLOCK || id === B.ENCHANTED_GOLDEN_APPLE || id === B.COOKIE || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT || id === B.ELYTRA || id === B.NETHERITE_INGOT) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
   return makeIconCanvas(id);
 }
-// 物品栏/背包槽位图标：工具叠加耐久条
+// 物品栏/背包槽位图标：工具叠加耐久条与附魔流光
 function makeSlotIcon(s) {
   const cv = makeIcon(s.id);
+  const ctx = cv.getContext('2d');
+  if (s.enchanted) {
+    ctx.fillStyle = 'rgba(155, 89, 182, 0.28)';
+    ctx.fillRect(0, 0, 32, 32);
+    ctx.fillStyle = '#f1c40f';
+    ctx.fillRect(24, 3, 3, 3);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(25, 4, 1, 1);
+  }
   if (isTool(s.id) && s.dur !== undefined) {
-    const ctx = cv.getContext('2d');
     const ratio = Math.max(0, Math.min(1, s.dur / TOOL_DURABILITY[s.id]));
     ctx.fillStyle = 'rgba(0,0,0,0.65)';
     ctx.fillRect(3, 28, 26, 3);
@@ -12497,7 +12777,8 @@ const HARDNESS = {
   [B.COAL_BLOCK]: 2.0, [B.IRON_BLOCK]: 3.0, [B.GOLD_BLOCK]: 2.5, [B.DIAMOND_BLOCK]: 3.5,
   [B.TNT]: 0, [B.SNOWBALL]: 0.1, [B.CHEST]: 1.5, [B.CAMPFIRE]: 1.2, [B.DOOR]: 1.5, [B.COBWEB]: 0.15,
   [B.SAPLING]: 0.1, [B.MAPLE_SAPLING]: 0.1, [B.CHERRY_SAPLING]: 0.1,
-  [B.JUKEBOX]: 1.5,
+  [B.JUKEBOX]: 1.5, [B.OBSIDIAN]: 25.0,
+  [B.ENCHANTING_TABLE]: 5.0, [B.BEACON]: 3.0,
 };
 function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
 // 破坏掉落物
@@ -12513,15 +12794,20 @@ function dropOf(id) {
   if (id === B.DOOR) return B.DOOR;
   if (id === B.COBWEB) return B.STRING;
   if (id === B.EMERALD_ORE) return B.EMERALD;
+  if (id === B.OBSIDIAN) return B.OBSIDIAN;
+  if (id === B.ENCHANTING_TABLE) return B.ENCHANTING_TABLE;
+  if (id === B.BEACON) return B.BEACON;
   if (isLeaf(id)) return null;               // 树叶不掉落（苹果单独判定）
   if (isTool(id) || id === B.STICK || id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.EGG || id === B.SNOWBALL || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.EMERALD) return null;
   return id;
 }
 // 工具等级挖掘倍率
 function tierOf(t) {
-  if (isWoodTier(t)) return 2.5;
-  if (isStoneTier(t)) return 5;
+  if (isNetheriteTier(t)) return 22;
+  if (isDiamondTier(t)) return 14;
   if (isIronTier(t)) return 8;
+  if (isStoneTier(t)) return 5;
+  if (isWoodTier(t)) return 2.5;
   return 1;
 }
 // 当前手持工具对目标方块的挖掘倍率
@@ -12530,6 +12816,8 @@ function effSpeed(id) {
   if (!s) return 1;
   const t = s.id;
   if (isPickaxe(t)) {
+    if (id === B.OBSIDIAN) return isNetheriteTier(t) ? 22 : (isDiamondTier(t) ? 14 : (isIronTier(t) ? 4.0 : 1.5));
+    if (id === B.ENCHANTING_TABLE || id === B.BEACON) return tierOf(t);
     if (id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK || id === B.SANDSTONE || id === B.QUARTZ || isOre(id) || id === B.FURNACE || id === B.BASALT || id === B.MAGMA || id === B.ICE || id === B.GLOWSTONE || id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK) return tierOf(t);
     return 1.15;
   }
@@ -12586,6 +12874,7 @@ function updateBreaking(dt) {
     const bx = breaking.x, by = breaking.y, bz = breaking.z, bid = breaking.id;
     stopBreaking();
     if (bid === B.TORCH || bid === B.JACK_O_LANTERN || bid === B.GLOWSTONE || bid === B.CAMPFIRE) removeTorchLight(bx, by, bz);
+    if (bid === B.BEACON) removeBeaconBeam(bx, by, bz);
     if (bid === B.DOOR) {
       openDoors.delete(`${bx},${by},${bz}`);
       if (world.getBlock(bx, by + 1, bz) === B.DOOR) {
@@ -12885,6 +13174,34 @@ function onMousedown(btn) {
             toast('💡 手持【音乐唱片】右键放入唱片机播放音乐');
             return;
           }
+        }
+      }
+      // 右键附魔台交互（消耗经验灌注神圣附魔）
+      if (hit.id === B.ENCHANTING_TABLE) {
+        if (sel && (isTool(sel.id) || sel.id === B.TRIDENT)) {
+          if (player.level >= 1 || player.fly) {
+            if (!player.fly) {
+              player.level = Math.max(0, player.level - 1);
+              updateHungerBar();
+            }
+            sel.dur = TOOL_DURABILITY[sel.id] || 250;
+            sel.enchanted = true;
+            refreshHotbar();
+            tone(440, 880, 0.15, 'triangle', 0.25);
+            setTimeout(() => tone(660, 1320, 0.2, 'sine', 0.25), 90);
+            setTimeout(() => tone(880, 1760, 0.25, 'triangle', 0.25), 180);
+            spawnParticles(hit.x + 0.5, hit.y + 1.2, hit.z + 0.5, 0x9b59b6, 22);
+            spawnParticles(hit.x + 0.5, hit.y + 1.2, hit.z + 0.5, 0x2ecc71, 18);
+            spawnParticles(hit.x + 0.5, hit.y + 1.2, hit.z + 0.5, 0xf1c40f, 18);
+            toast(`✨ 远古附魔仪式完成！【${itemName(sel.id)}】注入神圣魔力，耐久已回满并获强力魔法加持！`);
+            return;
+          } else {
+            toast('💡 附魔需要至少 1 级经验（投掷附魔之瓶可快速升级）');
+            return;
+          }
+        } else {
+          toast('📖 手持武器或工具右键附魔台注入远古附魔魔法');
+          return;
         }
       }
       // 右键 TNT 方块交互（必须手持打火石）
@@ -13457,11 +13774,25 @@ function onMousedown(btn) {
       return;
     }
 
-    // 手持烟花火箭发射
+    // 手持烟花火箭发射（滑翔状态时触发火箭推进加速！）
     if (sel && sel.id === B.FIREWORK_ROCKET) {
       if (!player.fly) removeItem(B.FIREWORK_ROCKET, 1);
       refreshHotbar();
-      launchFirework(origin, dir);
+      if (player.gliding) {
+        // 鞘翅火箭超音速推进！
+        const boostSpd = 26.0;
+        player.vel.x = dir.x * boostSpd;
+        player.vel.y = dir.y * boostSpd + 2.5;
+        player.vel.z = dir.z * boostSpd;
+        tone(350, 1050, 0.28, 'sawtooth', 0.28);
+        burst(0.2, 0.2, 900);
+        spawnParticles(player.pos.x, player.pos.y + 0.6, player.pos.z, 0xff3838, 20);
+        spawnParticles(player.pos.x, player.pos.y + 0.6, player.pos.z, 0x2ed573, 20);
+        spawnParticles(player.pos.x, player.pos.y + 0.6, player.pos.z, 0x1e90ff, 20);
+        toast('🚀 烟花火箭涡轮加速！鞘翅超音速破空巡航！');
+      } else {
+        launchFirework(origin, dir);
+      }
       return;
     }
 
@@ -13564,6 +13895,7 @@ function onMousedown(btn) {
     if (sid === B.WATER) world.setWater(px, py, pz, 8);
     else world.setBlock(px, py, pz, sid);
     if (sid === B.TORCH || sid === B.JACK_O_LANTERN || sid === B.GLOWSTONE || sid === B.CAMPFIRE) addTorchLight(px, py, pz);
+    if (sid === B.BEACON) addBeaconBeam(px, py, pz);
     if (isSapling(sid)) {
       plantedSaplings.set(`${px},${py},${pz}`, { x: px, y: py, z: pz, id: sid, growAt: performance.now() + 15000 + Math.random() * 15000 });
       toast('🌱 树苗已播种入土，片刻后将长成大树（可用骨粉催熟）');
@@ -13719,6 +14051,7 @@ function animate() {
     updateEnderPearls(dt);
     updateEnderEyes(dt);
     updateTridents(dt);
+    updateBeacons(dt);
     updateFishing(dt);
     updateArrows(dt);
     if (bowCharging) bowChargeTime += dt;
