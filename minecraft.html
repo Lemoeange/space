@@ -518,7 +518,8 @@ const B = {
   SHULKER_BOX:173, NETHER_PORTAL:174, REDSTONE_LAMP:175, REDSTONE_LAMP_ON:176,
   SOUL_CAMPFIRE:177, CRYING_OBSIDIAN:178, RESPAWN_ANCHOR:179, AMETHYST_BLOCK:180, TURTLE_HELMET:181,
   SPONGE:182, WET_SPONGE:183, LIGHTNING_ROD:184, COPPER_BLOCK:185, SEA_LANTERN:186,
-  SLIME_BLOCK:187, HONEY_BLOCK:188
+  SLIME_BLOCK:187, HONEY_BLOCK:188,
+  LANTERN:189, SOUL_LANTERN:190, LEVER:191, BUTTON:192, CHAIN:193, CAMPFIRE_OFF:194
 };
 
 function mulberry32(a) {
@@ -824,7 +825,7 @@ const { HEIGHT, SEA, B, mulberry32, surfaceHeight, isCave, oreFor, oreNoise, bio
 /* ============================ 常量 ============================ */
 const CHUNK = 16;
 const TILE = 16;
-const ATLAS_TILES = 205;
+const ATLAS_TILES = 220;
 const ATLAS_W = ATLAS_TILES * TILE;
 const AO_LEVELS = [0.55, 0.7, 0.85, 1.0];
 const VIEW_R = 10;        // 视距（chunk 半径，每格 16 块）
@@ -887,6 +888,10 @@ function makeAtlas() {
   T.lightningRodTop = i++; T.lightningRodSide = i++;
   T.copperBlock = i++; T.seaLantern = i++;
   T.slime = i++; T.honey = i++;
+  T.lantern = i++; T.soulLantern = i++;
+  T.leverOff = i++; T.leverOn = i++;
+  T.button = i++; T.chain = i++;
+  T.campfireOffTop = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -2239,6 +2244,106 @@ function makeAtlas() {
     }
   }
 
+  // —— 提灯（Lantern）——
+  // 经典铁艺镂空提灯：顶部吊环 + 铁艺框架 + 内部暖金烛芯烈火
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    put(T.lantern, x, y, 0, 0, 0, 0); // 默认透空
+    // 顶部吊环
+    if ((y === 1 || y === 2) && (x >= 6 && x <= 9)) put(T.lantern, x, y, 88, 92, 98);
+    // 提灯铁盖与基座
+    if ((y >= 3 && y <= 5 && x >= 4 && x <= 11) || (y >= 13 && y <= 15 && x >= 4 && x <= 11)) {
+      put(T.lantern, x, y, 52, 56, 62);
+      if (y === 3 || y === 13) put(T.lantern, x, y, 78, 84, 92);
+    }
+    // 侧边铁立柱与透光玻璃
+    if (y >= 6 && y <= 12 && x >= 4 && x <= 11) {
+      if (x === 4 || x === 11) put(T.lantern, x, y, 48, 52, 58);
+      else {
+        // 内部温润金烛火
+        const dist = Math.hypot(x - 7.5, y - 9.0);
+        if (dist <= 1.5) put(T.lantern, x, y, 255, 245, 160);
+        else if (dist <= 2.6) put(T.lantern, x, y, 250, 160, 30);
+        else put(T.lantern, x, y, 195, 95, 20);
+      }
+    }
+  }
+
+  // —— 灵魂提灯（Soul Lantern）——
+  // 幽蓝静谧灵魂冷火提灯
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    put(T.soulLantern, x, y, 0, 0, 0, 0);
+    if ((y === 1 || y === 2) && (x >= 6 && x <= 9)) put(T.soulLantern, x, y, 72, 85, 95);
+    if ((y >= 3 && y <= 5 && x >= 4 && x <= 11) || (y >= 13 && y <= 15 && x >= 4 && x <= 11)) {
+      put(T.soulLantern, x, y, 42, 52, 60);
+      if (y === 3 || y === 13) put(T.soulLantern, x, y, 68, 80, 92);
+    }
+    if (y >= 6 && y <= 12 && x >= 4 && x <= 11) {
+      if (x === 4 || x === 11) put(T.soulLantern, x, y, 38, 48, 55);
+      else {
+        // 内部幽魂青蓝火光
+        const dist = Math.hypot(x - 7.5, y - 9.0);
+        if (dist <= 1.5) put(T.soulLantern, x, y, 224, 255, 255);
+        else if (dist <= 2.6) put(T.soulLantern, x, y, 0, 206, 201);
+        else put(T.soulLantern, x, y, 9, 132, 227);
+      }
+    }
+  }
+
+  // —— 拉杆（Lever）——
+  // 关状态：向左斜上方拉起
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    put(T.leverOff, x, y, 0, 0, 0, 0);
+    put(T.leverOn, x, y, 0, 0, 0, 0);
+    // 石质基座
+    if (y >= 12 && y <= 15 && x >= 5 && x <= 10) {
+      put(T.leverOff, x, y, 128, 128, 132);
+      put(T.leverOn, x, y, 128, 128, 132);
+      if (y === 12 || x === 5) {
+        put(T.leverOff, x, y, 160, 160, 165);
+        put(T.leverOn, x, y, 160, 160, 165);
+      }
+    }
+    // 关态杠杆把手（左倾）
+    if ((x === 7 && y === 11) || (x === 6 && y >= 8 && y <= 10) || (x === 5 && y >= 5 && y <= 7) || (x === 4 && y >= 3 && y <= 4)) {
+      put(T.leverOff, x, y, 140, 92, 48);
+    }
+    // 开态杠杆把手（右倾）
+    if ((x === 8 && y === 11) || (x === 9 && y >= 8 && y <= 10) || (x === 10 && y >= 5 && y <= 7) || (x === 11 && y >= 3 && y <= 4)) {
+      put(T.leverOn, x, y, 140, 92, 48);
+    }
+  }
+
+  // —— 石质按钮（Button）——
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    put(T.button, x, y, 0, 0, 0, 0);
+    if (x >= 5 && x <= 10 && y >= 6 && y <= 9) {
+      put(T.button, x, y, 135, 138, 142);
+      if (y === 6 || x === 5) put(T.button, x, y, 175, 178, 182);
+      if (y === 9 || x === 10) put(T.button, x, y, 95, 98, 102);
+    }
+  }
+
+  // —— 锁链（Chain）——
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    put(T.chain, x, y, 0, 0, 0, 0);
+    if ((x === 7 || x === 8)) {
+      put(T.chain, x, y, 98, 102, 108);
+      if (x === 7) put(T.chain, x, y, 148, 152, 158); // 钢链高光
+    }
+  }
+
+  // —— 熄灭的营火（Campfire Off）——
+  fill(T.campfireOffTop, [42, 38, 36], 8, 222);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    if ((x < 3 || x > 12) && (y >= 2 && y <= 13)) put(T.campfireOffTop, x, y, 82, 54, 32);
+    else if ((y < 3 || y > 12) && (x >= 2 && x <= 13)) put(T.campfireOffTop, x, y, 68, 44, 26);
+    const cd = Math.hypot(x - 7.5, y - 7.5);
+    if (cd <= 4.2) {
+      // 熄灭冷炭灰烬
+      put(T.campfireOffTop, x, y, (cd <= 2.2) ? 22 : 45, (cd <= 2.2) ? 20 : 42, (cd <= 2.2) ? 18 : 40);
+    }
+  }
+
   // —— 营火（Campfire）——
   // 顶面：中心赤红灼热炭火木炭 + 外围原木
   fill(T.campfireTop, [42, 38, 36], 8, 140);
@@ -2470,6 +2575,12 @@ function tileOf(id) {
     case B.SEA_LANTERN: return { top: atlas.T.seaLantern, side: atlas.T.seaLantern, bottom: atlas.T.seaLantern };
     case B.SLIME_BLOCK: return { top: atlas.T.slime, side: atlas.T.slime, bottom: atlas.T.slime };
     case B.HONEY_BLOCK: return { top: atlas.T.honey, side: atlas.T.honey, bottom: atlas.T.honey };
+    case B.LANTERN: return { top: atlas.T.lantern, side: atlas.T.lantern, bottom: atlas.T.lantern };
+    case B.SOUL_LANTERN: return { top: atlas.T.soulLantern, side: atlas.T.soulLantern, bottom: atlas.T.soulLantern };
+    case B.LEVER: return { top: atlas.T.leverOff, side: atlas.T.leverOff, bottom: atlas.T.leverOff };
+    case B.BUTTON: return { top: atlas.T.button, side: atlas.T.button, bottom: atlas.T.button };
+    case B.CHAIN: return { top: atlas.T.chain, side: atlas.T.chain, bottom: atlas.T.chain };
+    case B.CAMPFIRE_OFF: return { top: atlas.T.campfireOffTop, side: atlas.T.campfireSide, bottom: atlas.T.campfireSide };
     case B.CAMPFIRE: return { top: atlas.T.campfireTop, side: atlas.T.campfireSide, bottom: atlas.T.campfireSide };
     case B.DOOR: return { top: atlas.T.doorTop, side: atlas.T.doorBottom, bottom: atlas.T.doorBottom };
     case B.COBWEB: return { top: atlas.T.cobweb, side: atlas.T.cobweb, bottom: atlas.T.cobweb };
@@ -4447,6 +4558,9 @@ const BLOCK_COLORS = {
   [B.SOUL_CAMPFIRE]: 0x00cec9, [B.CRYING_OBSIDIAN]: 0x8e44ad, [B.RESPAWN_ANCHOR]: 0x2c2c54, [B.AMETHYST_BLOCK]: 0x9b59b6, [B.TURTLE_HELMET]: 0x218c74,
   [B.SPONGE]: 0xc5b342, [B.WET_SPONGE]: 0x828436, [B.LIGHTNING_ROD]: 0xb86532, [B.COPPER_BLOCK]: 0xc0683a, [B.SEA_LANTERN]: 0xa8dadc,
   [B.SLIME_BLOCK]: 0x7bed9f, [B.HONEY_BLOCK]: 0xf39c12,
+  [B.LANTERN]: 0xf1c40f, [B.SOUL_LANTERN]: 0x00cec9,
+  [B.LEVER]: 0x7f8c8d, [B.BUTTON]: 0x95a5a6,
+  [B.CHAIN]: 0x57606f, [B.CAMPFIRE_OFF]: 0x3d3d3d,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -11164,14 +11278,14 @@ function isPlaceable(id) {
 }
 function isOre(id) { return id === B.COAL || id === B.IRON || id === B.GOLD || id === B.DIAMOND || id === B.EMERALD_ORE || id === B.LAPIS_ORE || id === B.REDSTONE_ORE || id === B.COPPER_ORE; }
 // 透明/可透视（用于面剔除与 AO）
-function isSeeThrough(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || id === B.DOOR || isCrossPlant(id) || isTorch(id) || isLilyPad(id) || isPetals(id) || isLadder(id) || isBed(id) || id === B.NETHER_PORTAL || id === B.LIGHTNING_ROD; }
+function isSeeThrough(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || id === B.DOOR || isCrossPlant(id) || isTorch(id) || isLilyPad(id) || isPetals(id) || isLadder(id) || isBed(id) || id === B.NETHER_PORTAL || id === B.LIGHTNING_ROD || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.LEVER || id === B.BUTTON || id === B.CHAIN; }
 // 确定性的列哈希（用于花草摆放）
 function plantHash(x, z) {
   let h = (x * 374761393 + z * 668265263) ^ 0x9e3779b9;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
-function isSolid(id) { return id !== B.AIR && id !== B.WATER && !isCrossPlant(id) && !isTorch(id) && !isLilyPad(id) && !isPetals(id) && !isLadder(id) && id !== B.NETHER_PORTAL; }
+function isSolid(id) { return id !== B.AIR && id !== B.WATER && !isCrossPlant(id) && !isTorch(id) && !isLilyPad(id) && !isPetals(id) && !isLadder(id) && id !== B.NETHER_PORTAL && id !== B.LEVER && id !== B.BUTTON; }
 
 function collideAxis(axis, vel) {
   if (axis === 0) player.pos.x += vel;
@@ -12034,6 +12148,9 @@ const NAMES = {
   [B.LIGHTNING_ROD]: '避雷针', [B.COPPER_BLOCK]: '铜块',
   [B.SEA_LANTERN]: '海晶灯',
   [B.SLIME_BLOCK]: '粘液块', [B.HONEY_BLOCK]: '蜂蜜块',
+  [B.LANTERN]: '提灯', [B.SOUL_LANTERN]: '灵魂提灯',
+  [B.LEVER]: '拉杆', [B.BUTTON]: '石质按钮',
+  [B.CHAIN]: '锁链', [B.CAMPFIRE_OFF]: '熄灭的营火',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 function isHelmet(id) { return id === B.IRON_HELMET || id === B.DIAMOND_HELMET || id === B.NETHERITE_HELMET || id === B.TURTLE_HELMET; }
@@ -12265,6 +12382,11 @@ const RECIPES = [
   { out: B.SEA_LANTERN, n: 1, need: [[B.QUARTZ, 4], [B.GLOWSTONE, 5]] },
   { out: B.SLIME_BLOCK, n: 1, need: [[B.EMERALD, 1], [B.WHEAT, 4]] },
   { out: B.HONEY_BLOCK, n: 1, need: [[B.APPLE, 4], [B.WHEAT, 4]] },
+  { out: B.LANTERN, n: 1, need: [[B.TORCH, 1], [B.IRON_INGOT, 4]] },
+  { out: B.SOUL_LANTERN, n: 1, need: [[B.SOUL_CAMPFIRE, 1], [B.IRON_INGOT, 4]] },
+  { out: B.LEVER, n: 1, need: [[B.STICK, 1], [B.COBBLE, 1]] },
+  { out: B.BUTTON, n: 1, need: [[B.STONE, 1]] },
+  { out: B.CHAIN, n: 1, need: [[B.IRON_INGOT, 2]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -12417,7 +12539,7 @@ function makeToolIcon(id) {
     const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
     for (let s = 0; s <= steps; s++) {
       const x = Math.round(x0 + (x1 - x0) * s / steps);
-      y = Math.round(y0 + (y1 - y0) * s / steps);
+      const y = Math.round(y0 + (y1 - y0) * s / steps);
       ctx.fillRect(x - (w >> 1), y - (w >> 1), w, w);
     }
   }
@@ -13872,6 +13994,9 @@ const HARDNESS = {
   [B.SPONGE]: 0.6, [B.WET_SPONGE]: 0.6, [B.LIGHTNING_ROD]: 3.0,
   [B.COPPER_BLOCK]: 3.0, [B.SEA_LANTERN]: 0.3,
   [B.SLIME_BLOCK]: 0.1, [B.HONEY_BLOCK]: 0.1,
+  [B.LANTERN]: 3.5, [B.SOUL_LANTERN]: 3.5,
+  [B.LEVER]: 0.5, [B.BUTTON]: 0.5, [B.CHAIN]: 5.0,
+  [B.CAMPFIRE_OFF]: 1.2,
 };
 function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
 // 破坏掉落物
@@ -13907,6 +14032,12 @@ function dropOf(id) {
   if (id === B.SEA_LANTERN) return B.SEA_LANTERN;
   if (id === B.SLIME_BLOCK) return B.SLIME_BLOCK;
   if (id === B.HONEY_BLOCK) return B.HONEY_BLOCK;
+  if (id === B.LANTERN) return B.LANTERN;
+  if (id === B.SOUL_LANTERN) return B.SOUL_LANTERN;
+  if (id === B.LEVER) return B.LEVER;
+  if (id === B.BUTTON) return B.BUTTON;
+  if (id === B.CHAIN) return B.CHAIN;
+  if (id === B.CAMPFIRE_OFF) return B.CAMPFIRE;
   if (isLeaf(id)) return null;               // 树叶不掉落（苹果单独判定）
   if (isTool(id) || id === B.STICK || id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.EGG || id === B.SNOWBALL || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.EMERALD) return null;
   return id;
@@ -13928,11 +14059,11 @@ function effSpeed(id) {
   if (isPickaxe(t)) {
     if (id === B.OBSIDIAN || id === B.ENDER_CHEST || id === B.CRYING_OBSIDIAN || id === B.RESPAWN_ANCHOR) return isNetheriteTier(t) ? 22 : (isDiamondTier(t) ? 14 : (isIronTier(t) ? 4.0 : 1.5));
     if (id === B.ENCHANTING_TABLE || id === B.BEACON) return tierOf(t);
-    if (id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK || id === B.SANDSTONE || id === B.QUARTZ || isOre(id) || id === B.FURNACE || id === B.BASALT || id === B.MAGMA || id === B.ICE || id === B.GLOWSTONE || id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.AMETHYST_BLOCK || id === B.LIGHTNING_ROD || id === B.COPPER_BLOCK || id === B.SEA_LANTERN) return tierOf(t);
+    if (id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK || id === B.SANDSTONE || id === B.QUARTZ || isOre(id) || id === B.FURNACE || id === B.BASALT || id === B.MAGMA || id === B.ICE || id === B.GLOWSTONE || id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.AMETHYST_BLOCK || id === B.LIGHTNING_ROD || id === B.COPPER_BLOCK || id === B.SEA_LANTERN || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.BUTTON || id === B.CHAIN) return tierOf(t);
     return 1.15;
   }
   if (isAxe(t)) {
-    if (isLog(id) || id === B.PLANKS || id === B.CHEST || id === B.CAMPFIRE || id === B.DOOR || id === B.BAMBOO || id === B.BOOKSHELF || id === B.PUMPKIN || id === B.JACK_O_LANTERN || id === B.MELON) return tierOf(t);
+    if (isLog(id) || id === B.PLANKS || id === B.CHEST || id === B.CAMPFIRE || id === B.CAMPFIRE_OFF || id === B.SOUL_CAMPFIRE || id === B.DOOR || id === B.BAMBOO || id === B.BOOKSHELF || id === B.PUMPKIN || id === B.JACK_O_LANTERN || id === B.MELON) return tierOf(t);
     return 1.15;
   }
   if (isShovel(t)) {
@@ -13983,7 +14114,7 @@ function updateBreaking(dt) {
   if (breaking.progress >= h) {
     const bx = breaking.x, by = breaking.y, bz = breaking.z, bid = breaking.id;
     stopBreaking();
-    if (bid === B.TORCH || bid === B.JACK_O_LANTERN || bid === B.GLOWSTONE || bid === B.CAMPFIRE || bid === B.SOUL_CAMPFIRE || bid === B.SEA_LANTERN || bid === B.REDSTONE_LAMP_ON) removeTorchLight(bx, by, bz);
+    if (bid === B.TORCH || bid === B.JACK_O_LANTERN || bid === B.GLOWSTONE || bid === B.CAMPFIRE || bid === B.SOUL_CAMPFIRE || bid === B.SEA_LANTERN || bid === B.REDSTONE_LAMP_ON || bid === B.LANTERN || bid === B.SOUL_LANTERN) removeTorchLight(bx, by, bz);
     if (bid === B.BEACON) removeBeaconBeam(bx, by, bz);
     if (bid === B.DOOR) {
       openDoors.delete(`${bx},${by},${bz}`);
@@ -14283,6 +14414,97 @@ function onMousedown(btn) {
 
     // 2. 交互型方块优先判定（储物箱、门、熔炉、床、村庄之钟、营火、TNT 等）
     if (hit) {
+      // 铲子/水桶扑灭营火
+      if (hit.id === B.CAMPFIRE || hit.id === B.SOUL_CAMPFIRE) {
+        if (sel && (isShovel(sel.id) || sel.id === B.WATER_BUCKET)) {
+          world.setBlock(hit.x, hit.y, hit.z, B.CAMPFIRE_OFF);
+          enqueueAround(hit.x, hit.y, hit.z);
+          removeTorchLight(hit.x, hit.y, hit.z);
+          tone(200, 80, 0.22, 'sine', 0.25);
+          burst(0.2, 0.28, 420, 'lowpass');
+          spawnParticles(hit.x + 0.5, hit.y + 0.4, hit.z + 0.5, 0xbdc3c7, 20);
+          spawnParticles(hit.x + 0.5, hit.y + 0.4, hit.z + 0.5, 0x7f8c8d, 12);
+          toast('💨 扑灭了营火！化为余烬冷炭【熄灭的营火】！');
+          return;
+        }
+      }
+      // 右键熄灭的营火 → 打火石/火焰弹重新引燃
+      if (hit.id === B.CAMPFIRE_OFF) {
+        if (sel && (sel.id === B.FLINT_AND_STEEL || sel.id === B.FIRE_CHARGE)) {
+          world.setBlock(hit.x, hit.y, hit.z, B.CAMPFIRE);
+          enqueueAround(hit.x, hit.y, hit.z);
+          addTorchLight(hit.x, hit.y, hit.z);
+          tone(720, 360, 0.15, 'sawtooth', 0.25);
+          burst(0.15, 0.2, 650);
+          spawnParticles(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, 0xff7700, 24);
+          toast('🔥 重新点燃了营火！熊熊烈焰升腾！');
+          return;
+        }
+      }
+      // 右键拉杆 → 扳动开关，切换周围红石回路
+      if (hit.id === B.LEVER) {
+        let anyLampOn = false;
+        const lamps = [];
+        for (let dx = -3; dx <= 3; dx++) {
+          for (let dy = -3; dy <= 3; dy++) {
+            for (let dz = -3; dz <= 3; dz++) {
+              const b = world.getBlock(hit.x + dx, hit.y + dy, hit.z + dz);
+              if (b === B.REDSTONE_LAMP_ON) { anyLampOn = true; lamps.push({ x: hit.x + dx, y: hit.y + dy, z: hit.z + dz }); }
+              else if (b === B.REDSTONE_LAMP) { lamps.push({ x: hit.x + dx, y: hit.y + dy, z: hit.z + dz }); }
+            }
+          }
+        }
+        playClick();
+        spawnParticles(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, 0xff4757, 12);
+        if (anyLampOn) {
+          for (const l of lamps) {
+            world.setBlock(l.x, l.y, l.z, B.REDSTONE_LAMP);
+            enqueueAround(l.x, l.y, l.z);
+            removeTorchLight(l.x, l.y, l.z);
+          }
+          toast('🕹️ 扳下拉杆！断开红石回路供电。');
+        } else {
+          for (const l of lamps) {
+            world.setBlock(l.x, l.y, l.z, B.REDSTONE_LAMP_ON);
+            enqueueAround(l.x, l.y, l.z);
+            addTorchLight(l.x, l.y, l.z);
+          }
+          toast('🕹️ 扳动拉杆！激活红石回路，周围红石灯点亮！');
+        }
+        return;
+      }
+      // 右键石质按钮 → 触发瞬时红石脉冲（维持 1.2 秒）
+      if (hit.id === B.BUTTON) {
+        playClick();
+        spawnParticles(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, 0xff3838, 14);
+        const lamps = [];
+        for (let dx = -3; dx <= 3; dx++) {
+          for (let dy = -3; dy <= 3; dy++) {
+            for (let dz = -3; dz <= 3; dz++) {
+              if (world.getBlock(hit.x + dx, hit.y + dy, hit.z + dz) === B.REDSTONE_LAMP) {
+                lamps.push({ x: hit.x + dx, y: hit.y + dy, z: hit.z + dz });
+              }
+            }
+          }
+        }
+        for (const l of lamps) {
+          world.setBlock(l.x, l.y, l.z, B.REDSTONE_LAMP_ON);
+          enqueueAround(l.x, l.y, l.z);
+          addTorchLight(l.x, l.y, l.z);
+        }
+        toast('🔘 按下石质按钮！激发出瞬时红石电能！');
+        setTimeout(() => {
+          playClick();
+          for (const l of lamps) {
+            if (world.getBlock(l.x, l.y, l.z) === B.REDSTONE_LAMP_ON) {
+              world.setBlock(l.x, l.y, l.z, B.REDSTONE_LAMP);
+              enqueueAround(l.x, l.y, l.z);
+              removeTorchLight(l.x, l.y, l.z);
+            }
+          }
+        }, 1200);
+        return;
+      }
       // 右键营火 → 烹饪烘烤生肉/生鱼
       if (hit.id === B.CAMPFIRE) {
         if (sel && (sel.id === B.RAW_MEAT || sel.id === B.RAW_FISH)) {
@@ -15252,7 +15474,7 @@ function onMousedown(btn) {
     if (isSapling(sid) && below !== B.GRASS && below !== B.DIRT && below !== B.SAND) { toast('⚠️ 树苗只能种植在泥土、草地或沙子上'); return; }
     if (sid === B.WATER) world.setWater(px, py, pz, 8);
     else world.setBlock(px, py, pz, sid);
-    if (sid === B.TORCH || sid === B.JACK_O_LANTERN || sid === B.GLOWSTONE || sid === B.CAMPFIRE || sid === B.SOUL_CAMPFIRE || sid === B.SEA_LANTERN || sid === B.REDSTONE_LAMP_ON) addTorchLight(px, py, pz);
+    if (sid === B.TORCH || sid === B.JACK_O_LANTERN || sid === B.GLOWSTONE || sid === B.CAMPFIRE || sid === B.SOUL_CAMPFIRE || sid === B.SEA_LANTERN || sid === B.REDSTONE_LAMP_ON || sid === B.LANTERN || sid === B.SOUL_LANTERN) addTorchLight(px, py, pz);
     if (sid === B.BEACON) addBeaconBeam(px, py, pz);
     if (isSapling(sid)) {
       plantedSaplings.set(`${px},${py},${pz}`, { x: px, y: py, z: pz, id: sid, growAt: performance.now() + 15000 + Math.random() * 15000 });
