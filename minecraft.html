@@ -2650,6 +2650,8 @@ uniform float uFogNear;
 uniform float uFogFar;
 uniform float uNight;
 uniform vec3 uCameraPos;
+uniform sampler2DArray uAtlas;
+uniform float uWaterLayer;
 
 varying vec3 vWorld;
 varying vec3 vNormal;
@@ -2675,7 +2677,8 @@ float getCaustics(vec2 p, float t) {
 }
 
 void main() {
-  vec2 p = vWorld.xz;
+  bool isSide = abs(vNormal.y) < 0.6;
+  vec2 p = isSide ? (abs(vNormal.x) > 0.5 ? vec2(vWorld.z, vWorld.y - uTime * 0.8) : vec2(vWorld.x, vWorld.y - uTime * 0.8)) : vWorld.xz;
   float t = uTime;
   // 增大法线采样基线，消除微观法线抖动
   float e = 0.65;
@@ -2683,8 +2686,8 @@ void main() {
   float hx = waveH(p + vec2(e, 0.0), t);
   float hz = waveH(p + vec2(0.0, e), t);
 
-  // 稳固水面法线基准（垂直偏置提升至 1.05，消除法线晃动）
-  vec3 n = normalize(vec3(vNormal.x + (h - hx) * 0.75, vNormal.y * 1.05 + 0.35, vNormal.z + (h - hz) * 0.75));
+  // 稳固水面法线基准（侧面呈现自然流动折射波纹）
+  vec3 n = isSide ? normalize(vNormal + vec3((h - hx) * 0.35, (h - hz) * 0.35, (h - hx) * 0.2)) : normalize(vec3(vNormal.x + (h - hx) * 0.75, vNormal.y * 1.05 + 0.35, vNormal.z + (h - hz) * 0.75));
 
   vec3 V = normalize(uCameraPos - vWorld);
   float ndotv = max(dot(V, n), 0.0);
@@ -2715,6 +2718,11 @@ void main() {
   float depthFactor = clamp(vWorld.y / 48.0, 0.0, 1.0);
   vec3 waterBody = mix(uWaterShallow, uWaterDeep, depthFactor);
 
+  // 采样原版水体材质纹理（流动侧面呈现自上而下的瀑布水流纹理）
+  vec2 uvTex = isSide ? vec2(abs(vNormal.x) > 0.5 ? vWorld.z : vWorld.x, vWorld.y - uTime * 1.8) : (vWorld.xz + vec2(uTime * 0.12, uTime * 0.08));
+  vec4 texWater = texture(uAtlas, vec3(fract(uvTex), uWaterLayer));
+  waterBody = mix(waterBody, texWater.rgb * 1.15, isSide ? 0.70 : 0.35);
+
   // 动态焦散波光注入水体
   float c = getCaustics(p, t);
   waterBody += vec3(0.06, 0.12, 0.16) * c * (1.0 - uNight * 0.6);
@@ -2732,8 +2740,8 @@ void main() {
   float fogFactor = smoothstep(uFogNear, uFogFar, vDist);
   col = mix(col, uFogColor, fogFactor);
 
-  // 通透度：直视透明、掠视反光、远距离与雾气全融
-  float alpha = mix(0.78 + fres * 0.20, 1.0, fogFactor);
+  // 通透度：侧面保持高质感立体水流质地与通透度
+  float alpha = isSide ? 0.88 : mix(0.78 + fres * 0.20, 1.0, fogFactor);
 
   gl_FragColor = vec4(col, alpha);
 }`;
@@ -2759,6 +2767,8 @@ const waterMat = new THREE.ShaderMaterial({
     uFogFar: { value: FOG_FAR },
     uNight: { value: 0.0 },
     uCameraPos: { value: new THREE.Vector3() },
+    uAtlas: { value: atlas.tex },
+    uWaterLayer: { value: atlas.T.water },
   },
   vertexShader: waterVertex,
   fragmentShader: waterFragment,
@@ -3546,7 +3556,11 @@ class World {
     const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
     this.ensureChunk(cx, cz);
     const c = this.chunks.get(key(cx, cz));
-    c.blocks[y * 256 + (z - cz * 16) * 16 + (x - cx * 16)] = id;
+    const idx = y * 256 + (z - cz * 16) * 16 + (x - cx * 16);
+    c.blocks[idx] = id;
+    if (id !== B.AIR && id !== B.WATER && c.water[idx] > 0) {
+      c.water[idx] = 0;
+    }
     if (id !== B.AIR && y > c.topY) c.topY = y;
     /* 挖掉最高那一层后把 topY 收回来，否则之后每次网格化都要白扫这些空气层 */
     else if (id === B.AIR && y === c.topY) c.topY = this._recalcTop(c);
@@ -4069,11 +4083,12 @@ function buildOpaqueGreedy(c, A, baseX, baseZ, yMax, colTop, getB, solid) {
   }
 }
 
-function pushWaterFace(A, bx, by, bz, f, hgt) {
+function pushWaterFace(A, bx, by, bz, f, topHgt, bottomHgt = 0) {
   const vi = A.pos.length / 3;
   for (let k = 0; k < 4; k++) {
     const c = f.corners[k];
-    A.pos.push(bx + c[0], by + (c[1] === 1 ? hgt : 0), bz + c[2]);
+    const yVal = by + (c[1] === 1 ? topHgt : bottomHgt);
+    A.pos.push(bx + c[0], yVal, bz + c[2]);
     A.nor.push(f.n[0], f.n[1], f.n[2]);
   }
   A.idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
@@ -4322,19 +4337,32 @@ function buildChunkGeometry(c) {
           // 水的所有暴露在空气或透光非水方块的侧面（FACES 0, 1, 4, 5）及底面（FACES 3）均必须渲染！
           const hgt = L < 8 ? (L / 8) : 1.0;
           for (const f of FACES) {
-            if (f.face === 2) continue; // 顶面：满水由贪心合并统一处理，流动水在下方单独补面
+            if (f.n[1] === 1) {
+              // 顶面：流动水(L < 8)在此单独补顶面；满水(L === 8)交由下方贪心合并统一处理
+              if (L < 8) {
+                const nbTop = getB(wx, y + 1, wz);
+                if (getW(wx, y + 1, wz) === 0 && isSeeThrough(nbTop)) {
+                  pushWaterFace(W, wx, y, wz, f, hgt);
+                }
+              }
+              continue;
+            }
+            if (f.n[1] === -1) {
+              // 底面
+              const nbBottom = getB(wx, y - 1, wz);
+              if (getW(wx, y - 1, wz) === 0 && isSeeThrough(nbBottom)) {
+                pushWaterFace(W, wx, y, wz, f, hgt);
+              }
+              continue;
+            }
+            // 侧面（FACES 0, 1, 4, 5）：若邻居透光且水深低于本格水（例如空气或落差水流），渲染侧面！
             const nb = getB(wx + f.dir[0], y + f.dir[1], wz + f.dir[2]);
-            if (getW(wx + f.dir[0], y + f.dir[1], wz + f.dir[2]) > 0 || !isSeeThrough(nb)) continue;
-            pushWaterFace(W, wx, y, wz, f, hgt);
-          }
-          if (L < 8) {
-            // 流动水非满格：单独渲染顶面
-            const nbTop = getB(wx, y + 1, wz);
-            if (getW(wx, y + 1, wz) === 0 && isSeeThrough(nbTop)) {
-              pushWaterFace(W, wx, y, wz, FACES[2], hgt);
+            const nbW = getW(wx + f.dir[0], y + f.dir[1], wz + f.dir[2]);
+            if (nbW < L && isSeeThrough(nb)) {
+              const bHgt = nbW > 0 ? (nbW / 8) : 0;
+              pushWaterFace(W, wx, y, wz, f, hgt, bHgt);
             }
           }
-          // 满水顶面：交由下方贪心合并，避免水下重复水面
           continue;
         }
         if (id === B.AIR) continue;
@@ -4440,6 +4468,29 @@ function waterStep(x, y, z) {
     }
   }
 
+  // 流动水断流检测 (L < 8)：若失去上游水源供给，则退水消失
+  if (L < 8) {
+    const aboveW = world.getWater(x, y + 1, z);
+    if (aboveW === 0) {
+      let maxNeighbor = 0;
+      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      for (const [dx, dz] of dirs) {
+        const nw = world.getWater(x + dx, y, z + dz);
+        if (nw > maxNeighbor) maxNeighbor = nw;
+      }
+      if (maxNeighbor <= L) {
+        // 无更高水流供给，断流消散
+        world.setWater(x, y, z, 0);
+        enqueueAround(x, y, z);
+        return;
+      } else if (maxNeighbor - 1 < L) {
+        world.setWater(x, y, z, maxNeighbor - 1);
+        enqueueAround(x, y, z);
+        return;
+      }
+    }
+  }
+
   const belowAir = world.getBlock(x, y - 1, z) === B.AIR;
   const belowWater = world.getWater(x, y - 1, z);
   if (belowAir && belowWater === 0) {
@@ -4449,25 +4500,36 @@ function waterStep(x, y, z) {
       enqueueWater(x, y - 1, z);
       // 源水继续参与下方的水平蔓延
     } else {
-      // 流动水：整体下移
-      world.setWater(x, y, z, 0);
-      world.setWater(x, y - 1, z, L);
-      enqueueAround(x, y, z); enqueueAround(x, y - 1, z);
-      return;
+      const aboveW = world.getWater(x, y + 1, z);
+      if (aboveW > 0) {
+        world.setWater(x, y - 1, z, 7);
+        enqueueWater(x, y - 1, z);
+      } else {
+        // 流动水：整体下移
+        world.setWater(x, y, z, 0);
+        world.setWater(x, y - 1, z, L);
+        enqueueAround(x, y, z); enqueueAround(x, y - 1, z);
+        return;
+      }
     }
   }
   if (L > 1) {
     const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     for (const [dx, dz] of dirs) {
       const nx = x + dx, nz = z + dz;
-      if (world.getBlock(nx, y, nz) === B.AIR && world.getWater(nx, y, nz) === 0 && world.chunkLoaded(Math.floor(nx / 16), Math.floor(nz / 16))) {
-        world.setWater(nx, y, nz, L - 1);
-        enqueueWater(nx, y, nz);
+      if (world.getBlock(nx, y, nz) === B.AIR && world.chunkLoaded(Math.floor(nx / 16), Math.floor(nz / 16))) {
+        const curW = world.getWater(nx, y, nz);
+        if (curW === 0 || curW < L - 1) {
+          world.setWater(nx, y, nz, L - 1);
+          enqueueWater(nx, y, nz);
+        }
       }
     }
   }
 }
 let waterHead = 0;            // 读指针：用下标代替 shift()，否则大队列时是 O(n²)
+let waterTickTimer = 0;
+const WATER_TICK_INTERVAL = 0.14; // 放缓水流扩散速度（每 0.14 秒推进一次），水流奔涌柔和逼真
 function updateWater(n) {
   let done = 0;
   while (done < n && waterHead < waterQ.length) {
@@ -5601,8 +5663,9 @@ function updateZombies(dt) {
       continue;
     }
 
-    let targetX = player.pos.x, targetZ = player.pos.z;
-    let targetDist = dist;
+    let targetX = player.fly ? null : player.pos.x;
+    let targetZ = player.fly ? null : player.pos.z;
+    let targetDist = player.fly ? Infinity : dist;
     let targetVillager = null;
     for (const v of villagers) {
       const vd = Math.hypot(v.x - z.x, v.z - z.z);
@@ -5614,8 +5677,9 @@ function updateZombies(dt) {
       }
     }
 
+    const hasTarget = targetX !== null;
     const playerTooHigh = !targetVillager && (player.pos.y - zy > 5);   // 玩家在上方 5 格以上（飞行）→ 不追击不攻击
-    if (!playerTooHigh) {
+    if (hasTarget && !playerTooHigh) {
       if (targetDist > 1.8) {   // 追击
         z.heading = Math.atan2(targetX - z.x, targetZ - z.z);
         const speed = z.hurtT > 0 ? 0.3 : 1.1;
@@ -5650,7 +5714,7 @@ function updateZombies(dt) {
                 toast('💀 村民被僵尸击败了！');
               }
             }
-          } else {
+          } else if (!player.fly) {
             damagePlayer(2);
           }
         }
@@ -5769,7 +5833,8 @@ function updateCreepers(dt) {
     }
 
     const playerTooHigh = dy3 > 5;
-    if (!playerTooHigh && dist3 < 3.2) {
+    const shouldIgnite = !player.fly && !playerTooHigh && dist3 < 3.2;
+    if (shouldIgnite) {
       // 进入引爆倒计时
       c.fuse += dt;
       c.fuseSoundT -= dt;
@@ -5782,21 +5847,21 @@ function updateCreepers(dt) {
       c.g.scale.set(swell, swell, swell);
 
       if (c.fuse >= 1.4) {
-        // 苦力怕引爆！
-        explodeTnt(c.x, cy + 0.6, c.z);
+        // 苦力怕引爆！（紧凑适度的 2.8 格原版自然爆破范围）
+        explodeTnt(c.x, cy + 0.6, c.z, 2.8);
         scene.remove(c.g);
         creepers.splice(i, 1);
         continue;
       }
     } else {
-      // 玩家远离时引线平息
+      // 玩家远离或处于飞行模式时引线平息
       if (c.fuse > 0) {
-        c.fuse = Math.max(0, c.fuse - dt * 2.0);
+        c.fuse = Math.max(0, c.fuse - dt * 2.5);
         const swell = 1.0 + (c.fuse / 1.4) * 0.28;
         c.g.scale.set(swell, swell, swell);
       }
-      // 追击玩家
-      if (!playerTooHigh && dist3 < 24) {
+      // 追击玩家（飞行模式下不寻找追击玩家）
+      if (!player.fly && !playerTooHigh && dist3 < 24) {
         c.heading = Math.atan2(dxp, dzp);
         const speed = c.hurtT > 0 ? 0.3 : 1.35;
         const nx = c.x + Math.sin(c.heading) * speed * dt;
@@ -5940,7 +6005,7 @@ function updateSkeletons(dt) {
     }
 
     const playerTooHigh = Math.abs(dyp) > 6;
-    if (!playerTooHigh && dist3 < 20) {
+    if (!player.fly && !playerTooHigh && dist3 < 20) {
       s.heading = Math.atan2(dxp, dzp);
       s.rightArmGroup.rotation.x = Math.PI * 0.45;
 
@@ -6119,7 +6184,7 @@ function updateEndermen(dt) {
       if (e.hp <= 0) { killEnderman(i); continue; }
     }
 
-    if (!e.angry && dist3 < 28) {
+    if (!player.fly && !e.angry && dist3 < 28) {
       const headPos = new THREE.Vector3(e.x, ey + 2.25, e.z);
       const toHead = headPos.clone().sub(camera.position).normalize();
       if (camDir.dot(toHead) > 0.985) {
@@ -6129,7 +6194,7 @@ function updateEndermen(dt) {
       }
     }
 
-    if (e.angry) {
+    if (!player.fly && e.angry) {
       e.heading = Math.atan2(dxp, dzp);
       e.head.position.x = (Math.random() - 0.5) * 0.05;
       e.head.position.z = (Math.random() - 0.5) * 0.05;
@@ -6277,7 +6342,7 @@ function killSpider(i) {
 function updateSpiders(dt) {
   const night = timeOfDay >= 0.5;
   spiderSpawnTimer -= dt;
-  if (spiders.length < MAX_SPIDERS && spiderSpawnTimer <= 0) {
+  if (night && spiders.length < MAX_SPIDERS && spiderSpawnTimer <= 0) {
     spiderSpawnTimer = 10 + Math.random() * 8;
     for (let attempt = 0; attempt < 20; attempt++) {
       const ang = Math.random() * Math.PI * 2, dist = 20 + Math.random() * 16;
@@ -6313,7 +6378,7 @@ function updateSpiders(dt) {
 
     const groundY = findGround(Math.floor(s.x), Math.floor(s.z));
 
-    if (s.angry && dist3 < 24) {
+    if (!player.fly && s.angry && dist3 < 24) {
       s.heading = Math.atan2(dxp, dzp);
       const speed = 2.4;
       const nx = s.x + Math.sin(s.heading) * speed * dt;
@@ -9273,13 +9338,13 @@ function updatePrimedTnt(dt) {
   }
 }
 
-function explodeTnt(ex, ey, ez) {
+function explodeTnt(ex, ey, ez, customRadius = 6.4) {
   playExplosionSound();
   spawnParticles(ex, ey, ez, 0xff5511, 48);
   spawnParticles(ex, ey, ez, 0xffcc33, 40);
   spawnParticles(ex, ey, ez, 0x555555, 36);
 
-  const radius = 6.4;
+  const radius = customRadius;
   const r2 = radius * radius;
   const minX = Math.floor(ex - radius), maxX = Math.ceil(ex + radius);
   const minY = Math.max(1, Math.floor(ey - radius)), maxY = Math.min(HEIGHT - 1, Math.ceil(ey + radius));
@@ -11702,7 +11767,7 @@ function raycast(origin, dir, maxDist) {
     const id = world.getBlock(x, y, z);
     // 水视为透明：射线穿过水，命中水下的实体方块（水本身不可破坏）
     if (id !== B.AIR) {
-      return { x, y, z, id, n: [face[0], face[1], face[2]] };
+      return { x, y, z, id, n: [face[0], face[1], face[2]], normal: [face[0], face[1], face[2]] };
     }
     if (tmx < tmy && tmx < tmz) { x += stepX; t = tmx; tmx += tdx; face = [-stepX, 0, 0]; }
     else if (tmy < tmz) { y += stepY; t = tmy; tmy += tdy; face = [0, -stepY, 0]; }
@@ -11721,13 +11786,14 @@ function raycastWater(origin, dir, maxDist) {
   let tmx = tdx === Infinity ? Infinity : (stepX > 0 ? (x + 1 - origin.x) : (origin.x - x)) * tdx;
   let tmy = tdy === Infinity ? Infinity : (stepY > 0 ? (y + 1 - origin.y) : (origin.y - y)) * tdy;
   let tmz = tdz === Infinity ? Infinity : (stepZ > 0 ? (z + 1 - origin.z) : (origin.z - z)) * tdz;
+  let face = [0, 0, 0];
   let t = 0;
   while (t <= maxDist) {
     if (world.getBlock(x, y, z) !== B.AIR) return null;   // 撞到实体方块则停止
-    if (world.getWater(x, y, z) > 0) return { x, y, z };
-    if (tmx < tmy && tmx < tmz) { x += stepX; t = tmx; tmx += tdx; }
-    else if (tmy < tmz) { y += stepY; t = tmy; tmy += tdy; }
-    else { z += stepZ; t = tmz; tmz += tdz; }
+    if (world.getWater(x, y, z) > 0) return { x, y, z, n: [face[0], face[1], face[2]], normal: [face[0], face[1], face[2]] };
+    if (tmx < tmy && tmx < tmz) { x += stepX; t = tmx; tmx += tdx; face = [-stepX, 0, 0]; }
+    else if (tmy < tmz) { y += stepY; t = tmy; tmy += tdy; face = [0, -stepY, 0]; }
+    else { z += stepZ; t = tmz; tmz += tdz; face = [0, 0, -stepZ]; }
   }
   return null;
 }
@@ -15460,12 +15526,29 @@ function onMousedown(btn) {
       return;
     }
     if (!isPlaceable(sid)) return;   // 工具/木棍/锭/木炭不可放置
-    if (!hit) return;
-    const px = hit.x + hit.n[0], py = hit.y + hit.n[1], pz = hit.z + hit.n[2];
+    let targetX, targetY, targetZ;
+    if (hit) {
+      targetX = hit.x + hit.n[0];
+      targetY = hit.y + hit.n[1];
+      targetZ = hit.z + hit.n[2];
+    } else if (sid !== B.WATER && sid !== B.LILY_PAD) {
+      // 隔水放置：若未直接命中实体方块，但视线交汇了水体，允许直接置入水体格
+      const wt = raycastWater(origin, dir, 6);
+      if (wt) {
+        targetX = wt.x;
+        targetY = wt.y;
+        targetZ = wt.z;
+      }
+    }
+    if (targetX === undefined) return;
+    const px = targetX, py = targetY, pz = targetZ;
     if (py < 0 || py >= HEIGHT) return;
     if (blockHitsPlayer(px, py, pz)) return;
-    const air = world.getBlock(px, py, pz) === B.AIR && world.getWater(px, py, pz) === 0;
-    if (!air) return;
+    const canPlace = world.getBlock(px, py, pz) === B.AIR;
+    if (!canPlace) return;
+    if (sid !== B.WATER && world.getWater(px, py, pz) > 0) {
+      world.setWater(px, py, pz, 0); // 排开水体，实现隔水与水下放置方块
+    }
     const below = world.getBlock(px, py - 1, pz);
     if (sid === B.CACTUS && below !== B.SAND && below !== B.CACTUS) { toast('⚠️ 仙人掌只能种植在沙子上'); return; }
     if (sid === B.BAMBOO && below !== B.GRASS && below !== B.DIRT && below !== B.BAMBOO) { toast('⚠️ 竹子只能种植在草地或泥土上'); return; }
@@ -15604,7 +15687,11 @@ function animate() {
     updatePlayer(dt);   // 暂停时不推进玩家物理，避免松开鼠标后人物继续漂移
     updateBreaking(dt);
     updateHunger(dt);   // 饥饿值仅在游玩时消耗
-    updateWater(150);
+    waterTickTimer += dt;
+    if (waterTickTimer >= WATER_TICK_INTERVAL) {
+      waterTickTimer = 0;
+      updateWater(24);
+    }
     updateParticles(dt);
     updateItems(dt);
     updateWeather(dt);
