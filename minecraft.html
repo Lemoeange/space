@@ -521,7 +521,8 @@ const B = {
   SLIME_BLOCK:187, HONEY_BLOCK:188,
   LANTERN:189, SOUL_LANTERN:190, LEVER:191, BUTTON:192, CHAIN:193, CAMPFIRE_OFF:194,
   DAYLIGHT_DETECTOR:195, NIGHT_DETECTOR:196, NOTE_BLOCK:197, SCULK_SENSOR:198, SCULK_BLOCK:199,
-  BEEHIVE:200, HONEYCOMB:201, DRIPSTONE_BLOCK:202, POINTED_DRIPSTONE:203
+  BEEHIVE:200, HONEYCOMB:201, DRIPSTONE_BLOCK:202, POINTED_DRIPSTONE:203,
+  COMPOSTER:204, BONE_MEAL:205, BLAST_FURNACE:206, SMOKER:207, LODESTONE:208
 };
 
 function mulberry32(a) {
@@ -827,7 +828,7 @@ const { HEIGHT, SEA, B, mulberry32, surfaceHeight, isCave, oreFor, oreNoise, bio
 /* ============================ 常量 ============================ */
 const CHUNK = 16;
 const TILE = 16;
-const ATLAS_TILES = 250;
+const ATLAS_TILES = 280;
 const ATLAS_W = ATLAS_TILES * TILE;
 const AO_LEVELS = [0.55, 0.7, 0.85, 1.0];
 const VIEW_R = 10;        // 视距（chunk 半径，每格 16 块）
@@ -901,6 +902,10 @@ function makeAtlas() {
   T.sculk = i++;
   T.beehiveTop = i++; T.beehiveSide = i++; T.beehiveFront = i++;
   T.dripstone = i++; T.pointedDripstone = i++;
+  T.composterTop = i++; T.composterSide = i++; T.composterReady = i++;
+  T.blastFurnaceTop = i++; T.blastFurnaceSide = i++; T.blastFurnaceFront = i++;
+  T.smokerTop = i++; T.smokerSide = i++; T.smokerFront = i++;
+  T.lodestoneTop = i++; T.lodestoneSide = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -2544,6 +2549,66 @@ function makeAtlas() {
   put(T.pointedDripstone, 7, 15, 82, 168, 236, 255); // 尖端晶莹水珠
   put(T.pointedDripstone, 8, 15, 120, 200, 255, 255);
 
+  // —— 堆肥桶（Composter）——
+  fill(T.composterSide, [131, 92, 59], 8, 180);
+  for (let y = 0; y < TILE; y += 4) for (let x = 0; x < TILE; x++) put(T.composterSide, x, y, 92, 62, 38);
+  for (let x = 0; x < TILE; x += 4) for (let y = 0; y < TILE; y++) put(T.composterSide, x, y, 92, 62, 38);
+
+  fill(T.composterTop, [131, 92, 59], 8, 181);
+  for (let y = 2; y <= 13; y++) for (let x = 2; x <= 13; x++) put(T.composterTop, x, y, 78, 54, 34); // 中间腐殖土
+  speck(T.composterTop, [112, 82, 48], 12, 182);
+
+  fill(T.composterReady, [131, 92, 59], 8, 183);
+  for (let y = 2; y <= 13; y++) for (let x = 2; x <= 13; x++) put(T.composterReady, x, y, 65, 48, 30);
+  speck(T.composterReady, [240, 242, 245], 16, 184); // 堆肥满溢白斑骨粉点缀
+
+  // —— 高炉（Blast Furnace）——
+  fill(T.blastFurnaceTop, [64, 64, 68], 8, 185);
+  for (let y = 3; y <= 12; y++) for (let x = 3; x <= 12; x++) {
+    if (x % 3 === 0 || y % 3 === 0) put(T.blastFurnaceTop, x, y, 42, 42, 46); // 耐火通风铁网
+  }
+
+  fill(T.blastFurnaceSide, [76, 76, 82], 10, 186);
+  for (let y = 0; y < TILE; y += 4) for (let x = 0; x < TILE; x++) put(T.blastFurnaceSide, x, y, 48, 48, 54);
+  speck(T.blastFurnaceSide, [118, 120, 128], 12, 187); // 铆钉金属加固块
+
+  fill(T.blastFurnaceFront, [76, 76, 82], 10, 188);
+  for (let y = 0; y < TILE; y += 4) for (let x = 0; x < TILE; x++) put(T.blastFurnaceFront, x, y, 48, 48, 54);
+  for (let y = 7; y <= 13; y++) for (let x = 4; x <= 11; x++) {
+    put(T.blastFurnaceFront, x, y, 235, 94, 40); // 白炽高温熔炉火口
+  }
+  for (let y = 9; y <= 12; y++) for (let x = 6; x <= 9; x++) put(T.blastFurnaceFront, x, y, 255, 220, 120);
+
+  // —— 烟熏炉（Smoker）——
+  fill(T.smokerTop, [84, 72, 64], 8, 189);
+  for (let y = 5; y <= 10; y++) for (let x = 5; x <= 10; x++) put(T.smokerTop, x, y, 42, 34, 28); // 烟囱排烟口
+
+  fill(T.smokerSide, [96, 78, 62], 10, 190);
+  for (let y = 0; y < TILE; y += 5) for (let x = 0; x < TILE; x++) put(T.smokerSide, x, y, 58, 46, 36);
+
+  fill(T.smokerFront, [96, 78, 62], 10, 191);
+  for (let y = 0; y < TILE; y += 5) for (let x = 0; x < TILE; x++) put(T.smokerFront, x, y, 58, 46, 36);
+  for (let y = 8; y <= 13; y++) for (let x = 4; x <= 11; x++) {
+    put(T.smokerFront, x, y, 220, 110, 36); // 慢烤炭火与烟熏木炉膛
+  }
+  for (let x = 5; x <= 10; x++) put(T.smokerFront, x, 7, 40, 32, 24); // 拱门炉檐
+
+  // —— 磁石（Lodestone）——
+  fill(T.lodestoneTop, [156, 158, 162], 8, 192);
+  for (let y = 2; y <= 13; y++) for (let x = 2; x <= 13; x++) {
+    const dCenter = Math.hypot(x - 7.5, y - 7.5);
+    if (dCenter >= 4.5 && dCenter <= 5.5) put(T.lodestoneTop, x, y, 102, 104, 110);
+    else if (dCenter <= 2.2) put(T.lodestoneTop, x, y, 68, 70, 78);
+  }
+  put(T.lodestoneTop, 7, 7, 142, 68, 173); // 磁石中央紫色共鸣晶核
+  put(T.lodestoneTop, 8, 7, 142, 68, 173);
+  put(T.lodestoneTop, 7, 8, 142, 68, 173);
+  put(T.lodestoneTop, 8, 8, 142, 68, 173);
+
+  fill(T.lodestoneSide, [146, 148, 154], 8, 193);
+  for (let y = 0; y < TILE; y += 4) for (let x = 0; x < TILE; x++) put(T.lodestoneSide, x, y, 110, 112, 118);
+  speck(T.lodestoneSide, [178, 180, 186], 14, 194);
+
   ctx.putImageData(img, 0, 0);
   // 3D 渲染改用 2D 纹理数组（每 tile 独立一层，配合 RepeatWrapping 可让单个 tile 跨大四边形循环）
   const layers = ATLAS_TILES;
@@ -2675,6 +2740,10 @@ function tileOf(id) {
     case B.BEEHIVE: return { top: atlas.T.beehiveTop, side: atlas.T.beehiveFront, bottom: atlas.T.beehiveTop };
     case B.DRIPSTONE_BLOCK: return { top: atlas.T.dripstone, side: atlas.T.dripstone, bottom: atlas.T.dripstone };
     case B.POINTED_DRIPSTONE: return { top: atlas.T.pointedDripstone, side: atlas.T.pointedDripstone, bottom: atlas.T.pointedDripstone };
+    case B.COMPOSTER: return { top: atlas.T.composterTop, side: atlas.T.composterSide, bottom: atlas.T.composterSide };
+    case B.BLAST_FURNACE: return { top: atlas.T.blastFurnaceTop, side: atlas.T.blastFurnaceSide, bottom: atlas.T.blastFurnaceTop };
+    case B.SMOKER: return { top: atlas.T.smokerTop, side: atlas.T.smokerSide, bottom: atlas.T.smokerTop };
+    case B.LODESTONE: return { top: atlas.T.lodestoneTop, side: atlas.T.lodestoneSide, bottom: atlas.T.lodestoneTop };
     case B.CAMPFIRE: return { top: atlas.T.campfireTop, side: atlas.T.campfireSide, bottom: atlas.T.campfireSide };
     case B.DOOR: return { top: atlas.T.doorTop, side: atlas.T.doorBottom, bottom: atlas.T.doorBottom };
     case B.COBWEB: return { top: atlas.T.cobweb, side: atlas.T.cobweb, bottom: atlas.T.cobweb };
@@ -4721,6 +4790,8 @@ const BLOCK_COLORS = {
   [B.NOTE_BLOCK]: 0x8b5a2b, [B.SCULK_SENSOR]: 0x00d2d3, [B.SCULK_BLOCK]: 0x0c2461,
   [B.BEEHIVE]: 0xf39c12, [B.HONEYCOMB]: 0xf1c40f,
   [B.DRIPSTONE_BLOCK]: 0x8d7a6b, [B.POINTED_DRIPSTONE]: 0x7f6c5d,
+  [B.COMPOSTER]: 0x835c3b, [B.BONE_MEAL]: 0xf1f2f6,
+  [B.BLAST_FURNACE]: 0x4b4b4b, [B.SMOKER]: 0x3d3d3d, [B.LODESTONE]: 0x95a5a6,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -10374,6 +10445,8 @@ function updateSensorsAndEnvironment(dt) {
 }
 
 const respawnAnchorCharges = new Map(); // "x,y,z" → 充能层数 0..4
+const composterLevels = new Map();       // "x,y,z" → 堆肥等级 0..7
+let lodestoneTarget = null;              // 磁石共振坐标 {x, y, z}
 
 /* ============================ 🌀 下界传送门与异次元穿梭系统 (Nether Portal & Dimension) ============================ */
 let playerInPortalTimer = 0;
@@ -11539,7 +11612,7 @@ const TOOL_DURABILITY = {
 };
 // 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌不可放置）
 function isPlaceable(id) {
-  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.COMPASS || id === B.CLOCK || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT || id === B.ELYTRA || id === B.NETHERITE_INGOT || id === B.NETHER_PORTAL || id === B.HONEYCOMB) return false;
+  if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.COMPASS || id === B.CLOCK || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT || id === B.ELYTRA || id === B.NETHERITE_INGOT || id === B.NETHER_PORTAL || id === B.HONEYCOMB || id === B.BONE_MEAL) return false;
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.MELON_SLICE) return false;
   if (isFood(id)) return false;   // 食物不可放置
   return true;
@@ -12424,6 +12497,8 @@ const NAMES = {
   [B.NOTE_BLOCK]: '音符盒', [B.SCULK_SENSOR]: '幽匿感测体', [B.SCULK_BLOCK]: '幽匿方块',
   [B.BEEHIVE]: '蜂箱', [B.HONEYCOMB]: '蜜脾',
   [B.DRIPSTONE_BLOCK]: '滴水石块', [B.POINTED_DRIPSTONE]: '滴水石锥',
+  [B.COMPOSTER]: '堆肥桶', [B.BONE_MEAL]: '骨粉',
+  [B.BLAST_FURNACE]: '高炉', [B.SMOKER]: '烟熏炉', [B.LODESTONE]: '磁石',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 function isHelmet(id) { return id === B.IRON_HELMET || id === B.DIAMOND_HELMET || id === B.NETHERITE_HELMET || id === B.TURTLE_HELMET; }
@@ -12668,6 +12743,11 @@ const RECIPES = [
   { out: B.HONEY_BLOCK, n: 1, need: [[B.HONEYCOMB, 4]] },
   { out: B.DRIPSTONE_BLOCK, n: 1, need: [[B.POINTED_DRIPSTONE, 4]] },
   { out: B.POINTED_DRIPSTONE, n: 4, need: [[B.COBBLE, 2], [B.GRAVEL, 1]] },
+  { out: B.BONE_MEAL, n: 3, need: [[B.BONE, 1]] },
+  { out: B.COMPOSTER, n: 1, need: [[B.PLANKS, 7]] },
+  { out: B.BLAST_FURNACE, n: 1, need: [[B.FURNACE, 1], [B.IRON_INGOT, 5], [B.STONE, 3]] },
+  { out: B.SMOKER, n: 1, need: [[B.FURNACE, 1], [B.LOG, 4]] },
+  { out: B.LODESTONE, n: 1, need: [[B.NETHERITE_INGOT, 1], [B.STONE_BRICK, 8]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -13480,12 +13560,26 @@ function makeItemIcon(id) {
     ctx.fillRect(13, 11, 6, 4); ctx.fillRect(11, 16, 5, 4); ctx.fillRect(17, 16, 5, 4);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(14, 12, 2, 2); ctx.fillRect(12, 17, 2, 2);
+  } else if (id === B.BONE_MEAL) {
+    // 骨粉：精细研磨的雪白磷光骨粉袋与粉末颗粒
+    ctx.fillStyle = '#dfe4ea';
+    ctx.fillRect(9, 10, 14, 14);
+    ctx.fillStyle = '#f1f2f6';
+    ctx.fillRect(10, 8, 12, 14);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(11, 7, 10, 12);
+    ctx.fillStyle = '#a4b0be';
+    ctx.fillRect(9, 12, 3, 10); ctx.fillRect(20, 12, 3, 10); ctx.fillRect(10, 22, 12, 3);
+    // 洒落的细微骨粉星芒
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(7, 9, 2, 2); ctx.fillRect(23, 8, 2, 2); ctx.fillRect(15, 4, 2, 2);
+    ctx.fillRect(5, 16, 2, 2); ctx.fillRect(25, 18, 2, 2);
   }
   return cv;
 }
 function makeIcon(id) {
   if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD && id !== B.CROSSBOW && id !== B.SHEARS && id !== B.FLINT_AND_STEEL)) return makeToolIcon(id);
-  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.GOLDEN_CARROT || id === B.COMPASS || id === B.CLOCK || id === B.ENCHANTED_GOLDEN_APPLE || id === B.COOKIE || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT || id === B.ELYTRA || id === B.NETHERITE_INGOT || id === B.HONEYCOMB) return makeItemIcon(id);
+  if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.GOLDEN_CARROT || id === B.COMPASS || id === B.CLOCK || id === B.ENCHANTED_GOLDEN_APPLE || id === B.COOKIE || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT || id === B.ELYTRA || id === B.NETHERITE_INGOT || id === B.HONEYCOMB || id === B.BONE_MEAL) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
   return makeIconCanvas(id);
 }
@@ -14293,6 +14387,7 @@ const HARDNESS = {
   [B.DAYLIGHT_DETECTOR]: 0.3, [B.NIGHT_DETECTOR]: 0.3, [B.NOTE_BLOCK]: 0.8,
   [B.SCULK_SENSOR]: 1.5, [B.SCULK_BLOCK]: 0.6, [B.BEEHIVE]: 0.6,
   [B.DRIPSTONE_BLOCK]: 1.5, [B.POINTED_DRIPSTONE]: 1.5,
+  [B.COMPOSTER]: 0.6, [B.BLAST_FURNACE]: 3.5, [B.SMOKER]: 3.5, [B.LODESTONE]: 3.5,
 };
 function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
 // 破坏掉落物
@@ -14341,8 +14436,12 @@ function dropOf(id) {
   if (id === B.BEEHIVE) return B.BEEHIVE;
   if (id === B.DRIPSTONE_BLOCK) return B.DRIPSTONE_BLOCK;
   if (id === B.POINTED_DRIPSTONE) return B.POINTED_DRIPSTONE;
+  if (id === B.COMPOSTER) return B.COMPOSTER;
+  if (id === B.BLAST_FURNACE) return B.BLAST_FURNACE;
+  if (id === B.SMOKER) return B.SMOKER;
+  if (id === B.LODESTONE) return B.LODESTONE;
   if (isLeaf(id)) return null;               // 树叶不掉落（苹果单独判定）
-  if (isTool(id) || id === B.STICK || id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.EGG || id === B.SNOWBALL || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.EMERALD || id === B.HONEYCOMB) return null;
+  if (isTool(id) || id === B.STICK || id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.EGG || id === B.SNOWBALL || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.EMERALD || id === B.HONEYCOMB || id === B.BONE_MEAL) return null;
   return id;
 }
 // 工具等级挖掘倍率
@@ -14362,11 +14461,11 @@ function effSpeed(id) {
   if (isPickaxe(t)) {
     if (id === B.OBSIDIAN || id === B.ENDER_CHEST || id === B.CRYING_OBSIDIAN || id === B.RESPAWN_ANCHOR) return isNetheriteTier(t) ? 22 : (isDiamondTier(t) ? 14 : (isIronTier(t) ? 4.0 : 1.5));
     if (id === B.ENCHANTING_TABLE || id === B.BEACON) return tierOf(t);
-    if (id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK || id === B.SANDSTONE || id === B.QUARTZ || isOre(id) || id === B.FURNACE || id === B.BASALT || id === B.MAGMA || id === B.ICE || id === B.GLOWSTONE || id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.AMETHYST_BLOCK || id === B.LIGHTNING_ROD || id === B.COPPER_BLOCK || id === B.SEA_LANTERN || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.BUTTON || id === B.CHAIN || id === B.SCULK_SENSOR || id === B.SCULK_BLOCK || id === B.DRIPSTONE_BLOCK || id === B.POINTED_DRIPSTONE) return tierOf(t);
+    if (id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK || id === B.SANDSTONE || id === B.QUARTZ || isOre(id) || id === B.FURNACE || id === B.BASALT || id === B.MAGMA || id === B.ICE || id === B.GLOWSTONE || id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.AMETHYST_BLOCK || id === B.LIGHTNING_ROD || id === B.COPPER_BLOCK || id === B.SEA_LANTERN || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.BUTTON || id === B.CHAIN || id === B.SCULK_SENSOR || id === B.SCULK_BLOCK || id === B.DRIPSTONE_BLOCK || id === B.POINTED_DRIPSTONE || id === B.BLAST_FURNACE || id === B.SMOKER || id === B.LODESTONE) return tierOf(t);
     return 1.15;
   }
   if (isAxe(t)) {
-    if (isLog(id) || id === B.PLANKS || id === B.CHEST || id === B.CAMPFIRE || id === B.CAMPFIRE_OFF || id === B.SOUL_CAMPFIRE || id === B.DOOR || id === B.BAMBOO || id === B.BOOKSHELF || id === B.PUMPKIN || id === B.JACK_O_LANTERN || id === B.MELON || id === B.DAYLIGHT_DETECTOR || id === B.NIGHT_DETECTOR || id === B.NOTE_BLOCK || id === B.BEEHIVE) return tierOf(t);
+    if (isLog(id) || id === B.PLANKS || id === B.CHEST || id === B.CAMPFIRE || id === B.CAMPFIRE_OFF || id === B.SOUL_CAMPFIRE || id === B.DOOR || id === B.BAMBOO || id === B.BOOKSHELF || id === B.PUMPKIN || id === B.JACK_O_LANTERN || id === B.MELON || id === B.DAYLIGHT_DETECTOR || id === B.NIGHT_DETECTOR || id === B.NOTE_BLOCK || id === B.BEEHIVE || id === B.COMPOSTER) return tierOf(t);
     return 1.15;
   }
   if (isShovel(t)) {
@@ -14743,6 +14842,118 @@ function onMousedown(btn) {
           toast('🔥 重新点燃了营火！熊熊烈焰升腾！');
           return;
         }
+      }
+      // 右键磁石 → 手持指南针绑定磁力共振坐标
+      if (hit.id === B.LODESTONE) {
+        if (sel && sel.id === B.COMPASS) {
+          lodestoneTarget = { x: hit.x, y: hit.y, z: hit.z };
+          playAmethystChime();
+          burst(0.2, 0.18, 900);
+          spawnParticles(hit.x + 0.5, hit.y + 0.8, hit.z + 0.5, 0x9b59b6, 24);
+          spawnParticles(hit.x + 0.5, hit.y + 0.8, hit.z + 0.5, 0x34495e, 16);
+          toast(`🧭 指南针已与磁石共振锁定！指针将永恒指向此磁石坐标 [${hit.x}, ${hit.y}, ${hit.z}]！`);
+          return;
+        } else {
+          toast('🧲 沉重的合金磁石（手持【指南针】右键可谐振绑定指针）');
+          return;
+        }
+      }
+      // 右键堆肥桶 → 投入有机植物堆肥 / 采集成熟骨粉
+      if (hit.id === B.COMPOSTER) {
+        const k = `${hit.x},${hit.y},${hit.z}`;
+        const curLvl = composterLevels.get(k) || 0;
+        if (curLvl >= 7) {
+          const yieldCount = Math.random() < 0.5 ? 2 : 1;
+          addItem(B.BONE_MEAL, yieldCount);
+          composterLevels.set(k, 0);
+          refreshHotbar();
+          tone(520, 680, 0.15, 'sine', 0.25);
+          burst(0.12, 0.16, 800);
+          spawnParticles(hit.x + 0.5, hit.y + 0.8, hit.z + 0.5, 0xf1f2f6, 18);
+          toast(`✨ 堆肥发酵成熟！采集获得了 ${yieldCount} 份高效【骨粉】！`);
+          return;
+        }
+        const isCompostable = sel && (
+          sel.id === B.WHEAT || sel.id === B.APPLE || isSapling(sel.id) ||
+          sel.id === B.FLOWER_RED || sel.id === B.FLOWER_YELLOW || sel.id === B.FERN ||
+          sel.id === B.GRASS_TALL || sel.id === B.MELON_SLICE || sel.id === B.BREAD ||
+          sel.id === B.SUGARCANE || isLeaf(sel.id)
+        );
+        if (isCompostable) {
+          if (!player.fly) removeItem(sel.id, 1);
+          refreshHotbar();
+          const nextLvl = curLvl + 1;
+          composterLevels.set(k, nextLvl);
+          burst(0.1, 0.15, 600, 'bandpass');
+          tone(300, 420, 0.1, 'triangle', 0.2);
+          spawnParticles(hit.x + 0.5, hit.y + 0.7, hit.z + 0.5, 0x2ed573, 14);
+          if (nextLvl >= 7) {
+            tone(440, 880, 0.2, 'sine', 0.3);
+            toast('🌱 堆肥桶已填满 [7/7]！表层泛起雪白磷光，右键即可采集骨粉！');
+          } else {
+            toast(`🍂 投入了有机原料进行堆肥 [${nextLvl}/7]`);
+          }
+          return;
+        } else {
+          toast(`🪵 堆肥桶当前堆肥进度 [${curLvl}/7]（手持植物/农作物右键投入）`);
+          return;
+        }
+      }
+      // 手持骨粉 → 催熟树苗、催熟小麦作物、使草地盛开繁花
+      if (sel && sel.id === B.BONE_MEAL) {
+        const k = `${hit.x},${hit.y},${hit.z}`;
+        if (plantedSaplings.has(k)) {
+          const s = plantedSaplings.get(k);
+          plantedSaplings.delete(k);
+          if (!player.fly) removeItem(B.BONE_MEAL, 1);
+          refreshHotbar();
+          growTree(s.x, s.y - 1, s.z, s.id);
+          spawnParticles(s.x + 0.5, s.y + 1.5, s.z + 0.5, 0x2ed573, 28);
+          tone(520, 1040, 0.25, 'sine', 0.35);
+          toast('🌱 使用骨粉施肥催熟！幼苗瞬间破土长成参天大树！');
+          return;
+        }
+        if (hit.id === B.WHEAT_CROP) {
+          if (!player.fly) removeItem(B.BONE_MEAL, 1);
+          refreshHotbar();
+          world.setBlock(hit.x, hit.y, hit.z, B.WHEAT_CROP_MATURE);
+          enqueueAround(hit.x, hit.y, hit.z);
+          spawnParticles(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, 0x2ed573, 20);
+          tone(440, 880, 0.2, 'sine', 0.3);
+          toast('🌾 骨粉滋养了农作物，小麦瞬间金黄成熟！');
+          return;
+        }
+        if (hit.id === B.GRASS) {
+          if (!player.fly) removeItem(B.BONE_MEAL, 1);
+          refreshHotbar();
+          for (let dx = -2; dx <= 2; dx++) {
+            for (let dz = -2; dz <= 2; dz++) {
+              const gx = hit.x + dx, gz = hit.z + dz;
+              const gy = hit.y + 1;
+              if (world.getBlock(gx, hit.y, gz) === B.GRASS && world.getBlock(gx, gy, gz) === B.AIR && Math.random() < 0.6) {
+                const flowers = [B.GRASS_TALL, B.GRASS_TALL, B.FLOWER_RED, B.FLOWER_YELLOW, B.FERN];
+                const plant = flowers[Math.floor(Math.random() * flowers.length)];
+                world.setBlock(gx, gy, gz, plant);
+                enqueueAround(gx, gy, gz);
+              }
+            }
+          }
+          spawnParticles(hit.x + 0.5, hit.y + 1.1, hit.z + 0.5, 0x2ed573, 24);
+          tone(400, 750, 0.22, 'sine', 0.28);
+          toast('🌸 骨粉挥洒在草地上，周围百花盛开、绿草茵茵！');
+          return;
+        }
+      }
+      // 右键高炉 / 烟熏炉
+      if (hit.id === B.BLAST_FURNACE) {
+        tone(320, 480, 0.15, 'sawtooth', 0.25);
+        toast('🔥 高炉：专用于极速熔炼矿石与矿物，冶炼效率提升 100%！');
+        return;
+      }
+      if (hit.id === B.SMOKER) {
+        tone(280, 420, 0.15, 'triangle', 0.25);
+        toast('🍖 烟熏炉：专用于高效烟熏烹制肉类与鱼类，烹饪效率提升 100%！');
+        return;
       }
       // 右键拉杆 → 扳动开关，切换周围红石回路
       if (hit.id === B.LEVER) {
@@ -15662,8 +15873,10 @@ function onMousedown(btn) {
 
     // 手持指南针：测距与方向指引
     if (sel && sel.id === B.COMPASS) {
-      const spawnX = 0, spawnZ = 0;
-      const dx = spawnX - player.pos.x, dz = spawnZ - player.pos.z;
+      const targetX = lodestoneTarget ? lodestoneTarget.x : 0;
+      const targetZ = lodestoneTarget ? lodestoneTarget.z : 0;
+      const targetLabel = lodestoneTarget ? `磁石锚点 [${targetX}, ${targetZ}]` : `世界原点 [0, 0]`;
+      const dx = targetX - player.pos.x, dz = targetZ - player.pos.z;
       const dist = Math.round(Math.hypot(dx, dz));
       const angle = Math.atan2(dx, dz) * 180 / Math.PI;
       let dirName = '北';
@@ -15675,7 +15888,7 @@ function onMousedown(btn) {
       else if (angle >= -112.5 && angle < -67.5) dirName = '东';
       else if (angle >= -157.5 && angle < -112.5) dirName = '东北';
       tone(440, 880, 0.08, 'sine', 0.15);
-      toast(`🧭 指南针指引：世界原点位于【${dirName}方】，直线距离 ${dist} 米 (X:0, Z:0)`);
+      toast(`🧭 指南针指引：${targetLabel} 位于【${dirName}方】，直线距离 ${dist} 米`);
       return;
     }
 
