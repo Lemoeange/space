@@ -507,7 +507,12 @@ const B = {
   DIAMOND_PICKAXE:149, DIAMOND_AXE:150, DIAMOND_SHOVEL:151, DIAMOND_SWORD:152,
   ELYTRA:153, OBSIDIAN:154,
   NETHERITE_INGOT:155, NETHERITE_SWORD:156, NETHERITE_PICKAXE:157,
-  ENCHANTING_TABLE:158, BEACON:159
+  ENCHANTING_TABLE:158, BEACON:159,
+  ENDER_CHEST:160,
+  NETHERITE_HELMET:161, NETHERITE_CHESTPLATE:162, NETHERITE_LEGGINGS:163, NETHERITE_BOOTS:164,
+  FIRE_RESISTANCE_POTION:165,
+  NETHERITE_AXE:166, NETHERITE_SHOVEL:167,
+  STRENGTH_POTION:168, NIGHT_VISION_POTION:169
 };
 
 function mulberry32(a) {
@@ -813,7 +818,7 @@ const { HEIGHT, SEA, B, mulberry32, surfaceHeight, isCave, oreFor, oreNoise, bio
 /* ============================ 常量 ============================ */
 const CHUNK = 16;
 const TILE = 16;
-const ATLAS_TILES = 130;
+const ATLAS_TILES = 140;
 const ATLAS_W = ATLAS_TILES * TILE;
 const AO_LEVELS = [0.55, 0.7, 0.85, 1.0];
 const VIEW_R = 10;        // 视距（chunk 半径，每格 16 块）
@@ -862,6 +867,7 @@ function makeAtlas() {
   T.obsidian = i++;
   T.enchantTop = i++; T.enchantSide = i++;
   T.beacon = i++;
+  T.enderChestTop = i++; T.enderChestSide = i++; T.enderChestFront = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -1932,6 +1938,34 @@ function makeAtlas() {
     }
   }
 
+  // —— 末影箱（Ender Chest）——
+  // 顶面：深邃黑曜石 + 幽绿微粒
+  fill(T.enderChestTop, [22, 28, 36], 6, 170);
+  for (let x = 0; x < TILE; x++) {
+    put(T.enderChestTop, x, 0, 65, 75, 88); put(T.enderChestTop, x, 15, 65, 75, 88);
+    put(T.enderChestTop, 0, x, 65, 75, 88); put(T.enderChestTop, 15, x, 65, 75, 88);
+  }
+  // 侧面：深邃黑曜石 + 加固金属包角
+  fill(T.enderChestSide, [20, 24, 32], 6, 171);
+  for (let x = 0; x < TILE; x++) {
+    put(T.enderChestSide, x, 0, 65, 75, 88); put(T.enderChestSide, x, 15, 65, 75, 88);
+    put(T.enderChestSide, 0, x, 65, 75, 88); put(T.enderChestSide, 15, x, 65, 75, 88);
+  }
+  // 正面：深邃黑曜石 + 中心末影之眼锁孔
+  fill(T.enderChestFront, [20, 24, 32], 6, 172);
+  for (let x = 0; x < TILE; x++) {
+    put(T.enderChestFront, x, 0, 65, 75, 88); put(T.enderChestFront, x, 15, 65, 75, 88);
+    put(T.enderChestFront, 0, x, 65, 75, 88); put(T.enderChestFront, 15, x, 65, 75, 88);
+    put(T.enderChestFront, x, 7, 50, 58, 68);
+  }
+  // 锁孔末影之眼
+  for (let y = 6; y <= 9; y++) {
+    for (let x = 7; x <= 8; x++) {
+      put(T.enderChestFront, x, y, 26, 200, 150);
+    }
+  }
+  put(T.enderChestFront, 7, 7, 10, 45, 35); put(T.enderChestFront, 8, 8, 10, 45, 35);
+
   // —— 营火（Campfire）——
   // 顶面：中心赤红灼热炭火木炭 + 外围原木
   fill(T.campfireTop, [42, 38, 36], 8, 140);
@@ -2145,6 +2179,7 @@ function tileOf(id) {
     case B.OBSIDIAN: return { top: atlas.T.obsidian, side: atlas.T.obsidian, bottom: atlas.T.obsidian };
     case B.ENCHANTING_TABLE: return { top: atlas.T.enchantTop, side: atlas.T.enchantSide, bottom: atlas.T.obsidian };
     case B.BEACON: return { top: atlas.T.beacon, side: atlas.T.beacon, bottom: atlas.T.obsidian };
+    case B.ENDER_CHEST: return { top: atlas.T.enderChestTop, side: atlas.T.enderChestSide, bottom: atlas.T.enderChestTop };
     case B.CAMPFIRE: return { top: atlas.T.campfireTop, side: atlas.T.campfireSide, bottom: atlas.T.campfireSide };
     case B.DOOR: return { top: atlas.T.doorTop, side: atlas.T.doorBottom, bottom: atlas.T.doorBottom };
     case B.COBWEB: return { top: atlas.T.cobweb, side: atlas.T.cobweb, bottom: atlas.T.cobweb };
@@ -2627,6 +2662,11 @@ function updateEnvironment(t) {
   hemi.intensity = lerp(0.28, 0.36, day) * dim;                    // 半球光（PBR 天光氛围）
   hemi.color.setRGB(lerp(0.14, 0.75, day), lerp(0.18, 0.85, day), lerp(0.36, 1.0, day));
   ambient.intensity = lerp(0.18, 0.24, day) * dim;                 // 环境光均匀柔和补光，消除死黑角
+  if (player.nightVisionTimer && player.nightVisionTimer > 0) {
+    // 开启【夜视药水】效果：照亮黑夜与深邃矿洞，如白昼般清晰通透
+    ambient.intensity = Math.max(ambient.intensity, 0.92);
+    hemi.intensity = Math.max(hemi.intensity, 0.88);
+  }
 
   // 天空：白天通透蓝天，日出日落暖橙，夜晚深蓝
   /* 白天要有"明显的蓝天"：天顶饱和深蓝，地平线只略浅（原来是灰白） */
@@ -4090,6 +4130,10 @@ const BLOCK_COLORS = {
   [B.JUKEBOX]: 0x6e3c23, [B.OBSIDIAN]: 0x22182c,
   [B.ENCHANTING_TABLE]: 0x8b1528, [B.BEACON]: 0x00f5d4,
   [B.NETHERITE_INGOT]: 0x3a3535, [B.NETHERITE_SWORD]: 0x3a3535, [B.NETHERITE_PICKAXE]: 0x3a3535,
+  [B.ENDER_CHEST]: 0x1a333c, [B.NETHERITE_HELMET]: 0x3a3535, [B.NETHERITE_CHESTPLATE]: 0x3a3535,
+  [B.NETHERITE_LEGGINGS]: 0x3a3535, [B.NETHERITE_BOOTS]: 0x3a3535, [B.FIRE_RESISTANCE_POTION]: 0xe67e22,
+  [B.NETHERITE_AXE]: 0x3a3535, [B.NETHERITE_SHOVEL]: 0x3a3535,
+  [B.STRENGTH_POTION]: 0x96281b, [B.NIGHT_VISION_POTION]: 0x1f3a93,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -8539,12 +8583,16 @@ function meleeDamage() {
       else if (isStoneTier(s.id)) dmg = 6;
       else dmg = 4;   // 木剑
     } else if (isAxe(s.id)) {
-      if (isDiamondTier(s.id)) dmg = 9;
+      if (isNetheriteTier(s.id)) dmg = 10;
+      else if (isDiamondTier(s.id)) dmg = 9;
       else if (isIronTier(s.id)) dmg = 7;
       else if (isStoneTier(s.id)) dmg = 5;
       else dmg = 3;
     }
     if (s.enchanted) dmg += 4; // 远古附魔额外 +4 魔法伤害！
+  }
+  if (player.strengthPotionTimer && player.strengthPotionTimer > 0) {
+    dmg += 6; // 力量 II 药水状态额外 +6 斩杀威力！
   }
   return dmg;
 }
@@ -8811,7 +8859,7 @@ function explodeTnt(ex, ey, ez) {
         const d2 = dx * dx + dy * dy + dz * dz;
         if (d2 <= r2) {
           const bid = world.getBlock(x, y, z);
-          if (bid !== B.AIR && bid !== B.BEDROCK && bid !== B.OBSIDIAN) {
+          if (bid !== B.AIR && bid !== B.BEDROCK && bid !== B.OBSIDIAN && bid !== B.ENDER_CHEST) {
             if (bid === B.TNT) {
               // 连锁爆破：波及的 TNT 不被破坏，而是被点燃引信并受冲击波抛射！连锁引信设定为 0.7 - 1.0 秒
               const dist = Math.sqrt(d2) || 1;
@@ -10077,6 +10125,9 @@ const player = {
   armor: { helmet: null, chestplate: null, leggings: null, boots: null },
   gliding: false,
   speedPotionTimer: 0,
+  fireResistanceTimer: 0,
+  strengthPotionTimer: 0,
+  nightVisionTimer: 0,
   absorption: 0,
 };
 let maxFallY = null;   // 摔落起点高度（用于计算摔落伤害）
@@ -10346,8 +10397,8 @@ function isTorch(id) { return id === B.TORCH; }
 function isLilyPad(id) { return id === B.LILY_PAD; }
 function isLadder(id) { return id === B.LADDER; }
 function isPickaxe(id) { return id === B.WOOD_PICKAXE || id === B.STONE_PICKAXE || id === B.IRON_PICKAXE || id === B.DIAMOND_PICKAXE || id === B.NETHERITE_PICKAXE; }
-function isAxe(id) { return id === B.WOOD_AXE || id === B.STONE_AXE || id === B.IRON_AXE || id === B.DIAMOND_AXE; }
-function isShovel(id) { return id === B.WOOD_SHOVEL || id === B.STONE_SHOVEL || id === B.IRON_SHOVEL || id === B.DIAMOND_SHOVEL; }
+function isAxe(id) { return id === B.WOOD_AXE || id === B.STONE_AXE || id === B.IRON_AXE || id === B.DIAMOND_AXE || id === B.NETHERITE_AXE; }
+function isShovel(id) { return id === B.WOOD_SHOVEL || id === B.STONE_SHOVEL || id === B.IRON_SHOVEL || id === B.DIAMOND_SHOVEL || id === B.NETHERITE_SHOVEL; }
 function isSword(id) { return id === B.WOOD_SWORD || id === B.STONE_SWORD || id === B.IRON_SWORD || id === B.DIAMOND_SWORD || id === B.NETHERITE_SWORD; }
 function isBow(id) { return id === B.BOW; }
 function isShield(id) { return id === B.SHIELD; }
@@ -10359,14 +10410,14 @@ function isWoodTier(id) { return id === B.WOOD_PICKAXE || id === B.WOOD_AXE || i
 function isStoneTier(id) { return id === B.STONE_PICKAXE || id === B.STONE_AXE || id === B.STONE_SHOVEL || id === B.STONE_SWORD; }
 function isIronTier(id) { return id === B.IRON_PICKAXE || id === B.IRON_AXE || id === B.IRON_SHOVEL || id === B.IRON_SWORD; }
 function isDiamondTier(id) { return id === B.DIAMOND_PICKAXE || id === B.DIAMOND_AXE || id === B.DIAMOND_SHOVEL || id === B.DIAMOND_SWORD; }
-function isNetheriteTier(id) { return id === B.NETHERITE_PICKAXE || id === B.NETHERITE_SWORD; }
+function isNetheriteTier(id) { return id === B.NETHERITE_PICKAXE || id === B.NETHERITE_SWORD || id === B.NETHERITE_AXE || id === B.NETHERITE_SHOVEL; }
 // 工具耐久上限（木 60 / 石 130 / 铁 250 / 钻石 1561 / 下界合金 2031 / 弓 100 / 盾 180 / 钓竿 64）
 const TOOL_DURABILITY = {
   [B.WOOD_PICKAXE]: 60, [B.WOOD_AXE]: 60, [B.WOOD_SHOVEL]: 60, [B.WOOD_SWORD]: 60,
   [B.STONE_PICKAXE]: 130, [B.STONE_AXE]: 130, [B.STONE_SHOVEL]: 130, [B.STONE_SWORD]: 130,
   [B.IRON_PICKAXE]: 250, [B.IRON_AXE]: 250, [B.IRON_SHOVEL]: 250, [B.IRON_SWORD]: 250,
   [B.DIAMOND_PICKAXE]: 1561, [B.DIAMOND_AXE]: 1561, [B.DIAMOND_SHOVEL]: 1561, [B.DIAMOND_SWORD]: 1561,
-  [B.NETHERITE_PICKAXE]: 2031, [B.NETHERITE_SWORD]: 2031,
+  [B.NETHERITE_PICKAXE]: 2031, [B.NETHERITE_AXE]: 2031, [B.NETHERITE_SHOVEL]: 2031, [B.NETHERITE_SWORD]: 2031,
   [B.BOW]: 100, [B.SHIELD]: 180, [B.FISHING_ROD]: 64,
 };
 // 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌不可放置）
@@ -10542,9 +10593,28 @@ function updatePlayer(dt) {
   let speed = player.fly ? 16 : (player.sprint ? 7.5 : 4.5);
   if (player.armor && player.armor.boots === B.IRON_BOOTS) speed *= 1.10;
   else if (player.armor && player.armor.boots === B.DIAMOND_BOOTS) speed *= 1.16;
+  else if (player.armor && player.armor.boots === B.NETHERITE_BOOTS) speed *= 1.22;
   if (player.speedPotionTimer && player.speedPotionTimer > 0) {
     speed *= 1.35;
     player.speedPotionTimer = Math.max(0, player.speedPotionTimer - dt);
+  }
+  if (player.fireResistanceTimer && player.fireResistanceTimer > 0) {
+    player.fireResistanceTimer = Math.max(0, player.fireResistanceTimer - dt);
+    if (Math.random() < 0.25) {
+      spawnParticles(player.pos.x + (Math.random() - 0.5) * 0.6, player.pos.y + 0.8, player.pos.z + (Math.random() - 0.5) * 0.6, 0xe67e22, 1);
+    }
+  }
+  if (player.strengthPotionTimer && player.strengthPotionTimer > 0) {
+    player.strengthPotionTimer = Math.max(0, player.strengthPotionTimer - dt);
+    if (Math.random() < 0.25) {
+      spawnParticles(player.pos.x + (Math.random() - 0.5) * 0.6, player.pos.y + 0.8, player.pos.z + (Math.random() - 0.5) * 0.6, 0x96281b, 1);
+    }
+  }
+  if (player.nightVisionTimer && player.nightVisionTimer > 0) {
+    player.nightVisionTimer = Math.max(0, player.nightVisionTimer - dt);
+    if (Math.random() < 0.25) {
+      spawnParticles(player.pos.x + (Math.random() - 0.5) * 0.6, player.pos.y + 0.8, player.pos.z + (Math.random() - 0.5) * 0.6, 0x1f3a93, 1);
+    }
   }
   if (player.blocking) speed *= 0.6; // 举盾格挡时稳步防守减速
   if (keys['ShiftLeft'] || keys['ShiftRight']) speed = player.fly ? 10 : 2.2;
@@ -10657,12 +10727,25 @@ function updatePlayer(dt) {
         const fallDist = maxFallY - player.pos.y;
         if (fallDist > 3 && !feetInWater()) {
           let fallDmg = Math.floor(fallDist - 3);
-          if (player.armor && player.armor.boots === B.DIAMOND_BOOTS) {
+          if (player.armor && player.armor.boots === B.NETHERITE_BOOTS) {
+            fallDmg = Math.max(1, Math.floor(fallDmg * 0.4));
+          } else if (player.armor && player.armor.boots === B.DIAMOND_BOOTS) {
             fallDmg = Math.max(1, Math.floor(fallDmg * 0.5));
           }
           damagePlayer(fallDmg);
         }
         maxFallY = null;
+      }
+      // 踏踩在岩浆块或营火上：环境火焰灼伤伤害（具有抗火效果时完全免伤）
+      const gx = Math.floor(player.pos.x), gy = Math.floor(player.pos.y - 0.1), gz = Math.floor(player.pos.z);
+      const floorBlock = world.getBlock(gx, gy, gz);
+      if (floorBlock === B.MAGMA || floorBlock === B.CAMPFIRE) {
+        if (!player.fireResistanceTimer || player.fireResistanceTimer <= 0) {
+          damagePlayer(1);
+          if (Math.random() < 0.25) {
+            spawnParticles(player.pos.x, player.pos.y + 0.3, player.pos.z, 0xff4757, 4);
+          }
+        }
       }
     } else if (player.vel.y < 0) {
       if (maxFallY === null) maxFallY = player.pos.y;
@@ -11152,25 +11235,38 @@ const NAMES = {
   [B.ELYTRA]: '鞘翅', [B.OBSIDIAN]: '黑曜石',
   [B.NETHERITE_INGOT]: '下界合金锭', [B.NETHERITE_SWORD]: '下界合金剑', [B.NETHERITE_PICKAXE]: '下界合金镐',
   [B.ENCHANTING_TABLE]: '附魔台', [B.BEACON]: '信标',
+  [B.ENDER_CHEST]: '末影箱',
+  [B.NETHERITE_HELMET]: '下界合金头盔', [B.NETHERITE_CHESTPLATE]: '下界合金胸甲',
+  [B.NETHERITE_LEGGINGS]: '下界合金护腿', [B.NETHERITE_BOOTS]: '下界合金靴子',
+  [B.FIRE_RESISTANCE_POTION]: '抗火药水',
+  [B.NETHERITE_AXE]: '下界合金斧', [B.NETHERITE_SHOVEL]: '下界合金锹',
+  [B.STRENGTH_POTION]: '力量药水', [B.NIGHT_VISION_POTION]: '夜视药水',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
-function isHelmet(id) { return id === B.IRON_HELMET || id === B.DIAMOND_HELMET; }
-function isChestplate(id) { return id === B.IRON_CHESTPLATE || id === B.DIAMOND_CHESTPLATE || id === B.ELYTRA; }
-function isLeggings(id) { return id === B.IRON_LEGGINGS || id === B.DIAMOND_LEGGINGS; }
-function isBoots(id) { return id === B.IRON_BOOTS || id === B.DIAMOND_BOOTS; }
+function isHelmet(id) { return id === B.IRON_HELMET || id === B.DIAMOND_HELMET || id === B.NETHERITE_HELMET; }
+function isChestplate(id) { return id === B.IRON_CHESTPLATE || id === B.DIAMOND_CHESTPLATE || id === B.NETHERITE_CHESTPLATE || id === B.ELYTRA; }
+function isLeggings(id) { return id === B.IRON_LEGGINGS || id === B.DIAMOND_LEGGINGS || id === B.NETHERITE_LEGGINGS; }
+function isBoots(id) { return id === B.IRON_BOOTS || id === B.DIAMOND_BOOTS || id === B.NETHERITE_BOOTS; }
 function isArmor(id) { return isHelmet(id) || isChestplate(id) || isLeggings(id) || isBoots(id); }
-function isPotion(id) { return id === B.HEALING_POTION || id === B.SPEED_POTION; }
+function isPotion(id) { return id === B.HEALING_POTION || id === B.SPEED_POTION || id === B.FIRE_RESISTANCE_POTION || id === B.STRENGTH_POTION || id === B.NIGHT_VISION_POTION; }
 function getArmorPoints() {
   let pts = 0;
   if (!player.armor) return 0;
   if (player.armor.helmet === B.IRON_HELMET) pts += 2;
   else if (player.armor.helmet === B.DIAMOND_HELMET) pts += 3;
+  else if (player.armor.helmet === B.NETHERITE_HELMET) pts += 3;
+
   if (player.armor.chestplate === B.IRON_CHESTPLATE) pts += 6;
   else if (player.armor.chestplate === B.DIAMOND_CHESTPLATE) pts += 8;
+  else if (player.armor.chestplate === B.NETHERITE_CHESTPLATE) pts += 8;
+
   if (player.armor.leggings === B.IRON_LEGGINGS) pts += 5;
   else if (player.armor.leggings === B.DIAMOND_LEGGINGS) pts += 6;
+  else if (player.armor.leggings === B.NETHERITE_LEGGINGS) pts += 6;
+
   if (player.armor.boots === B.IRON_BOOTS) pts += 2;
   else if (player.armor.boots === B.DIAMOND_BOOTS) pts += 3;
+  else if (player.armor.boots === B.NETHERITE_BOOTS) pts += 3;
   return pts;
 }
 function updateArmorBar() {
@@ -11293,6 +11389,16 @@ const RECIPES = [
   { out: B.NETHERITE_PICKAXE, n: 1, need: [[B.DIAMOND_PICKAXE, 1], [B.NETHERITE_INGOT, 1]] },
   { out: B.ENCHANTING_TABLE, n: 1, need: [[B.OBSIDIAN, 4], [B.DIAMOND, 2], [B.BOOKSHELF, 1]] },
   { out: B.BEACON, n: 1, need: [[B.OBSIDIAN, 3], [B.DIAMOND, 1], [B.GLASS, 5]] },
+  { out: B.ENDER_CHEST, n: 1, need: [[B.OBSIDIAN, 8], [B.ENDER_EYE, 1]] },
+  { out: B.NETHERITE_HELMET, n: 1, need: [[B.DIAMOND_HELMET, 1], [B.NETHERITE_INGOT, 1]] },
+  { out: B.NETHERITE_CHESTPLATE, n: 1, need: [[B.DIAMOND_CHESTPLATE, 1], [B.NETHERITE_INGOT, 1]] },
+  { out: B.NETHERITE_LEGGINGS, n: 1, need: [[B.DIAMOND_LEGGINGS, 1], [B.NETHERITE_INGOT, 1]] },
+  { out: B.NETHERITE_BOOTS, n: 1, need: [[B.DIAMOND_BOOTS, 1], [B.NETHERITE_INGOT, 1]] },
+  { out: B.FIRE_RESISTANCE_POTION, n: 1, need: [[B.MAGMA, 1], [B.WATER_BUCKET, 1]] },
+  { out: B.NETHERITE_AXE, n: 1, need: [[B.DIAMOND_AXE, 1], [B.NETHERITE_INGOT, 1]] },
+  { out: B.NETHERITE_SHOVEL, n: 1, need: [[B.DIAMOND_SHOVEL, 1], [B.NETHERITE_INGOT, 1]] },
+  { out: B.STRENGTH_POTION, n: 1, need: [[B.FIRE_CHARGE, 1], [B.MUSHROOM_RED, 1], [B.WATER_BUCKET, 1]] },
+  { out: B.NIGHT_VISION_POTION, n: 1, need: [[B.GOLDEN_CARROT, 1], [B.WATER_BUCKET, 1]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -12006,6 +12112,55 @@ function makeItemIcon(id) {
     ctx.fillStyle = '#5c5459'; ctx.fillRect(10, 12, 12, 3);
     ctx.fillStyle = '#312c2f'; ctx.fillRect(9, 17, 14, 3);
     ctx.fillStyle = '#6b6167'; ctx.fillRect(10, 13, 3, 2);
+  } else if (id === B.NETHERITE_HELMET) {
+    // 下界合金头盔：乌金角盔 + 深邃面甲
+    ctx.fillStyle = '#201d1f'; ctx.fillRect(7, 7, 18, 17);
+    ctx.fillStyle = '#3a3535'; ctx.fillRect(8, 8, 16, 15);
+    ctx.fillStyle = '#5c5459'; ctx.fillRect(9, 8, 14, 3);
+    ctx.fillStyle = '#111011'; ctx.fillRect(11, 16, 10, 4);
+    ctx.fillStyle = '#8c7c58'; ctx.fillRect(15, 14, 2, 2);
+  } else if (id === B.NETHERITE_CHESTPLATE) {
+    // 下界合金胸甲：加厚玄铁肩铠 + 坚固板甲
+    ctx.fillStyle = '#201d1f'; ctx.fillRect(6, 6, 20, 20);
+    ctx.fillStyle = '#3a3535'; ctx.fillRect(7, 7, 18, 18);
+    ctx.fillStyle = '#5c5459'; ctx.fillRect(8, 7, 16, 4);
+    ctx.fillStyle = '#111011'; ctx.fillRect(12, 7, 8, 5);
+    ctx.fillStyle = '#4a4449'; ctx.fillRect(10, 15, 12, 7);
+  } else if (id === B.NETHERITE_LEGGINGS) {
+    // 下界合金护腿：玄铁护膝 + 连体战裙
+    ctx.fillStyle = '#201d1f'; ctx.fillRect(8, 6, 16, 5); ctx.fillRect(8, 11, 6, 16); ctx.fillRect(18, 11, 6, 16);
+    ctx.fillStyle = '#3a3535'; ctx.fillRect(9, 7, 14, 3); ctx.fillRect(9, 11, 4, 14); ctx.fillRect(19, 11, 4, 14);
+    ctx.fillStyle = '#5c5459'; ctx.fillRect(9, 14, 4, 4); ctx.fillRect(19, 14, 4, 4);
+  } else if (id === B.NETHERITE_BOOTS) {
+    // 下界合金靴子：重装合金战靴
+    ctx.fillStyle = '#201d1f'; ctx.fillRect(7, 12, 6, 14); ctx.fillRect(19, 12, 6, 14);
+    ctx.fillStyle = '#3a3535'; ctx.fillRect(8, 13, 4, 12); ctx.fillRect(20, 13, 4, 12);
+    ctx.fillStyle = '#5c5459'; ctx.fillRect(8, 13, 4, 3); ctx.fillRect(20, 13, 4, 3);
+    ctx.fillStyle = '#111011'; ctx.fillRect(7, 24, 6, 2); ctx.fillRect(19, 24, 6, 2);
+  } else if (id === B.FIRE_RESISTANCE_POTION) {
+    // 抗火药水：软木塞 + 琥珀橙炽焰药液 + 金黄火苗微粒
+    ctx.fillStyle = '#f5cd79'; ctx.fillRect(14, 6, 4, 3);
+    ctx.fillStyle = '#d0d8e0'; ctx.fillRect(13, 9, 6, 3); ctx.fillRect(11, 12, 10, 14);
+    ctx.fillStyle = '#e67e22'; ctx.fillRect(12, 13, 8, 12);
+    ctx.fillStyle = '#f39c12'; ctx.fillRect(13, 16, 6, 6);
+    ctx.fillStyle = '#ffd32a'; ctx.fillRect(15, 17, 2, 3);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(17, 13, 2, 2);
+  } else if (id === B.STRENGTH_POTION) {
+    // 力量药水：软木塞 + 浓烈猩红狂暴药液 + 炽红力量符文
+    ctx.fillStyle = '#f5cd79'; ctx.fillRect(14, 6, 4, 3);
+    ctx.fillStyle = '#d0d8e0'; ctx.fillRect(13, 9, 6, 3); ctx.fillRect(11, 12, 10, 14);
+    ctx.fillStyle = '#96281b'; ctx.fillRect(12, 13, 8, 12);
+    ctx.fillStyle = '#cf000f'; ctx.fillRect(13, 16, 6, 6);
+    ctx.fillStyle = '#ff7675'; ctx.fillRect(15, 17, 2, 3);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(17, 13, 2, 2);
+  } else if (id === B.NIGHT_VISION_POTION) {
+    // 夜视药水：软木塞 + 幽暗夜蓝药液 + 灵动明眸翠绿微粒
+    ctx.fillStyle = '#f5cd79'; ctx.fillRect(14, 6, 4, 3);
+    ctx.fillStyle = '#d0d8e0'; ctx.fillRect(13, 9, 6, 3); ctx.fillRect(11, 12, 10, 14);
+    ctx.fillStyle = '#1f3a93'; ctx.fillRect(12, 13, 8, 12);
+    ctx.fillStyle = '#00cec9'; ctx.fillRect(13, 16, 6, 6);
+    ctx.fillStyle = '#55efc4'; ctx.fillRect(15, 17, 2, 3);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(17, 13, 2, 2);
   }
   return cv;
 }
@@ -12642,27 +12797,41 @@ function buildChestUI() {
   }
 }
 
-function openChest(x, y, z) {
+function openChest(x, y, z, isEnder = false) {
   if (!started) return;
   if (tradeOpen) closeTradeUI();
-  currentChestKey = `${x},${y},${z}`;
+  currentChestKey = isEnder ? 'ender_chest' : `${x},${y},${z}`;
   if (!chestStorages.has(currentChestKey)) {
     chestStorages.set(currentChestKey, new Array(27).fill(null));
   }
   chestOpen = true;
   furnaceOpen = false;
   inventoryOpen = false;
+  const titleEl = document.querySelector('#chestUI .title');
+  if (titleEl) {
+    titleEl.textContent = isEnder ? '🔮 末影箱（异次元跨时空共享储物）' : '📦 大储物箱';
+  }
   buildChestUI();
   refreshOverlays();
-  playChestOpen();
+  if (isEnder) {
+    tone(280, 560, 0.22, 'triangle', 0.25);
+    spawnParticles(x + 0.5, y + 1.0, z + 0.5, 0x9b30ff, 16);
+  } else {
+    playChestOpen();
+  }
   document.exitPointerLock?.();
 }
 function closeChest() {
   if (!chestOpen) return;
+  const wasEnder = currentChestKey === 'ender_chest';
   chestOpen = false;
   currentChestKey = null;
   refreshOverlays();
-  playChestClose();
+  if (wasEnder) {
+    tone(460, 230, 0.18, 'triangle', 0.2);
+  } else {
+    playChestClose();
+  }
   requestLock();
 }
 function toggleDayNight() { timeOfDay = (timeOfDay < 0.5) ? 0.74 : 0.24; }   // 0 键快速切换昼夜
@@ -12779,6 +12948,7 @@ const HARDNESS = {
   [B.SAPLING]: 0.1, [B.MAPLE_SAPLING]: 0.1, [B.CHERRY_SAPLING]: 0.1,
   [B.JUKEBOX]: 1.5, [B.OBSIDIAN]: 25.0,
   [B.ENCHANTING_TABLE]: 5.0, [B.BEACON]: 3.0,
+  [B.ENDER_CHEST]: 22.0,
 };
 function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
 // 破坏掉落物
@@ -12797,6 +12967,7 @@ function dropOf(id) {
   if (id === B.OBSIDIAN) return B.OBSIDIAN;
   if (id === B.ENCHANTING_TABLE) return B.ENCHANTING_TABLE;
   if (id === B.BEACON) return B.BEACON;
+  if (id === B.ENDER_CHEST) return B.ENDER_CHEST;
   if (isLeaf(id)) return null;               // 树叶不掉落（苹果单独判定）
   if (isTool(id) || id === B.STICK || id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.EGG || id === B.SNOWBALL || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.EMERALD) return null;
   return id;
@@ -12816,7 +12987,7 @@ function effSpeed(id) {
   if (!s) return 1;
   const t = s.id;
   if (isPickaxe(t)) {
-    if (id === B.OBSIDIAN) return isNetheriteTier(t) ? 22 : (isDiamondTier(t) ? 14 : (isIronTier(t) ? 4.0 : 1.5));
+    if (id === B.OBSIDIAN || id === B.ENDER_CHEST) return isNetheriteTier(t) ? 22 : (isDiamondTier(t) ? 14 : (isIronTier(t) ? 4.0 : 1.5));
     if (id === B.ENCHANTING_TABLE || id === B.BEACON) return tierOf(t);
     if (id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK || id === B.SANDSTONE || id === B.QUARTZ || isOre(id) || id === B.FURNACE || id === B.BASALT || id === B.MAGMA || id === B.ICE || id === B.GLOWSTONE || id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK) return tierOf(t);
     return 1.15;
@@ -13228,6 +13399,12 @@ function onMousedown(btn) {
       if (hit.id === B.CHEST) {
         if (tradeOpen) closeTradeUI();
         openChest(hit.x, hit.y, hit.z);
+        return;
+      }
+      // 右键末影箱 → 打开异次元共享末影箱（随身跨维度相通）
+      if (hit.id === B.ENDER_CHEST) {
+        if (tradeOpen) closeTradeUI();
+        openChest(hit.x, hit.y, hit.z, true);
         return;
       }
       // 右键木门 → 开关门
@@ -13686,6 +13863,42 @@ function onMousedown(btn) {
       player.speedPotionTimer = 45; // 45 秒加速
       spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0x00d2d3, 24);
       toast('⚡ 畅饮迅捷药水！获得了 45 秒超凡疾行移速（迅捷 II）！');
+      return;
+    }
+
+    // 手持抗火药水饮用
+    if (sel && sel.id === B.FIRE_RESISTANCE_POTION) {
+      if (!player.fly) removeItem(B.FIRE_RESISTANCE_POTION, 1);
+      refreshHotbar();
+      playDrink();
+      player.fireResistanceTimer = 60; // 60 秒抗火
+      spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0xe67e22, 24);
+      spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0xf39c12, 16);
+      toast('🔥 畅饮抗火药水！获得了 60 秒浴火无伤抗性（完全免疫熔岩与火焰灼伤）！');
+      return;
+    }
+
+    // 手持力量药水饮用
+    if (sel && sel.id === B.STRENGTH_POTION) {
+      if (!player.fly) removeItem(B.STRENGTH_POTION, 1);
+      refreshHotbar();
+      playDrink();
+      player.strengthPotionTimer = 45; // 45 秒力量 II
+      spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0x96281b, 24);
+      spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0xff7675, 16);
+      toast('💪 畅饮力量药水！获得了 45 秒狂暴战神神力（力量 II，近战伤害 +6）！');
+      return;
+    }
+
+    // 手持夜视药水饮用
+    if (sel && sel.id === B.NIGHT_VISION_POTION) {
+      if (!player.fly) removeItem(B.NIGHT_VISION_POTION, 1);
+      refreshHotbar();
+      playDrink();
+      player.nightVisionTimer = 60; // 60 秒夜视
+      spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0x1f3a93, 24);
+      spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0x55efc4, 16);
+      toast('👁️ 畅饮夜视药水！获得了 60 秒极光夜视透视（黑夜与深矿如白昼般清晰明亮）！');
       return;
     }
 
