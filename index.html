@@ -431,7 +431,7 @@
     inset: 0;
     z-index: 100;
     overflow: hidden;
-    background: radial-gradient(circle at 50% 30%, #fffde8 0%, #ffe066 32%, #f59e0b 72%, #d97706 100%);
+    background: radial-gradient(circle at 50% 28%, #feffeb 0%, #f6fec9 26%, #dcf88a 60%, #b8eb65 86%, #9ade46 100%);
     transition: opacity .85s cubic-bezier(0.4, 0, 0.2, 1), filter .85s ease, transform .85s ease;
   }
   .intro.leave {
@@ -457,23 +457,23 @@
     z-index: 2;
     pointer-events: none;
     box-shadow:
-      inset 0 0 50px rgba(255, 255, 255, 0.55),
-      inset 0 0 120px rgba(255, 210, 60, 0.35);
+      inset 0 0 50px rgba(255, 255, 255, 0.65),
+      inset 0 0 130px rgba(217, 249, 157, 0.45);
   }
   .intro-glass-overlay::before {
     content: "";
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 140px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.1) 60%, transparent 100%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.12) 60%, transparent 100%);
   }
   .intro-glass-overlay::after {
     content: "";
     position: absolute;
     inset: 0;
     background:
-      radial-gradient(ellipse at 15% 25%, rgba(255, 255, 255, 0.25) 0%, transparent 45%),
-      radial-gradient(ellipse at 85% 75%, rgba(255, 240, 160, 0.2) 0%, transparent 45%);
+      radial-gradient(ellipse at 15% 25%, rgba(255, 255, 255, 0.3) 0%, transparent 45%),
+      radial-gradient(ellipse at 85% 75%, rgba(220, 252, 160, 0.25) 0%, transparent 45%);
   }
 
   /* 开场主体容器 */
@@ -503,15 +503,15 @@
     gap: 6px;
     padding: 6px 16px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.88);
+    background: rgba(255, 255, 255, 0.92);
     -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
     border: 1.5px solid rgba(255, 255, 255, 0.95);
-    color: #92400e;
+    color: #3f6212;
     font-size: 13px;
     font-weight: 800;
     letter-spacing: 1.5px;
-    box-shadow: 0 4px 18px rgba(180, 83, 9, 0.18);
+    box-shadow: 0 4px 18px rgba(101, 163, 13, 0.18);
   }
   .intro-title-wrap {
     margin-top: 10px;
@@ -521,7 +521,7 @@
     max-width: min(84vw, 440px);
     height: auto;
     margin: 0 auto;
-    filter: drop-shadow(0 6px 18px rgba(180, 83, 9, 0.35)) drop-shadow(0 0 10px rgba(255, 255, 255, 0.5));
+    filter: drop-shadow(0 6px 18px rgba(77, 124, 15, 0.28)) drop-shadow(0 0 10px rgba(255, 255, 255, 0.6));
   }
 
   /* 核心互动大柠檬片舞台 */
@@ -557,7 +557,7 @@
     border-radius: 16px;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.75) 0%, rgba(224, 242, 254, 0.4) 60%, rgba(255, 255, 255, 0.2) 100%);
     border: 2px solid rgba(255, 255, 255, 0.85);
-    box-shadow: 0 8px 24px rgba(180, 100, 0, 0.25), inset 0 0 12px rgba(255, 255, 255, 0.6);
+    box-shadow: 0 8px 24px rgba(101, 163, 13, 0.2), inset 0 0 12px rgba(255, 255, 255, 0.7);
     transform: rotate(18deg);
     z-index: 1;
     pointer-events: none;
@@ -609,7 +609,7 @@
   }
   .intro-lemon-btn:hover {
     transform: scale(1.08) rotate(3deg);
-    filter: drop-shadow(0 18px 45px rgba(217, 119, 6, 0.65)) drop-shadow(0 0 24px rgba(255, 240, 150, 0.85));
+    filter: drop-shadow(0 18px 45px rgba(132, 204, 22, 0.6)) drop-shadow(0 0 24px rgba(234, 254, 150, 0.9));
   }
   .intro-lemon-btn:active {
     transform: scale(0.94);
@@ -627,7 +627,7 @@
     display: block;
     width: clamp(230px, 34vw, 320px);
     height: clamp(230px, 34vw, 320px);
-    filter: drop-shadow(0 14px 35px rgba(180, 83, 9, 0.45));
+    filter: drop-shadow(0 14px 35px rgba(101, 163, 13, 0.3));
     transition: filter .28s ease;
   }
 
@@ -635,7 +635,7 @@
     position: absolute;
     inset: -14px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(255, 235, 59, 0.5) 20%, rgba(255, 179, 0, 0.25) 55%, transparent 75%);
+    background: radial-gradient(circle, rgba(254, 240, 138, 0.55) 20%, rgba(190, 242, 100, 0.35) 55%, transparent 75%);
     filter: blur(14px);
     z-index: -1;
     pointer-events: none;
@@ -658,11 +658,11 @@
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     border: 2px solid rgba(255, 255, 255, 0.9);
-    color: #854d0e;
+    color: #365314;
     font-size: clamp(15px, 2.2vw, 18px);
     font-weight: 800;
     font-family: var(--font-display);
-    box-shadow: 0 8px 24px rgba(180, 83, 9, 0.25);
+    box-shadow: 0 8px 24px rgba(101, 163, 13, 0.22);
     cursor: pointer;
     transition: all .25s ease;
     letter-spacing: 2px;
@@ -671,7 +671,7 @@
     -webkit-tap-highlight-color: transparent;
   }
   .intro-hint-box:focus-visible {
-    outline: 3px solid #854d0e;
+    outline: 3px solid #365314;
     outline-offset: 2px;
   }
   @keyframes hint-float {
@@ -681,28 +681,28 @@
   .intro-hint-box:hover {
     background: #ffffff;
     transform: translateY(-4px) scale(1.04);
-    box-shadow: 0 12px 32px rgba(180, 83, 9, 0.35);
-    color: #713f12;
+    box-shadow: 0 12px 32px rgba(101, 163, 13, 0.32);
+    color: #1a2e05;
   }
   .hint-pulse-dot {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #eab308;
-    box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.7);
+    background: #84cc16;
+    box-shadow: 0 0 0 0 rgba(132, 204, 22, 0.7);
     animation: dot-pulse 1.8s infinite;
   }
   @keyframes dot-pulse {
-    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.7); }
-    70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(234, 179, 8, 0); }
-    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); }
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(132, 204, 22, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(132, 204, 22, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(132, 204, 22, 0); }
   }
 
   .intro-footer-tip {
     font-size: 13px;
     font-weight: 700;
-    color: rgba(255, 255, 255, 0.92);
-    text-shadow: 0 2px 8px rgba(180, 83, 9, 0.45);
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 2px 8px rgba(54, 83, 20, 0.45);
     letter-spacing: 1px;
     margin-bottom: 1vh;
     animation: intro-fade-up .8s ease .3s both;
@@ -790,40 +790,42 @@
           <svg class="lemon-svg" viewBox="0 0 320 320" width="320" height="320" aria-hidden="true">
             <defs>
               <radialGradient id="lemonPeelGrad" cx="35%" cy="30%" r="70%">
-                <stop offset="0%" stop-color="#ffe066" />
-                <stop offset="65%" stop-color="#f59e0b" />
-                <stop offset="100%" stop-color="#d97706" />
+                <stop offset="0%" stop-color="#feffc2" />
+                <stop offset="38%" stop-color="#fef08a" />
+                <stop offset="76%" stop-color="#d9f99d" />
+                <stop offset="100%" stop-color="#a3e635" />
               </radialGradient>
-              <radialGradient id="pulpGrad" cx="50%" cy="50%" r="65%">
-                <stop offset="0%" stop-color="#fff8b5" />
-                <stop offset="35%" stop-color="#ffde59" />
-                <stop offset="75%" stop-color="#f59e0b" />
-                <stop offset="100%" stop-color="#e28704" />
+              <radialGradient id="pulpGrad" cx="45%" cy="45%" r="65%">
+                <stop offset="0%" stop-color="#ffffff" />
+                <stop offset="26%" stop-color="#fef9c3" />
+                <stop offset="66%" stop-color="#fef08a" />
+                <stop offset="86%" stop-color="#e2f87a" />
+                <stop offset="100%" stop-color="#bef264" />
               </radialGradient>
               <linearGradient id="lemonGlossGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#ffffff" stop-opacity="0.75" />
-                <stop offset="60%" stop-color="#ffffff" stop-opacity="0.15" />
+                <stop offset="0%" stop-color="#ffffff" stop-opacity="0.8" />
+                <stop offset="60%" stop-color="#ffffff" stop-opacity="0.18" />
                 <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
               </linearGradient>
               <radialGradient id="rimBubbleGrad" cx="30%" cy="30%" r="70%">
                 <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95" />
-                <stop offset="60%" stop-color="#fff9c4" stop-opacity="0.6" />
-                <stop offset="100%" stop-color="#fbc02d" stop-opacity="0.25" />
+                <stop offset="55%" stop-color="#f7fee7" stop-opacity="0.75" />
+                <stop offset="100%" stop-color="#bef264" stop-opacity="0.35" />
               </radialGradient>
               <path id="lemonSegment" d="M 188.4 150.5 L 268.1 123.8 Q 273.8 121.9 275.6 127.7 A 120 120 0 0 1 275.6 192.3 Q 273.8 198.1 268.1 196.2 L 188.4 169.5 Q 182.8 167.6 183.3 165.8 A 24 24 0 0 0 183.3 154.2 Q 182.8 152.4 188.4 150.5 Z" />
             </defs>
 
             <!-- 1. 柠檬外果皮与皮质孔隙 -->
-            <circle cx="160" cy="160" r="148" fill="url(#lemonPeelGrad)" stroke="#c66900" stroke-width="2" />
-            <circle cx="160" cy="160" r="144" fill="none" stroke="#fff485" stroke-width="2" stroke-dasharray="2 5" opacity="0.6" />
+            <circle cx="160" cy="160" r="148" fill="url(#lemonPeelGrad)" stroke="#65a30d" stroke-width="1.8" />
+            <circle cx="160" cy="160" r="144" fill="none" stroke="#f7fee7" stroke-width="1.8" stroke-dasharray="2 5" opacity="0.7" />
 
             <!-- 2. 白色中果皮（白络环） -->
-            <circle cx="160" cy="160" r="136" fill="#fffdf2" stroke="#fef3c7" stroke-width="1.5" />
+            <circle cx="160" cy="160" r="136" fill="#fcfef5" stroke="#f4fce3" stroke-width="1.5" />
 
             <!-- 3. 内果皮基底 -->
-            <circle cx="160" cy="160" r="126" fill="#fef08a" />
+            <circle cx="160" cy="160" r="126" fill="#f7fee7" />
 
-            <!-- 4. 八瓣晶莹果肉 -->
+            <!-- 4. 八瓣晶莹淡黄果肉 -->
             <g id="lemonPulpGroup">
               <use href="#lemonSegment" fill="url(#pulpGrad)" />
               <use href="#lemonSegment" fill="url(#pulpGrad)" transform="rotate(45 160 160)" />
@@ -836,7 +838,7 @@
             </g>
 
             <!-- 果肉微晶质感点缀 (Juicy Vesicles) -->
-            <g opacity="0.65" fill="#fffef0">
+            <g opacity="0.7" fill="#fefff0">
               <circle cx="218" cy="154" r="2.5" />
               <circle cx="238" cy="148" r="3" />
               <circle cx="246" cy="162" r="2" />
@@ -856,8 +858,8 @@
             </g>
 
             <!-- 5. 柠檬果心 -->
-            <circle cx="160" cy="160" r="16" fill="#fffdf2" stroke="#fef08a" stroke-width="2" />
-            <circle cx="160" cy="160" r="6" fill="#fde047" />
+            <circle cx="160" cy="160" r="16" fill="#fefffa" stroke="#e2f87a" stroke-width="1.8" />
+            <circle cx="160" cy="160" r="6" fill="#bef264" />
 
             <!-- 6. 水润高光折射层 -->
             <path d="M 50 140 A 124 124 0 0 1 270 140 A 110 80 0 0 0 50 140 Z" fill="url(#lemonGlossGrad)" opacity="0.55" />
@@ -1025,7 +1027,7 @@
     } else {
       doc.body.classList.add('no-scroll');
 
-      /* ===== 汽水音效合成器 (Web Audio API) ===== */
+      /* ===== 汽水气泡与冰块碰撞音效合成器 (Web Audio API) ===== */
       function playSodaSound() {
         try {
           const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -1034,70 +1036,94 @@
           if (ctx.state === 'suspended') ctx.resume();
           const t0 = ctx.currentTime;
 
-          // 1. 冰块碰杯声 (Crystal Ice Clink)
-          const osc1 = ctx.createOscillator();
-          const osc2 = ctx.createOscillator();
-          const chimeGain = ctx.createGain();
-          osc1.type = 'sine';
-          osc1.frequency.setValueAtTime(1480, t0);
-          osc2.type = 'sine';
-          osc2.frequency.setValueAtTime(2220, t0);
+          // 1. 冰块在杯中相互撞击与回弹声 (Ice Cubes Colliding & Clinking)
+          const iceStrikes = [
+            { delay: 0.000, f1: 2380, f2: 3640, f3: 1620, vol: 0.26, decay: 0.24 },
+            { delay: 0.062, f1: 2080, f2: 3180, f3: 1410, vol: 0.19, decay: 0.18 },
+            { delay: 0.145, f1: 2950, f2: 4420, f3: 1980, vol: 0.13, decay: 0.12 }
+          ];
 
-          chimeGain.gain.setValueAtTime(0.001, t0);
-          chimeGain.gain.linearRampToValueAtTime(0.28, t0 + 0.005);
-          chimeGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.45);
+          const iceHpFilter = ctx.createBiquadFilter();
+          iceHpFilter.type = 'highpass';
+          iceHpFilter.frequency.setValueAtTime(1100, t0);
+          iceHpFilter.connect(ctx.destination);
 
-          osc1.connect(chimeGain);
-          osc2.connect(chimeGain);
-          chimeGain.connect(ctx.destination);
-          osc1.start(t0);
-          osc2.start(t0);
-          osc1.stop(t0 + 0.46);
-          osc2.stop(t0 + 0.46);
+          iceStrikes.forEach(s => {
+            const st = t0 + s.delay;
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0.0001, st);
+            gain.gain.linearRampToValueAtTime(s.vol, st + 0.002);
+            gain.gain.exponentialRampToValueAtTime(0.0001, st + s.decay);
 
-          // 2. 汽水开盖滋滋声 (Fizz Sizzle)
-          const bufSize = Math.floor(ctx.sampleRate * 0.4);
-          const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-          const d = buf.getChannelData(0);
-          for (let i = 0; i < bufSize; i++) {
-            d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.16));
+            [s.f1, s.f2, s.f3].forEach(freq => {
+              const osc = ctx.createOscillator();
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(freq, st);
+              osc.frequency.exponentialRampToValueAtTime(freq * 0.97, st + s.decay);
+              osc.connect(gain);
+              osc.start(st);
+              osc.stop(st + s.decay + 0.01);
+            });
+
+            gain.connect(iceHpFilter);
+          });
+
+          // 2. 碳酸汽水密集翻涌与持续滋滋微气泡声 (Effervescent Soda Carbonation Fizz)
+          const fizzLen = Math.floor(ctx.sampleRate * 0.65);
+          const fizzBuf = ctx.createBuffer(1, fizzLen, ctx.sampleRate);
+          const fData = fizzBuf.getChannelData(0);
+          for (let i = 0; i < fizzLen; i++) {
+            const env = Math.exp(-i / (ctx.sampleRate * 0.25));
+            const tremolo = 0.72 + 0.28 * Math.sin(i * 0.02);
+            fData[i] = (Math.random() * 2 - 1) * env * tremolo;
           }
-          const noise = ctx.createBufferSource();
-          noise.buffer = buf;
-          const filter = ctx.createBiquadFilter();
-          filter.type = 'bandpass';
-          filter.frequency.setValueAtTime(3200, t0);
-          filter.frequency.exponentialRampToValueAtTime(1200, t0 + 0.35);
-          filter.Q.value = 2.0;
+          const fizzSrc = ctx.createBufferSource();
+          fizzSrc.buffer = fizzBuf;
+
+          const bpf = ctx.createBiquadFilter();
+          bpf.type = 'bandpass';
+          bpf.frequency.setValueAtTime(5400, t0);
+          bpf.frequency.exponentialRampToValueAtTime(3600, t0 + 0.6);
+          bpf.Q.value = 2.4;
 
           const fizzGain = ctx.createGain();
-          fizzGain.gain.setValueAtTime(0.001, t0);
-          fizzGain.gain.linearRampToValueAtTime(0.32, t0 + 0.012);
-          fizzGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.38);
+          fizzGain.gain.setValueAtTime(0.0001, t0);
+          fizzGain.gain.linearRampToValueAtTime(0.34, t0 + 0.012);
+          fizzGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.62);
 
-          noise.connect(filter);
-          filter.connect(fizzGain);
+          fizzSrc.connect(bpf);
+          bpf.connect(fizzGain);
           fizzGain.connect(ctx.destination);
-          noise.start(t0);
+          fizzSrc.start(t0);
 
-          // 3. 气泡破裂欢快声 (Bubble Pop)
-          [0.08, 0.16].forEach((delay, idx) => {
-            const popOsc = ctx.createOscillator();
-            const popGain = ctx.createGain();
-            const pt = t0 + delay;
-            popOsc.type = 'sine';
-            const bf = idx === 0 ? 680 : 950;
-            popOsc.frequency.setValueAtTime(bf, pt);
-            popOsc.frequency.exponentialRampToValueAtTime(bf * 1.8, pt + 0.035);
+          // 3. 密集清脆小气泡破裂水音 (Sparkling Micro-Bubble Pops)
+          const pops = [
+            { d: 0.025, f: 1300 },
+            { d: 0.060, f: 1950 },
+            { d: 0.100, f: 1480 },
+            { d: 0.150, f: 2400 },
+            { d: 0.210, f: 1720 },
+            { d: 0.270, f: 2150 },
+            { d: 0.340, f: 1380 },
+            { d: 0.420, f: 2700 }
+          ];
 
-            popGain.gain.setValueAtTime(0.001, pt);
-            popGain.gain.linearRampToValueAtTime(0.16, pt + 0.005);
-            popGain.gain.exponentialRampToValueAtTime(0.001, pt + 0.04);
+          pops.forEach(p => {
+            const pt = t0 + p.d;
+            const pOsc = ctx.createOscillator();
+            const pGain = ctx.createGain();
+            pOsc.type = 'sine';
+            pOsc.frequency.setValueAtTime(p.f, pt);
+            pOsc.frequency.exponentialRampToValueAtTime(p.f * 1.85, pt + 0.022);
 
-            popOsc.connect(popGain);
-            popGain.connect(ctx.destination);
-            popOsc.start(pt);
-            popOsc.stop(pt + 0.045);
+            pGain.gain.setValueAtTime(0.0001, pt);
+            pGain.gain.linearRampToValueAtTime(0.12, pt + 0.003);
+            pGain.gain.exponentialRampToValueAtTime(0.0001, pt + 0.03);
+
+            pOsc.connect(pGain);
+            pGain.connect(ctx.destination);
+            pOsc.start(pt);
+            pOsc.stop(pt + 0.035);
           });
         } catch (e) {}
       }
@@ -1236,10 +1262,10 @@
             ctx.save();
             ctx.globalAlpha = b.alpha;
 
-            // 气泡外圈与柔和白金色内芯
+            // 气泡外圈与清透青柠白内芯
             ctx.beginPath();
             ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255, 250, 220, 0.28)';
+            ctx.fillStyle = 'rgba(247, 254, 231, 0.35)';
             ctx.fill();
             ctx.lineWidth = 1.2;
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
@@ -1307,7 +1333,7 @@
       }
 
       function triggerSplash(x, y) {
-        const colors = ['#fff8b5', '#fde047', '#f59e0b', '#ffffff', '#ffd000', '#fbbf24'];
+        const colors = ['#ffffff', '#fcffe6', '#fef9c3', '#fef08a', '#e2f976', '#d9f99d', '#bef264', '#a3e635'];
         for (let i = 0; i < 48; i++) {
           const angle = Math.random() * Math.PI * 2;
           const speed = 4 + Math.random() * 14;
