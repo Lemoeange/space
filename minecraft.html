@@ -4105,6 +4105,10 @@ function saveWorld() {
         slots.map((s) => (s ? [s.id, s.count, s.dur || 0] : null))
       ]),
       doors: Array.from(openDoors),
+      /* 已建成的村庄清单：不存的话每次重进地图 villageCenters 都是空的，
+         村庄会被判定为"未建造"而在已有建筑上再盖一遍 —— 干草堆和路灯就是这样
+         一层层越堆越高的。 */
+      villages: Array.from(villageCenters),
     };
     localStorage.setItem('mc_inv_v1', JSON.stringify(invData));
   } catch (e) { console.warn('[save] 存档失败:', e && e.message); }
@@ -4154,6 +4158,10 @@ function loadWorld() {
       if (Array.isArray(d.doors)) {
         openDoors.clear();
         d.doors.forEach((k) => openDoors.add(k));
+      }
+      if (Array.isArray(d.villages)) {
+        villageCenters.clear();
+        d.villages.forEach((k) => villageCenters.add(k));
       }
       restoredInv = true;
     }
@@ -6084,6 +6092,26 @@ function killAnimal(i) {
   playPop();
 }
 
+/* ============================ 生物动作辅助 ============================ */
+/* 让生物的头部随玩家方向偏转（限制在 ±maxYaw 内），转身时有自然的"回头"感。
+   大多数模型朝向本地 -Z（人脸在 -z 面），僵尸/骷髅/末影人都是这样；
+   蜘蛛的模型是 +Z 朝前（头、獠牙、复眼都在 +z），所以用 plusZ 参数切换。 */
+function mobHeadLook(head, g, maxYaw = 0.9, plusZ = false) {
+  if (!head) return;
+  const dx = player.pos.x - g.position.x;
+  const dz = player.pos.z - g.position.z;
+  if (dx * dx + dz * dz > 40 * 40) return;          // 太远就不必转头
+  const desired = plusZ ? Math.atan2(dx, dz) : Math.atan2(-dx, -dz);
+  let rel = desired - g.rotation.y;
+  while (rel < -Math.PI) rel += Math.PI * 2;
+  while (rel > Math.PI) rel -= Math.PI * 2;
+  head.rotation.y = Math.max(-maxYaw, Math.min(maxYaw, rel));
+}
+/* 行走时的上下起伏：幅度很小，只是让方块生物"有重量感" */
+function mobBob(phase, moving, amp = 0.028) {
+  return moving ? Math.abs(Math.sin(phase * 2)) * amp : 0;
+}
+
 /* ============================ 僵尸（怪物） ============================ */
 const MAX_ZOMBIES = 4;
 const zombies = [];
@@ -6113,11 +6141,21 @@ function spawnZombie(x, z) {
     leg.position.set(dx, 0.35, 0); leg.castShadow = true; leg.receiveShadow = true;
     g.add(leg); legs.push(leg);
   }
+  const arms = [];
   for (const dx of [-0.34, 0.34]) { // 前伸双臂（破旧青色衬衫袖 + 腐肉手爪）
+    // 手臂以肩膀为轴：把几何体下移半个臂长，这样 rotation.x 是"从肩膀摆动"而不是绕中心转
     const arm = new THREE.Mesh(zombieArmGeo, zombieArmMat);
-    arm.position.set(dx, 1.25, -0.26); arm.rotation.x = Math.PI * 0.5;
+    arm.geometry = zombieArmGeo;
+    arm.position.set(dx, 1.25, -0.26);
+    arm.rotation.x = Math.PI * 0.5;
     arm.castShadow = true; arm.receiveShadow = true;
     g.add(arm);
+    arms.push(arm);
+    // 枯瘦的手爪：接在手臂末端，伸出一点，前伸姿势下更明显
+    const hand = new THREE.Mesh(partGeo(0.16, 0.14, 0.20), zombieSkinMat);
+    hand.position.set(0, -0.40, 0);
+    hand.castShadow = true;
+    arm.add(hand);
   }
   const isZombieVillager = Math.random() < 0.20;
   if (isZombieVillager) {
@@ -6129,7 +6167,7 @@ function spawnZombie(x, z) {
 
   g.position.set(x, findGround(Math.floor(x), Math.floor(z)), z);
   scene.add(g);
-  zombies.push({ g, legs, x, z, hp: 3, heading: 0, attackTimer: 0, phase: Math.random() * 6, hurtT: 0, isZombieVillager, curing: 0 });
+  zombies.push({ g, head, legs, arms, x, z, hp: 3, heading: 0, attackTimer: 0, phase: Math.random() * 6, hurtT: 0, isZombieVillager, curing: 0 });
 }
 function killZombie(i) {
   const z = zombies[i];
@@ -6261,11 +6299,19 @@ function updateZombies(dt) {
         }
       }
     }
-    z.g.position.set(z.x, findGround(Math.floor(z.x), Math.floor(z.z)), z.z);
+    const moving = !playerTooHigh && dist > 1.5;
+    z.g.position.set(z.x, findGround(Math.floor(z.x), Math.floor(z.z)) + mobBob(z.phase, moving), z.z);
     z.g.rotation.y = z.heading + Math.PI;
     z.phase += dt * (playerTooHigh ? 0 : 4);
     const swing = Math.sin(z.phase) * 0.35;
     z.legs.forEach((leg, i2) => { leg.rotation.x = swing * (i2 % 2 === 0 ? 1 : -1); });
+    // 前伸的双臂随步伐轻轻摆动（僵尸那种僵硬的小幅晃动）
+    if (z.arms) {
+      const sway = Math.sin(z.phase * 0.5) * 0.10;
+      z.arms[0].rotation.x = Math.PI * 0.5 + sway;
+      z.arms[1].rotation.x = Math.PI * 0.5 - sway;
+    }
+    mobHeadLook(z.head, z.g, 0.85);
   }
 }
 
@@ -6365,11 +6411,12 @@ function updateCreepers(dt) {
       if (world.getWater(ti, cy, tz) === 0 && Math.abs(tg - cy) <= 1) {
         c.x = nx; c.z = nz;
       }
-      c.g.position.set(c.x, cy, c.z);
+      c.g.position.set(c.x, cy + mobBob(c.phase, true), c.z);
       c.g.rotation.y = c.heading + Math.PI;
       c.phase += dt * 6;
       const swing = Math.sin(c.phase) * 0.35;
       c.legs.forEach((leg, i2) => { leg.rotation.x = swing * (i2 % 2 === 0 ? 1 : -1); });
+      mobHeadLook(c.head, c.g, 0.8);
       continue;
     }
 
@@ -6415,13 +6462,22 @@ function updateCreepers(dt) {
       }
     }
 
-    c.g.position.set(c.x, cy, c.z);
+    const creeperMoving = !(playerTooHigh || dist3 < 3.2);
+    c.g.position.set(c.x, cy + mobBob(c.phase, creeperMoving), c.z);
     c.g.rotation.y = c.heading + Math.PI;
-    c.phase += dt * (playerTooHigh || dist3 < 3.2 ? 0 : 5);
+    c.phase += dt * (creeperMoving ? 5 : 0);
     const swing = Math.sin(c.phase) * 0.4;
     c.legs.forEach((leg, idx) => {
       leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
     });
+    // 引信点燃时头部剧烈左右抽动，配合膨胀一眼就能看出"要炸了"
+    if (c.fuse > 0.05) {
+      c.head.rotation.z = Math.sin(c.fuse * 42) * 0.16;
+      c.head.rotation.y = Math.sin(c.fuse * 31) * 0.22;
+    } else {
+      c.head.rotation.z *= 0.8;
+      mobHeadLook(c.head, c.g, 0.75);
+    }
   }
 }
 
@@ -6588,14 +6644,16 @@ function updateSkeletons(dt) {
       s.rightArmGroup.rotation.x = 0;
     }
 
-    s.g.position.set(s.x, sy, s.z);
+    const skelMoving = !(playerTooHigh || dist3 < 6);
+    s.g.position.set(s.x, sy + mobBob(s.phase, skelMoving), s.z);
     s.g.rotation.y = s.heading + Math.PI;
-    s.phase += dt * (playerTooHigh || dist3 < 6 ? 0 : 4.5);
+    s.phase += dt * (skelMoving ? 4.5 : 0);
     const swing = Math.sin(s.phase) * 0.35;
     s.legs.forEach((leg, idx) => {
       leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
     });
     s.leftArm.rotation.x = -swing;
+    mobHeadLook(s.head, s.g, 0.95);
   }
 }
 
@@ -6759,7 +6817,7 @@ function updateEndermen(dt) {
       if (Math.random() < 0.015) e.heading += (Math.random() - 0.5) * 1.5;
     }
 
-    e.g.position.set(e.x, ey, e.z);
+    e.g.position.set(e.x, ey + mobBob(e.phase, e.angry), e.z);
     e.g.rotation.y = e.heading + Math.PI;
     e.phase += dt * (e.angry ? 7.0 : 3.0);
     const swing = Math.sin(e.phase) * (e.angry ? 0.5 : 0.25);
@@ -6769,6 +6827,8 @@ function updateEndermen(dt) {
     e.arms.forEach((arm, idx) => {
       arm.rotation.x = -swing * (idx % 2 === 0 ? 1 : -1);
     });
+    // 末影人平时就爱"盯着"你，愤怒时转头更快更明显
+    if (!e.angry) mobHeadLook(e.head, e.g, 1.2);
   }
 }
 
@@ -6968,7 +7028,7 @@ function updateSpiders(dt) {
       }
     }
 
-    s.g.position.set(s.x, s.y, s.z);
+    s.g.position.set(s.x, s.y + mobBob(s.phase, s.angry, 0.02), s.z);
     s.g.rotation.y = s.heading; // 修正朝向：头部与毒牙正面朝向玩家与行进方向，绝不背对玩家倒退走
 
     s.phase += dt * (s.angry ? 11.0 : 5.0);
@@ -6980,6 +7040,7 @@ function updateSpiders(dt) {
       base.rotation.y = defaultYaw + swing;
       base.position.y = 0.32 + lift;
     });
+    mobHeadLook(s.head, s.g, 0.7, true);   // 蜘蛛是 +Z 朝前
   }
 }
 
@@ -8192,7 +8253,15 @@ function buildVillage(c) {
   // 街道火把立柱路灯：广场四角 + 沿四条主干道每 6 格一盏（立在路侧，不挡道）
   const placeLamp = (px, pz) => {
     if (isBuildingZone(px, pz)) return;
-    const sy = findGround(px, pz);                 // 最高的实体方块之上的空气层
+    /* 从上方往下找地面，并跳过已有的原木灯柱：
+       用 findGround 会把上一次立好的灯柱顶当成地面，导致路灯一次次往上长。 */
+    let sy = -1;
+    const top = Math.min(HEIGHT - 2, gy + 22);
+    for (let y = top; y >= 1; y--) {
+      const b = world.getBlock(px, y, pz);
+      if (isSolid(b) && b !== B.LOG && b !== B.WOOD_PICKAXE && !isLeaf(b)) { sy = y + 1; break; }
+    }
+    if (sy < 0) return;
     const ground = world.getBlock(px, sy - 1, pz);
     if (!isSolid(ground) || ground === B.WATER) return;   // 悬空或水面上不立灯
     world.setBlock(px, sy, pz, B.LOG);
@@ -8220,7 +8289,9 @@ function buildVillage(c) {
         let groundY = 0;
         for (let y = HEIGHT - 2; y >= 1; y--) {
           const b = world.getBlock(px, y, pz);
-          if (isSolid(b) && !isLeaf(b)) { groundY = y + 1; break; }
+          /* 跳过干草块本身：否则第二次生成时会把旧草垛顶当成地面，草垛一层层往上叠。
+             这样重算出来的永远是"真实地面"，重建结果与原来完全一致。 */
+          if (isSolid(b) && !isLeaf(b) && b !== B.HAY_BALE) { groundY = y + 1; break; }
         }
         if (groundY <= SEA + 1) continue;
         const maxH = dist < 0.9 ? 3 : (dist < 1.6 ? 2 : 1);
@@ -8237,20 +8308,28 @@ function buildVillage(c) {
   spawnHayMound(granX - 4, granZ + 2, 2);
   spawnHayMound(ranX + 4, ranZ + 4, 2);
 
-  // 10. 生成驻村守护者铁傀儡与村民（全部精准生成在开阔主干道和广场上，显式指定 gy，绝不出现在屋顶）
-  spawnIronGolem(cx8 + 2.5, gy + 1, cz8 + 2.5);
+  /* 10. 生成驻村守护者铁傀儡与村民（全部精准生成在开阔主干道和广场上，显式指定 gy，绝不出现在屋顶）
+     重建保护：如果广场附近已经有村民了，说明这个村庄之前就建过（旧存档/存档标记缺失的情况），
+     直接跳过全部生物生成，避免同一座村庄堆出十几个村民和一堆猫。 */
+  let existingVillagers = 0;
+  for (const v of villagers) {
+    if (Math.abs(v.x - cx8) < 26 && Math.abs(v.z - cz8) < 26) existingVillagers++;
+  }
+  if (existingVillagers < 4) {
+    spawnIronGolem(cx8 + 2.5, gy + 1, cz8 + 2.5);
 
-  spawnVillager(cx8, gy, cz8 - 10.5, 'farmer');
-  spawnVillager(cx8 + 2.5, gy, cz8 - 2.5, 'farmer');
-  spawnVillager(cx8 + 9.5, gy, cz8 - 5.5, 'blacksmith');
-  spawnVillager(cx8 - 9.5, gy, cz8 + 9.5, 'librarian');
-  spawnVillager(cx8, gy, cz8 + 7.5, 'cleric');
-  spawnVillager(cx8 + 9.5, gy, cz8 - 16.5, 'shepherd'); // 牧羊人/屠夫！
+    spawnVillager(cx8, gy, cz8 - 10.5, 'farmer');
+    spawnVillager(cx8 + 2.5, gy, cz8 - 2.5, 'farmer');
+    spawnVillager(cx8 + 9.5, gy, cz8 - 5.5, 'blacksmith');
+    spawnVillager(cx8 - 9.5, gy, cz8 + 9.5, 'librarian');
+    spawnVillager(cx8, gy, cz8 + 7.5, 'cleric');
+    spawnVillager(cx8 + 9.5, gy, cz8 - 16.5, 'shepherd'); // 牧羊人/屠夫！
 
-  // 生成 3 只村庄猫咪（全部生成在露天广场与街道上，绝不出现在屋顶）
-  spawnCat(cx8 + 2.0, gy, cz8 + 1.5, 'ginger');
-  spawnCat(cx8 - 4.5, gy, cz8 - 3.5, 'calico');
-  spawnCat(cx8 + 7.5, gy, cz8 + 8.5, 'tuxedo');
+    // 生成 3 只村庄猫咪（全部生成在露天广场与街道上，绝不出现在屋顶）
+    spawnCat(cx8 + 2.0, gy, cz8 + 1.5, 'ginger');
+    spawnCat(cx8 - 4.5, gy, cz8 - 3.5, 'calico');
+    spawnCat(cx8 + 7.5, gy, cz8 + 8.5, 'tuxedo');
+  }
 
   // 在村庄牧场生成家畜（牛与羊、骏马与伴生狼）
   const cowKind = MOB_KINDS.find(k => k.name === 'cow');
@@ -9671,23 +9750,39 @@ function meleeDamage() {
   }
   return dmg;
 }
-// 挥剑攻击（视角锥内 3.6 格）
+// 挥剑攻击：视角锥内 4.6 格，且**只命中一个目标**
 // 命中检测 + 击退（不推进墙里，避免被 findGround 抬升到上一层）
-function meleeHitMob(m, dir) {
+/* 瞄准评分：只做判定、不改状态，返回"越正对越小"的分值（null 表示不在攻击范围）。
+   单独拆出来是为了让 meleeAttack 能把所有候选实体放在一起比，只挑最正中的一个打；
+   原来的写法是对每一类生物都跑一遍判定，锥内挤在一起的两三只会被同一剑一起打中。 */
+function meleeAimScore(m, dir, maxDist = 4.6) {
+  if (!m || !m.g) return null;
   const dx = m.x - camera.position.x;
   const dy = (m.g.position.y + 0.8) - camera.position.y;
   const dz = m.z - camera.position.z;
   const d = Math.hypot(dx, dy, dz);
-  if (d > 5.0) return false;   // 攻击距离 5 格
+  if (d > maxDist || d < 0.05) return null;
+  const dot = (dx * dir.x + dy * dir.y + dz * dir.z) / d;
+  if (dot < 0.62) return null;             // 约 51° 视锥：比原来略窄，贴合准星
+  /* 主判据是"生物中心到准星射线的垂直距离"（越小越正对），
+     再叠加一点距离权重 —— 这样同一方向上一串怪会优先打最近的那只，
+     而不是因为远处目标的角度更接近水平线就跳过去打远的。 */
+  const perp = d * Math.sqrt(Math.max(0, 1 - dot * dot));
+  return perp + d * 0.05;
+}
+
+function meleeHitMob(m, dir) {
+  const dx = m.x - camera.position.x;
+  const dy = (m.g.position.y + 0.8) - camera.position.y;
+  const dz = m.z - camera.position.z;
+  const d = Math.hypot(dx, dy, dz) || 1;
   const ndx = dx / d, ndy = dy / d, ndz = dz / d;
-  if (ndx * dir.x + ndy * dir.y + ndz * dir.z < 0.55) return false;   // 约 57° 视角锥
   const zgy = m.g.position.y;
   const kx = Math.floor(m.x + ndx * 0.6), kz = Math.floor(m.z + ndz * 0.6);
   if (!isSolid(world.getBlock(kx, zgy, kz)) && !isSolid(world.getBlock(kx, zgy + 1, kz))) {
     m.x += ndx * 0.6; m.z += ndz * 0.6;
   }
   m.hurtT = 0.25;
-  return true;
 }
 function alertWolves(target) {
   for (const w of wolves) {
@@ -9699,113 +9794,97 @@ function meleeAttack() {
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
   const dmg = meleeDamage();
+
+  /* 1) 收集全部候选，挑"最正对"的那一个。
+        每个条目记录所属数组与类型，命中后按类型走各自的死亡/音效分支。 */
+  let best = null, bestScore = Infinity;
+  const scan = (list, kind) => {
+    for (let i = 0; i < list.length; i++) {
+      const s = meleeAimScore(list[i], dir);
+      if (s !== null && s < bestScore) { bestScore = s; best = { list, i, ent: list[i], kind }; }
+    }
+  };
+  scan(zombies, 'zombie');
+  scan(creepers, 'creeper');
+  scan(skeletons, 'skeleton');
+  scan(endermen, 'enderman');
+  scan(spiders, 'spider');
+  scan(pillagers, 'pillager');
+  scan(ravagers, 'ravager');
+  scan(ironGolems, 'golem');
+  scan(villagers, 'villager');
+  scan(cats, 'cat');
+  scan(animals, 'animal');
+
   let hitAny = false;
-  for (let i = zombies.length - 1; i >= 0; i--) {
-    const m = zombies[i];
-    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; playZombieHit(); alertWolves(m); if (m.hp <= 0) killZombie(i); }
-  }
-  for (let i = creepers.length - 1; i >= 0; i--) {
-    const m = creepers[i];
-    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; playZombieHit(); alertWolves(m); if (m.hp <= 0) killCreeper(i); }
-  }
-  for (let i = skeletons.length - 1; i >= 0; i--) {
-    const m = skeletons[i];
-    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; tone(160, 240, 0.1, 'triangle', 0.1); alertWolves(m); if (m.hp <= 0) killSkeleton(i); }
-  }
-  for (let i = endermen.length - 1; i >= 0; i--) {
-    const m = endermen[i];
-    if (meleeHitMob(m, dir)) {
-      m.hp -= dmg;
-      m.angry = true;
-      hitAny = true;
-      alertWolves(m);
-      tone(180, 260, 0.1, 'triangle', 0.1);
-      if (Math.random() < 0.6 && m.teleCooldown <= 0) teleportEnderman(m);
-      if (m.hp <= 0) killEnderman(i);
+  if (best) {
+    const m = best.ent;
+    hitAny = true;
+    m.hp -= dmg;
+    // 只有敌对生物才会让忠诚猎犬加入围殴（与改动前一致）
+    const hostile = best.kind === 'zombie' || best.kind === 'creeper' || best.kind === 'skeleton' ||
+                    best.kind === 'enderman' || best.kind === 'spider' ||
+                    best.kind === 'pillager' || best.kind === 'ravager';
+    if (hostile) alertWolves(m);
+    meleeHitMob(m, dir);         // 击退 + 受击闪白
+    switch (best.kind) {
+      case 'zombie': playZombieHit(); if (m.hp <= 0) killZombie(best.i); break;
+      case 'creeper': playZombieHit(); if (m.hp <= 0) killCreeper(best.i); break;
+      case 'skeleton': tone(160, 240, 0.1, 'triangle', 0.1); if (m.hp <= 0) killSkeleton(best.i); break;
+      case 'enderman':
+        m.angry = true;
+        tone(180, 260, 0.1, 'triangle', 0.1);
+        if (Math.random() < 0.6 && m.teleCooldown <= 0) teleportEnderman(m);
+        if (m.hp <= 0) killEnderman(best.i);
+        break;
+      case 'spider': m.angry = true; playSpiderHiss(); if (m.hp <= 0) killSpider(best.i); break;
+      case 'pillager':
+        playZombieHit();
+        spawnParticles(m.x, m.y + 1.0, m.z, 0x959b9b, 10);
+        if (m.hp <= 0) killPillager(best.i);
+        break;
+      case 'ravager':
+        playZombieHit();
+        spawnParticles(m.x, m.y + 1.2, m.z, 0x545559, 14);
+        if (m.hp <= 0) killRavager(best.i);
+        break;
+      case 'golem':
+        tone(120, 200, 0.12, 'sawtooth', 0.18);
+        spawnParticles(m.x, m.y + 1.2, m.z, 0xd8dcde, 8);
+        if (m.hp <= 0) killIronGolem(best.i);
+        break;
+      case 'villager':
+        playVillagerHmm();
+        spawnParticles(m.x, m.y + 0.8, m.z, 0xc68c62, 8);
+        if (m.hp <= 0) {
+          scene.remove(m.g);
+          villagers.splice(best.i, 1);
+          toast('💀 村民倒下了…');
+        }
+        break;
+      case 'cat':
+        playCatMeow();
+        spawnParticles(m.x, m.y + 0.3, m.z, 0xd43828, 6);
+        if (m.hp <= 0) {
+          scene.remove(m.g);
+          cats.splice(best.i, 1);
+          dropItem(B.STRING, Math.floor(m.x), Math.floor(m.y), Math.floor(m.z));
+        }
+        break;
+      case 'animal': playPop(); if (m.hp <= 0) killAnimal(best.i); break;
     }
   }
-  for (let i = spiders.length - 1; i >= 0; i--) {
-    const m = spiders[i];
-    if (meleeHitMob(m, dir)) {
-      m.hp -= dmg;
-      m.angry = true;
-      hitAny = true;
-      alertWolves(m);
-      playSpiderHiss();
-      if (m.hp <= 0) killSpider(i);
+
+  // 2) 只有这一剑什么都没打中时，才去试着拍水面捞鱼
+  if (!hitAny) {
+    const wt = raycastWater(camera.position, dir, 4.5);
+    if (wt && Math.random() < 0.28) {
+      dropItem(B.RAW_FISH, wt.x, wt.y, wt.z);
+      spawnParticles(wt.x, wt.y, wt.z, 0x4c86a8, 6);
+      playSplash();
     }
   }
-  for (let i = pillagers.length - 1; i >= 0; i--) {
-    const p = pillagers[i];
-    if (meleeHitMob(p, dir)) {
-      p.hp -= dmg;
-      hitAny = true;
-      alertWolves(p);
-      playZombieHit();
-      spawnParticles(p.x, p.y + 1.0, p.z, 0x959b9b, 10);
-      if (p.hp <= 0) killPillager(i);
-    }
-  }
-  for (let i = ravagers.length - 1; i >= 0; i--) {
-    const r = ravagers[i];
-    if (meleeHitMob(r, dir)) {
-      r.hp -= dmg;
-      hitAny = true;
-      alertWolves(r);
-      playZombieHit();
-      spawnParticles(r.x, r.y + 1.2, r.z, 0x545559, 14);
-      if (r.hp <= 0) killRavager(i);
-    }
-  }
-  for (let i = ironGolems.length - 1; i >= 0; i--) {
-    const m = ironGolems[i];
-    if (meleeHitMob(m, dir)) {
-      m.hp -= dmg;
-      hitAny = true;
-      tone(120, 200, 0.12, 'sawtooth', 0.18);
-      spawnParticles(m.x, m.y + 1.2, m.z, 0xd8dcde, 8);
-      if (m.hp <= 0) killIronGolem(i);
-    }
-  }
-  for (let i = villagers.length - 1; i >= 0; i--) {
-    const v = villagers[i];
-    if (meleeHitMob(v, dir)) {
-      v.hp -= dmg;
-      hitAny = true;
-      playVillagerHmm();
-      spawnParticles(v.x, v.y + 0.8, v.z, 0xc68c62, 8);
-      if (v.hp <= 0) {
-        scene.remove(v.g);
-        villagers.splice(i, 1);
-        toast('💀 村民倒下了…');
-      }
-    }
-  }
-  for (let i = cats.length - 1; i >= 0; i--) {
-    const c = cats[i];
-    if (meleeHitMob(c, dir)) {
-      c.hp -= dmg;
-      hitAny = true;
-      playCatMeow();
-      spawnParticles(c.x, c.y + 0.3, c.z, 0xd43828, 6);
-      if (c.hp <= 0) {
-        scene.remove(c.g);
-        cats.splice(i, 1);
-        dropItem(B.STRING, Math.floor(c.x), Math.floor(c.y), Math.floor(c.z));
-      }
-    }
-  }
-  for (let i = animals.length - 1; i >= 0; i--) {
-    const m = animals[i];
-    if (meleeHitMob(m, dir)) { m.hp -= dmg; hitAny = true; playPop(); if (m.hp <= 0) killAnimal(i); }
-  }
-  // 击打水面捕鱼
-  const wt = raycastWater(camera.position, dir, 4.5);
-  if (wt && Math.random() < 0.28) {
-    dropItem(B.RAW_FISH, wt.x, wt.y, wt.z);
-    spawnParticles(wt.x, wt.y, wt.z, 0x4c86a8, 6);
-    playSplash();
-  }
+
   if (hitAny) {
     const tool = hotbar[selected];
     if (tool && isSword(tool.id) && tool.dur !== undefined) {
