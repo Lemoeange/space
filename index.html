@@ -75,15 +75,46 @@
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; overflow-y: scroll; }
+  html {
+    -webkit-text-size-adjust: 100%;
+    overflow-y: scroll;
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+  }
   body {
     font-family: var(--font-main);
     background: var(--bg);
     color: var(--ink);
     line-height: 1.65;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
   }
   img { max-width: 100%; }
+  ::selection { background: var(--accent); color: #4a421f; }
+
+  /* 现代细滚动条(Chrome 121+ 支持 scrollbar-width;Safari 用 ::-webkit-scrollbar) */
+  html { scrollbar-width: thin; scrollbar-color: var(--accent) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, var(--accent), var(--lime));
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--accent-strong); }
+  ::-webkit-scrollbar-track { background: transparent; }
+
   :focus-visible { outline: 3px solid var(--accent-strong); outline-offset: 2px; border-radius: 6px; }
+
+  /* ---------- 视图过渡(iOS 18+/Chrome 111+ 生效;旧浏览器自动忽略) ---------- */
+  @view-transition { navigation: auto; }
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) {
+      animation: none !important;
+    }
+  }
 
   /* ---------- 主页毛玻璃背景 ---------- */
   .bg-deco {
@@ -97,6 +128,38 @@
       radial-gradient(ellipse at 85% 88%, var(--deco-3), transparent 46%),
       radial-gradient(ellipse at 8% 92%, var(--deco-4), transparent 46%),
       var(--bg);
+  }
+  /* 动态光斑:两团柔和柠檬光缓慢漂移(合成器动画,几乎零开销) */
+  .bg-deco::before,
+  .bg-deco::after {
+    content: "";
+    position: absolute;
+    width: 42vmax; height: 42vmax;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: .5;
+    will-change: transform;
+  }
+  .bg-deco::before {
+    background: radial-gradient(circle, var(--deco-1), transparent 65%);
+    top: -12%; left: -8%;
+    animation: deco-drift-1 26s ease-in-out infinite alternate;
+  }
+  .bg-deco::after {
+    background: radial-gradient(circle, var(--deco-2), transparent 65%);
+    bottom: -14%; right: -10%;
+    animation: deco-drift-2 32s ease-in-out infinite alternate;
+  }
+  @keyframes deco-drift-1 {
+    from { transform: translate(0, 0) scale(1); }
+    to { transform: translate(9vw, 12vh) scale(1.15); }
+  }
+  @keyframes deco-drift-2 {
+    from { transform: translate(0, 0) scale(1.1); }
+    to { transform: translate(-11vw, -9vh) scale(.92); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bg-deco::before, .bg-deco::after { animation: none; }
   }
   .page {
     position: relative;
@@ -112,14 +175,43 @@
 
   .card {
     background: var(--glass);
-    -webkit-backdrop-filter: blur(18px);
-    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    backdrop-filter: blur(18px) saturate(1.5);
     border-radius: var(--radius);
     border: 2px solid var(--line);
     box-shadow: 6px 6px 0 var(--shadow);
   }
   @supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
     .card, .tabs { background: var(--card); }
+  }
+  /* 可交互卡片:悬浮时柔和上浮 + 光泽扫过(仅指针设备) */
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    .card-link .post, .side-card {
+      transition: transform .35s cubic-bezier(.2,.9,.25,1.2), box-shadow .35s ease, border-color .35s ease;
+    }
+    .card-link:hover .post {
+      transform: translateY(-4px);
+      box-shadow: 8px 10px 0 var(--shadow), 0 18px 40px rgba(150, 110, 20, .12);
+      border-color: var(--accent);
+    }
+    /* 流光扫过:conic 渐变随鼠标位置点亮边框(iOS 16 支持 conic 与 CSS 变量) */
+    .card-link .post { position: relative; }
+    .card-link .post::after {
+      content: "";
+      position: absolute;
+      inset: -2px;
+      border-radius: inherit;
+      padding: 2px;
+      background: conic-gradient(from var(--shine, 0deg), transparent 0deg, rgba(255, 210, 63, .9) 40deg, transparent 90deg);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      mask-composite: exclude;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .3s ease;
+    }
+    .card-link:hover .post::after { opacity: 1; }
   }
 
   /* ---------- 柠檬气泡 ---------- */
@@ -134,8 +226,9 @@
     position: absolute;
     border-radius: 50%;
     border: 1.5px solid rgba(255, 210, 63, .85);
-    background: rgba(255, 255, 255, .55);
+    background: radial-gradient(circle at 32% 30%, rgba(255, 255, 255, .9), rgba(255, 255, 255, .4) 60%);
     box-shadow: inset -2px -2px 4px rgba(255, 210, 63, .4);
+    will-change: transform, opacity;
   }
 
   .profile { overflow: hidden; position: relative; }
@@ -145,12 +238,14 @@
     position: relative;
     overflow: hidden;
   }
+  /* 流动光泽带:斜向高光缓慢扫过封面 */
   .cover::before {
-    content: "🍋";
+    content: "";
     position: absolute;
-    top: 18px; left: 12%;
-    font-size: 34px;
-    opacity: .85;
+    inset: -40%;
+    background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, .5) 50%, transparent 58%);
+    animation: cover-shine 7s ease-in-out infinite;
+    pointer-events: none;
   }
   .cover::after {
     content: "🍋";
@@ -158,6 +253,14 @@
     bottom: 22px; right: 10%;
     font-size: 44px;
     opacity: .85;
+    filter: drop-shadow(0 4px 8px rgba(160, 100, 0, .35));
+  }
+  @keyframes cover-shine {
+    0%, 100% { transform: translateX(-38%); }
+    50% { transform: translateX(38%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cover::before { animation: none; opacity: .35; }
   }
   .profile-row { padding: 0 24px 24px; }
   .avatar {
@@ -169,10 +272,50 @@
     border: 2px dashed var(--accent);
     position: relative;
     z-index: 2;
+    transition: border-color .3s ease;
   }
+  /* 头像呼吸光环:conic 柠檬光环绕旋转 */
+  .avatar::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    padding: 2.5px;
+    background: conic-gradient(from var(--av, 0deg), var(--accent), var(--lime), var(--accent));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity .35s ease;
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .avatar { animation: av-spin 6s linear infinite paused; }
+    .avatar:hover { animation-play-state: running; }
+  }
+  .avatar:hover::after { opacity: 1; }
+  @property --av { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+  @keyframes av-spin { to { --av: 360deg; } }
   .avatar img { width: 100%; height: 100%; border-radius: 50%; display: block; object-fit: cover; }
   .name-row { margin-top: 12px; }
-  .name-row h1 { font-size: 24px; font-weight: 800; display: inline-block; font-family: var(--font-display); }
+  .name-row h1 {
+    font-size: 24px; font-weight: 800;
+    display: inline-block;
+    font-family: var(--font-display);
+    background: linear-gradient(120deg, var(--ink), var(--accent-ink) 60%, var(--ink));
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .name-row h1 { animation: name-shimmer 5s ease-in-out infinite; }
+    @keyframes name-shimmer {
+      0%, 100% { background-position: 0% 0; }
+      50% { background-position: 100% 0; }
+    }
+  }
   .badge {
     display: inline-block;
     margin-left: 8px;
@@ -182,8 +325,9 @@
     color: var(--accent-ink);
     font-size: 12px;
     font-weight: 700;
+    vertical-align: 3px;
   }
-  .bio { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .bio { color: var(--muted); font-size: 14px; margin-top: 8px; text-wrap: pretty; }
   .meta { color: var(--muted); font-size: 13px; margin-top: 10px; }
   .meta span { margin-right: 14px; }
   .btn-row { margin-top: 14px; }
@@ -199,10 +343,16 @@
     cursor: pointer;
     text-decoration: none;
     touch-action: manipulation;
-    transition: transform .15s ease, box-shadow .15s ease;
+    transition: transform .25s cubic-bezier(.2,.9,.3,1.4), box-shadow .25s ease;
     box-shadow: 3px 3px 0 var(--ink);
+    will-change: transform;
   }
   .btn + .btn { margin-left: 10px; }
+  @media (hover: hover) {
+    .btn:hover { transform: translate(-1px, -2px); box-shadow: 5px 5px 0 var(--ink); }
+    .btn.primary:hover { box-shadow: 5px 5px 0 #d14d77; }
+    .btn.github:hover { box-shadow: 5px 5px 0 #0d1117; }
+  }
   .btn.primary {
     background: linear-gradient(120deg, #fc8bab, #fb7299);
     border-color: #d14d77;
@@ -241,8 +391,24 @@
     border-radius: 999px;
     border: 2px solid var(--line);
     background: var(--glass);
-    -webkit-backdrop-filter: blur(18px);
-    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    backdrop-filter: blur(18px) saturate(1.5);
+    position: relative;
+  }
+  /* 滑动指示器:JS 定位,跟随选中项滑动 */
+  .tab-indicator {
+    position: absolute;
+    top: 6px; bottom: 6px;
+    left: 0;
+    width: 0;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    border: 2px solid var(--accent);
+    box-shadow: 0 2px 10px rgba(255, 200, 40, .25);
+    transition: transform .4s cubic-bezier(.3, 1.2, .3, 1), width .4s cubic-bezier(.3, 1.2, .3, 1);
+    z-index: 0;
+    pointer-events: none;
+    will-change: transform, width;
   }
   .tab {
     flex: 1;
@@ -256,13 +422,24 @@
     font-weight: 700;
     cursor: pointer;
     touch-action: manipulation;
-    transition: background .2s ease, color .2s ease;
+    transition: color .25s ease;
+    position: relative;
+    z-index: 1;
   }
-  .tab.active { background: var(--accent-soft); color: var(--accent-ink); }
+  .tab.active { color: var(--accent-ink); }
+  .tab:active { transform: scale(.96); }
 
   .panels { padding-top: 16px; }
   .panel { display: block; scroll-margin-top: 84px; }   /* 侧栏跳转滚到面板时,给固定的菜单按钮留出空间 */
   .panel[hidden] { display: none; }
+  /* 面板切换:轻微上浮淡入(仅动画可用时) */
+  @media (prefers-reduced-motion: no-preference) {
+    .panel:not([hidden]) { animation: panel-in .4s cubic-bezier(.2,.8,.3,1) both; }
+    @keyframes panel-in {
+      from { opacity: 0; translate: 0 10px; filter: blur(6px); }
+      to { opacity: 1; translate: 0 0; filter: blur(0); }
+    }
+  }
   /* 侧栏跳转后高亮一下目标板块,让"跳到哪了"一目了然 */
   .panel.flash { animation: panel-flash 1.1s ease-out 1 both; border-radius: var(--radius); }
   @keyframes panel-flash {
@@ -300,10 +477,16 @@
   @media (prefers-reduced-motion: no-preference) {
     .reveal {
       opacity: 0;
-      translate: 0 22px;
-      transition: opacity .55s ease, translate .55s ease;
+      translate: 0 26px;
+      filter: blur(8px);
+      scale: .97;
+      transition:
+        opacity .6s ease,
+        translate .6s cubic-bezier(.2, .9, .25, 1.1),
+        filter .6s ease,
+        scale .6s cubic-bezier(.2, .9, .25, 1.1);
     }
-    .reveal.in { opacity: 1; translate: 0 0; }
+    .reveal.in { opacity: 1; translate: 0 0; filter: blur(0); scale: 1; }
   }
 
   /* ---------- 侧栏抽屉(始终为抽屉,从左侧滑出) ---------- */
@@ -319,12 +502,13 @@
       calc(16px + env(safe-area-inset-bottom))
       calc(16px + env(safe-area-inset-left));
     background: var(--glass-soft);
-    -webkit-backdrop-filter: blur(18px);
-    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    backdrop-filter: blur(24px) saturate(1.6);
     overflow-y: auto;
     overscroll-behavior: contain;
     translate: -100% 0;
-    transition: translate .28s ease;
+    transition: translate .38s cubic-bezier(.25, 1.1, .3, 1);
+    will-change: translate;
   }
   .sidebar.open { translate: 0 0; }
   .side-card { padding: 8px 0; }
@@ -729,7 +913,8 @@
   @media (prefers-reduced-motion: reduce) {
     .intro-lemon-wrap, .intro-hint-box, .lemon-glow-ring, .hint-pulse-dot { animation: none; }
     .intro-lemon-btn.bursting { animation: none !important; opacity: 0; }
-    .sidebar, .mask, .btn, .intro, .tab { transition: none; }
+    .sidebar, .mask, .btn, .intro, .tab, .tab-indicator { transition: none; }
+    .name-row h1 { animation: none; }
   }
 </style>
 </head>
@@ -927,7 +1112,8 @@
 
   <div class="layout">
     <div class="main">
-      <nav class="tabs" role="tablist" aria-label="主页内容">
+      <nav class="tabs" role="tablist" aria-label="主页内容" id="mainTabs">
+        <span class="tab-indicator" id="tabIndicator" aria-hidden="true"></span>
         <button class="tab active" role="tab" id="tab-p-projects" aria-controls="p-projects" aria-selected="true">项目</button>
         <button class="tab" role="tab" id="tab-p-links" aria-controls="p-links" aria-selected="false" tabindex="-1">链接</button>
       </nav>
@@ -1149,11 +1335,16 @@
         window.addEventListener('resize', resize, { passive: true });
         resize();
 
-        // 汽水气泡池 (85 个上升微粒气泡)
+        /* 帧率自适应:先按 120Hz 满血渲染,若连续掉帧则自动降粒子密度与刷新率 */
+        let frameTimes = [];
+        let quality = 1;              // 1 = 高配, 0.5 = 低配(粒子减半)
+        let lastT = performance.now();
+
+        // 汽水气泡池(按质量等级决定数量)
         const bubbles = [];
         const BUBBLE_COUNT = 85;
-        for (let i = 0; i < BUBBLE_COUNT; i++) {
-          bubbles.push({
+        function resetBubble(i) {
+          bubbles[i] = {
             x: Math.random() * (cw || window.innerWidth),
             y: Math.random() * (ch || window.innerHeight),
             r: 1.5 + Math.random() * 6.5,
@@ -1162,8 +1353,9 @@
             wobbleAmp: 0.8 + Math.random() * 1.6,
             phase: Math.random() * Math.PI * 2,
             alpha: 0.35 + Math.random() * 0.5
-          });
+          };
         }
+        for (let i = 0; i < BUBBLE_COUNT; i++) resetBubble(i);
 
         // 浮动晶莹冰块 (6 个不同层深的冰块)
         const iceCubes = [
@@ -1221,8 +1413,25 @@
         }
 
         let time = 0;
-        function render() {
-          time += 1;
+        function render(now) {
+          /* 增量时间:高刷屏(120Hz)与低刷屏(60Hz)动画速度完全一致 */
+          const dt = Math.min(3, (now - lastT) / 16.67);   // 以 60fps 为基准 1.0,封顶防跳帧爆炸
+          lastT = now;
+          time += dt;
+
+          /* 帧率监控:滚动采样最近 30 帧,平均帧时长 > 22ms(约 <45fps)则降级 */
+          frameTimes.push(dt * 16.67);
+          if (frameTimes.length > 30) {
+            frameTimes.shift();
+            if (quality === 1) {
+              const avg = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
+              if (avg > 22) {
+                quality = 0.5;
+                frameTimes = [];      // 清空,降级后不再重复评估
+              }
+            }
+          }
+
           ctx.clearRect(0, 0, cw, ch);
 
           // 1. 顶部阳光焦散水波
@@ -1239,20 +1448,22 @@
           ctx.closePath();
           ctx.fill();
 
-          // 2. 绘制浮动冰块
-          for (let i = 0; i < iceCubes.length; i++) {
+          // 2. 绘制浮动冰块(低配时跳过 2 个远端小块)
+          const cubeMax = quality === 1 ? iceCubes.length : 4;
+          for (let i = 0; i < cubeMax; i++) {
             const cube = iceCubes[i];
             const ix = cube.rx * cw;
             const iy = cube.ry * ch + Math.sin(time * cube.bSpeed + cube.phase) * cube.bAmp;
-            cube.ang += cube.vRot;
+            cube.ang += cube.vRot * dt;
             drawIceCube(ix, iy, cube.s, cube.ang);
           }
 
-          // 3. 绘制汽水气泡 (微粒上升与摆动)
-          for (let i = 0; i < bubbles.length; i++) {
+          // 3. 绘制汽水气泡 (微粒上升与摆动;低配时隔一个画一个)
+          const bMax = quality === 1 ? bubbles.length : Math.ceil(bubbles.length * 0.5);
+          for (let i = 0; i < bMax; i++) {
             const b = bubbles[i];
-            b.y -= b.vy;
-            b.x += Math.sin(time * b.wobbleSpeed + b.phase) * b.wobbleAmp;
+            b.y -= b.vy * dt;
+            b.x += Math.sin(time * b.wobbleSpeed + b.phase) * b.wobbleAmp * dt;
 
             if (b.y < -15) {
               b.y = ch + 15;
@@ -1284,11 +1495,11 @@
           if (splashes.length > 0) {
             for (let i = splashes.length - 1; i >= 0; i--) {
               const p = splashes[i];
-              p.x += p.vx;
-              p.y += p.vy;
-              p.vy += p.g;
-              p.vx *= 0.97;
-              p.alpha *= 0.95;
+              p.x += p.vx * dt;
+              p.y += p.vy * dt;
+              p.vy += p.g * dt;
+              p.vx *= Math.pow(0.97, dt);
+              p.alpha *= Math.pow(0.95, dt);
 
               if (p.alpha <= 0.02) {
                 splashes.splice(i, 1);
@@ -1309,8 +1520,8 @@
           if (rings.length > 0) {
             for (let i = rings.length - 1; i >= 0; i--) {
               const r = rings[i];
-              r.rad += r.v;
-              r.alpha *= 0.94;
+              r.rad += r.v * dt;
+              r.alpha *= Math.pow(0.94, dt);
               if (r.alpha <= 0.02) {
                 rings.splice(i, 1);
                 continue;
@@ -1357,16 +1568,25 @@
       const hintBtn = doc.getElementById('introHint');
       const lemonWrap = doc.getElementById('lemonWrap');
 
-      // 3D 悬浮视差跟踪 (桌面端鼠标悬浮时柠檬片微微立体倾斜)
+      // 3D 悬浮视差跟踪 (rAF 节流:每帧最多更新一次,避免 pointermove 风暴)
       if (lemonWrap && !reduceMotion.matches) {
+        let pendingX = 0, pendingY = 0, rafQueued = false;
         doc.addEventListener('pointermove', (e) => {
           if (intro.classList.contains('leave')) return;
-          const rect = lemonWrap.getBoundingClientRect();
-          const cx = rect.left + rect.width / 2;
-          const cy = rect.top + rect.height / 2;
-          const dx = (e.clientX - cx) / (window.innerWidth * 0.5);
-          const dy = (e.clientY - cy) / (window.innerHeight * 0.5);
-          lemonWrap.style.transform = `perspective(800px) rotateY(${dx * 12}deg) rotateX(${-dy * 12}deg) translateY(-8px)`;
+          pendingX = e.clientX;
+          pendingY = e.clientY;
+          if (rafQueued) return;
+          rafQueued = true;
+          requestAnimationFrame(() => {
+            rafQueued = false;
+            if (intro.classList.contains('leave')) return;
+            const rect = lemonWrap.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            const dx = (pendingX - cx) / (window.innerWidth * 0.5);
+            const dy = (pendingY - cy) / (window.innerHeight * 0.5);
+            lemonWrap.style.transform = `perspective(800px) rotateY(${dx * 12}deg) rotateX(${-dy * 12}deg) translateY(-8px)`;
+          });
         }, { passive: true });
       }
 
@@ -1415,6 +1635,26 @@
   /* ---------- 标签页(遵循 WAI-ARIA tabs 模式:方向键切换) ---------- */
   const tabs = [...doc.querySelectorAll('.tab')];
   const panels = [...doc.querySelectorAll('.panel')];
+  const tabIndicator = doc.getElementById('tabIndicator');
+
+  /* 滑动指示器:跟随选中项的位置与宽度(弹簧缓动由 CSS transition 完成) */
+  function moveIndicator() {
+    if (!tabIndicator) return;
+    const active = tabs.find((t) => t.classList.contains('active'));
+    if (!active) { tabIndicator.style.opacity = '0'; return; }
+    const tabsRect = active.parentElement.getBoundingClientRect();
+    const r = active.getBoundingClientRect();
+    tabIndicator.style.width = r.width + 'px';
+    tabIndicator.style.transform = `translateX(${r.left - tabsRect.left}px)`;
+    tabIndicator.style.opacity = '1';
+  }
+  if (tabIndicator) {
+    tabIndicator.style.opacity = '0';
+    addEventListener('resize', moveIndicator, { passive: true });
+    doc.fonts && doc.fonts.ready.then(moveIndicator);
+    moveIndicator();
+    setTimeout(moveIndicator, 60);   // 字体加载/布局稳定后再校一次
+  }
 
   function selectTab(id, focus) {
     if (!panels.some((p) => p.id === id)) return;   // 未知 id:别把所有面板都藏起来
@@ -1426,6 +1666,7 @@
       if (on && focus) t.focus();
     }
     for (const p of panels) p.hidden = p.id !== id;
+    moveIndicator();
   }
 
   tabs.forEach((tab, i) => {
@@ -1487,7 +1728,6 @@
   });
 
   if (wideQuery.addEventListener) wideQuery.addEventListener('change', syncDrawer);
-  else if (wideQuery.addListener) wideQuery.addListener(syncDrawer);   // 老 WebKit 回退
   syncDrawer();
 
   /* 目标板块高亮一下,让"跳到哪了"一目了然 */
@@ -1572,16 +1812,13 @@
         const dur = (1 + Math.random() * .8) * 1000;
         const dx = Math.random() * 40 - 20;
         const done = () => { el.remove(); live--; };
-        if (el.animate) {
-          /* Web Animations:合成器线程执行,结束即回收,无需定时器 */
-          const anim = el.animate([
-            { transform: 'translate(0, 0) scale(1)', opacity: .9 },
-            { transform: `translate(${dx}px, -90px) scale(.35)`, opacity: 0 }
-          ], { duration: dur, easing: 'ease-out', fill: 'forwards' });
-          anim.onfinish = done;
-        } else {
-          setTimeout(done, dur);
-        }
+        /* Web Animations:合成器线程执行,结束即回收,无需定时器 */
+        const anim = el.animate([
+          { transform: 'translate(0, 0) scale(1)', opacity: .9 },
+          { transform: `translate(${dx}px, -90px) scale(.35)`, opacity: 0 }
+        ], { duration: dur, easing: 'ease-out', fill: 'forwards' });
+        anim.onfinish = done;
+        anim.oncancel = done;            // 标签页切换等异常中断时也回收
       }
     };
 
@@ -1592,9 +1829,11 @@
   const revealTargets = doc.querySelectorAll('[data-reveal]');
   if (revealTargets.length && 'IntersectionObserver' in window && !reduceMotion.matches) {
     const io = new IntersectionObserver((entries) => {
-      entries.forEach((entry, i) => {
+      entries.forEach((entry) => {
         if (!entry.isIntersecting) return;
-        entry.target.style.transitionDelay = (i * 70) + 'ms';
+        /* 同一批进入视口的卡片按 DOM 顺序级联,而不是按回调顺序 */
+        const idx = [...revealTargets].indexOf(entry.target);
+        entry.target.style.transitionDelay = (Math.min(idx, 6) * 80) + 'ms';
         entry.target.classList.add('in');
         io.unobserve(entry.target);
       });
@@ -1603,6 +1842,19 @@
       el.classList.add('reveal');
       io.observe(el);
     });
+  }
+
+  /* ---------- 卡片流光:conic 渐变跟随鼠标角度(仅 hover 设备) ---------- */
+  if (matchMedia('(hover: hover)').matches) {
+    for (const link of doc.querySelectorAll('.card-link')) {
+      link.addEventListener('pointermove', (e) => {
+        const post = link.querySelector('.post');
+        if (!post) return;
+        const r = post.getBoundingClientRect();
+        const ang = Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2));
+        post.style.setProperty('--shine', (ang * 180 / Math.PI + 90) + 'deg');
+      }, { passive: true });
+    }
   }
 })();
 </script>
