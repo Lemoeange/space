@@ -608,13 +608,26 @@ let WX = 0, WZ = 0;
 function setWorldOffset(x, z) { WX = x | 0; WZ = z | 0; }
 function getWorldOffset() { return [WX, WZ]; }
 
+/* ---------- 气候场（temp / moist / weird）----------
+   swampWeight、biomeOf、surfaceHeight 原来各自把这三个噪声重算一遍：
+   同一个 (x,z) 列上要被算 4 次（swampWeight 一次、biomeOf 一次、再加上 height 内部的调用）。
+   这三个 fbm 是全流程最重的部分，这里统一算一次然后传下去，结果完全等价。 */
+function climateAt(x, z) {
+  const wx = x + WX, wz = z + WZ;
+  return {
+    temp: P.terrain.fbm2(wx * 0.0016 + 500, wz * 0.0016 + 500, 3),
+    moist: P.terrain.fbm2(wx * 0.0016 + 900, wz * 0.0016 + 900, 3),
+    weird: P.terrain.fbm2(wx * 0.0009 + 1700, wz * 0.0009 + 1700, 2),   // 稀有群系通道
+  };
+}
+
 // 沼泽低洼湿地权重（在连续温湿噪声区间内平滑过渡，确保沼泽地形平滑衔接）
-function swampWeight(x, z) {
-  const moist = P.terrain.fbm2(x * 0.0016 + 900, z * 0.0016 + 900, 3);
+function swampWeightAt(cl) {
+  const moist = cl.moist;
   if (moist < 0.15) return 0;
-  const temp = P.terrain.fbm2(x * 0.0016 + 500, z * 0.0016 + 500, 3);
+  const temp = cl.temp;
   if (temp < -0.16 || temp > 0.22) return 0;
-  const weird = P.terrain.fbm2(x * 0.0009 + 1700, z * 0.0009 + 1700, 2);
+  const weird = cl.weird;
   if (weird > 0.22 || weird < -0.34) return 0;
   if (temp > 0.04 && weird < -0.08) return 0; // 竹林通道排除
   if (weird > 0.08 && weird < 0.26 && temp > -0.10 && temp < 0.10 && moist < 0.22) return 0; // 樱花林排除
@@ -625,24 +638,30 @@ function swampWeight(x, z) {
   const w = mWeight * tWeight * wWeight;
   return w * w * (3 - 2 * w); // smoothstep 平滑样条过渡
 }
+function swampWeight(x, z) { return swampWeightAt(climateAt(x, z)); }
 
 // 地表高度（平原 / 丘陵 / 山脉 / 海洋 / 沼泽低地）
-function surfaceHeight(x, z) {
-  x += WX; z += WZ;
-  const cont = P.terrain.fbm2(x * 0.0022 + 120, z * 0.0022 + 120, 3); // 大陆/海洋
-  if (cont < -0.03) {
-    return Math.max(2, SEA - 4 + cont * 18);                        // 海洋（近岸浅、远岸深）
-  }
-  const hills = P.terrain.fbm2(x * 0.012, z * 0.012, 4);            // ~80 块起伏
-  const mtn = P.terrain.fbm2(x * 0.004 + 60, z * 0.004 + 60, 3);    // ~250 块山体
-  const u = Math.max(0, mtn - 0.05);                                // 山体抬升
-  let h = SEA + 2 + hills * 18 + Math.max(0, cont) * 10 + u * 50 + u * u * 40;
+const smoothstep01 = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+function surfaceHeightAt(x, z, cl) {
+  const wx = x + WX, wz = z + WZ;
+  const cont = P.terrain.fbm2(wx * 0.0022 + 120, wz * 0.0022 + 120, 3); // 大陆/海洋
+  const hills = P.terrain.fbm2(wx * 0.012, wz * 0.012, 4);            // ~80 块起伏
+  const mtn = P.terrain.fbm2(wx * 0.004 + 60, wz * 0.004 + 60, 3);    // ~250 块山体
+  const u = Math.max(0, mtn - 0.05);                                  // 山体抬升
+  const landH = SEA + 2 + hills * 18 + Math.max(0, cont) * 10 + u * 50 + u * u * 40;
+  const oceanH = Math.max(2, SEA - 4 + cont * 18);                    // 海洋（近岸浅、远岸深）
+
+  /* 海陆过渡：原来以 cont = -0.03 硬切换，两侧高度差可达 6~7 格，
+     导致每条海岸线都变成垂直断崖（实测单格最大跳变 47.8 格）。
+     改成在 cont ∈ [-0.13, 0.03] 的过渡带内平滑插值，自然形成沙滩缓坡。 */
+  const shore = smoothstep01((cont + 0.10) / 0.12);
+  let h = oceanH + (landH - oceanH) * shore;
 
   // 沼泽低洼湿地：地势平缓贴近海平面(地平线)，带有天然浅水塘与泥潭，与周边地形平滑过渡
-  const sw = swampWeight(x, z);
+  const sw = swampWeightAt(cl);
   if (sw > 0) {
     // 沼泽内部微地形：温和波动的浅水洼、泥滩与低土丘
-    const poolNoise = P.terrain.fbm2(x * 0.020 + 77, z * 0.020 + 77, 3);
+    const poolNoise = P.terrain.fbm2(wx * 0.020 + 77, wz * 0.020 + 77, 3);
     // 目标高度：SEA 在 32，poolNoise (-0.5 ~ +0.5) 映射出 30.6 ~ 33.3
     // 低于 32 即自动生成天然连片浅水坑与蜿蜒水塘，高于 32 为贴水湿泥草地与泥洲
     const hSwamp = SEA + 0.6 + poolNoise * 2.2;
@@ -651,6 +670,7 @@ function surfaceHeight(x, z) {
 
   return Math.max(2, Math.min(HEIGHT - 6, h));
 }
+function surfaceHeight(x, z) { return surfaceHeightAt(x, z, climateAt(x, z)); }
 
 // 3D 洞穴系统：连贯的长隧道 + 中深层的大洞穴
 //   旧版是「|噪声| < 阈值」的薄片叠加小团块，挖出来全是零散小坑、又密又碎，也没有能走进去的大洞。
@@ -659,21 +679,23 @@ function surfaceHeight(x, z) {
 function isCave(x, y, z) {
   if (y < 5) return false;
   x += WX; z += WZ;
-  // 洞穴生成概率减少一半：宏观区域噪声遮罩（仅 50% 区域允许生成连贯洞穴网络）
-  const caveMask = P.cave.fbm2(x * 0.015, z * 0.015);
-  if (caveMask < 0.50) return false;
+  /* 洞穴生成概率减少一半：宏观区域噪声遮罩（仅部分区域允许生成连贯洞穴网络）。
+     注意 fbm2 的第三个参数 oct 必须传：漏传会让循环不执行、返回 NaN，
+     而 `NaN < 阈值` 恒为 false —— 遮罩就完全失效了（这里原来正是这个 bug）。 */
+  const caveMask = P.cave.fbm2(x * 0.015, z * 0.015, 2);
+  if (caveMask < 0.02) return false;   // 约 45% 的区域不生成洞穴，形成区域性留白
 
   const depth = Math.min(1, Math.max(0, (76 - y) / 54));   // 0 = 浅, 1 = 深
   // 1) 长隧道
   const f = 0.021;
   const n1 = P.cave.fbm3(x * f, y * f * 1.25, z * f, 3);
   const n2 = P.cave.fbm3(x * f + 131, y * f * 1.25 + 57, z * f + 89, 3);
-  const t = 0.065 + 0.045 * depth;                         // 越深隧道越宽
+  const t = 0.055 + 0.040 * depth;                         // 越深隧道越宽
   if (Math.abs(n1) < t && Math.abs(n2) < t) return true;
   // 2) 大洞穴：低频 + 横向更宽，只在中深层出现
   if (y < 52) {
     const big = P.cave.fbm3(x * 0.016, y * 0.030, z * 0.016, 3);
-    if (big > 0.35 - 0.06 * depth) return true;
+    if (big > 0.40 - 0.06 * depth) return true;
   }
   return false;
 }
@@ -686,9 +708,10 @@ function oreFor(wx, y, wz) {
   const cy = Math.floor(y / CELL_Y);
   const cz = Math.floor(wz / CELL_XZ);
 
-  // 区域专属哈希
-  let h = (cx * 73856093 ^ cy * 19349663 ^ cz * 83492791 ^ ((WX + 17) * 31 + WZ)) >>> 0;
-  h = (h ^ (h >>> 16)) * 0x45d9f3b;
+  // 区域专属哈希（用 Math.imul 保证 32 位乘法精度：普通 `*` 会因超过 2^53 而丢失低位）
+  let h = (Math.imul(cx, 73856093) ^ Math.imul(cy, 19349663) ^ Math.imul(cz, 83492791) ^ Math.imul(WX + 17, 31) ^ WZ) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b) >>> 0;
   const hash = ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 
   let targetOre = B.STONE;
@@ -726,11 +749,8 @@ function oreFor(wx, y, wz) {
 
 // 生物群系：1=平原 2=森林 3=沙漠 4=雪地 5=沼泽 6=热带草原 7=白桦林 8=丛林 9=恶地 10=蘑菇岛 11=花海 12=砾石平原 13=白沙丘 14=冰刺平原 15=针叶林 16=沙漠绿洲 17=黑森林 18=樱花林 19=竹林 20=熔岩火山 21=枫树林 22=极地冰川
 // 比例经过实测校准：平原与森林各约 12~14%，各大主群系 5~8%，特色与稀有特化群系 1~4%，探索兼顾惊喜与开阔平衡
-function biomeOf(x, z) {
-  x += WX; z += WZ;
-  const temp = P.terrain.fbm2(x * 0.0016 + 500, z * 0.0016 + 500, 3);
-  const moist = P.terrain.fbm2(x * 0.0016 + 900, z * 0.0016 + 900, 3);
-  const weird = P.terrain.fbm2(x * 0.0009 + 1700, z * 0.0009 + 1700, 2);   // 稀有群系通道
+function biomeOfClimate(cl) {
+  const temp = cl.temp, moist = cl.moist, weird = cl.weird;
 
   // 极冷与极地
   if (temp < -0.34) return 14;                  // 冰刺平原（极冷稀有）
@@ -775,8 +795,12 @@ function biomeOf(x, z) {
   if (moist > -0.04) return 2;                  // 森林
   return 1;                                     // 平原
 }
+function biomeOf(x, z) { return biomeOfClimate(climateAt(x, z)); }
 
-const NOISE = { HEIGHT, SEA, B, mulberry32, Perlin, surfaceHeight, isCave, oreFor, oreNoise, biomeOf, setWorldOffset, getWorldOffset };
+const NOISE = {
+  HEIGHT, SEA, B, mulberry32, Perlin, surfaceHeight, surfaceHeightAt, isCave, oreFor, oreNoise,
+  biomeOf, biomeOfClimate, climateAt, setWorldOffset, getWorldOffset,
+};
 if (typeof window !== 'undefined') window.NOISE = NOISE;
 if (typeof globalThis !== 'undefined') globalThis.NOISE = NOISE;
 </script>
@@ -824,7 +848,7 @@ if (!THREE || !THREE.Vector3) {
 }
 setLoading('正在生成地形…');
 
-const { HEIGHT, SEA, B, mulberry32, surfaceHeight, isCave, oreFor, oreNoise, biomeOf, setWorldOffset, getWorldOffset } = globalThis.NOISE;
+const { HEIGHT, SEA, B, mulberry32, surfaceHeight, surfaceHeightAt, isCave, oreFor, oreNoise, biomeOf, biomeOfClimate, climateAt, setWorldOffset, getWorldOffset } = globalThis.NOISE;
 
 /* ============================ 常量 ============================ */
 const CHUNK = 16;
@@ -935,48 +959,152 @@ function makeAtlas() {
     }
   }
 
-  // —— 草顶 ——
-  fill(T.grassTop, [104, 160, 58], 26, 1);
-  speck(T.grassTop, [70, 128, 40], 26, 2);
-  speck(T.grassTop, [136, 190, 74], 16, 3);
-  // —— 草侧（泥土 + 草皮悬垂）——
-  fill(T.grassSide, [128, 92, 58], 24, 1);
+  // —— 草顶（明快草绿 + 成片的短草叶笔触，比纯噪点更有生长感）——
+  fill(T.grassTop, [112, 172, 62], 22, 1);
   {
-    const r = rng(T.grassSide, 5);
-    for (let x = 0; x < TILE; x++) {
-      let depth = 2 + ((r() * 3) | 0);
-      for (let y = 0; y < depth; y++) {
-        const g = 104 + ((r() - 0.5) * 30);
-        put(T.grassSide, x, y, clamp(g), clamp(150 + (r() - 0.5) * 30), clamp(50));
+    const r = rng(T.grassTop, 71);
+    // 42 根 1×2 的短草叶：亮暗两色交错，密铺出绒毛般的草面
+    for (let n = 0; n < 42; n++) {
+      const x = (r() * TILE) | 0, y = (r() * TILE) | 0;
+      const bright = r() < 0.55;
+      const c = bright ? [140, 200, 78] : [82, 140, 46];
+      put(T.grassTop, x, y, c[0], c[1], c[2]);
+      if (y + 1 < TILE) {
+        const c2 = bright ? [116, 178, 64] : [68, 122, 40];
+        put(T.grassTop, x, y + 1, c2[0], c2[1], c2[2]);
       }
     }
   }
-  // —— 泥土 ——
-  fill(T.dirt, [128, 92, 58], 26, 1);
-  speck(T.dirt, [104, 72, 44], 20, 2);
-  speck(T.dirt, [150, 112, 74], 12, 3);
-  // —— 石头 ——
-  fill(T.stone, [126, 126, 126], 16, 1);
-  speck(T.stone, [104, 104, 104], 24, 2);
-  speck(T.stone, [142, 142, 142], 14, 3);
-  // —— 圆石 ——
-  fill(T.cobble, [118, 118, 118], 12, 1);
+  // —— 草侧（泥土 + 参差下垂的草皮，边缘带 1px 深绿描边更像草甸剖面）——
+  fill(T.grassSide, [126, 90, 56], 22, 1);
   {
-    const r = rng(T.cobble, 2);
-    for (let n = 0; n < 22; n++) {
-      const cx = (r() * TILE) | 0, cy = (r() * TILE) | 0, s = 70 + ((r() - 0.5) * 60);
-      put(T.cobble, cx, cy, clamp(s), clamp(s), clamp(s));
+    const r = rng(T.grassSide, 5);
+    for (let x = 0; x < TILE; x++) {
+      const depth = 2 + ((r() * 3) | 0);
+      for (let y = 0; y < depth; y++) {
+        const g = 108 + ((r() - 0.5) * 34);
+        put(T.grassSide, x, y, clamp(g), clamp(166 + (r() - 0.5) * 32), clamp(52));
+      }
+      // 草皮最下一行加深，形成立体的悬垂阴影线
+      if (depth > 1) put(T.grassSide, x, depth - 1, 78, 132, 40);
     }
-    for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++)
-      if (((x + y) & 3) === 0) put(T.cobble, x, y, 86, 86, 86);
   }
-  // —— 沙 ——
-  fill(T.sand, [214, 196, 150], 18, 1);
-  speck(T.sand, [196, 176, 128], 22, 2);
-  // —— 沙砾 ——
-  fill(T.gravel, [116, 104, 96], 26, 1);
-  speck(T.gravel, [86, 76, 70], 26, 2);
-  speck(T.gravel, [140, 128, 120], 14, 3);
+  // —— 泥土（主体泥色 + 细碎石粒与小根须）——
+  fill(T.dirt, [126, 90, 56], 24, 1);
+  {
+    const r = rng(T.dirt, 81);
+    // 12 颗浅色小石粒（2×1），让泥土不至于糊成一片
+    for (let n = 0; n < 12; n++) {
+      const x = (r() * TILE) | 0, y = (r() * TILE) | 0;
+      const v = 150 + r() * 26;
+      put(T.dirt, x, y, clamp(v), clamp(v - 30), clamp(v - 66));
+      if (x + 1 < TILE) put(T.dirt, x + 1, y, clamp(v - 16), clamp(v - 46), clamp(v - 80));
+    }
+    // 6 条纵向褐色根须
+    for (let n = 0; n < 6; n++) {
+      const x = (r() * TILE) | 0, y = (r() * TILE) | 0;
+      put(T.dirt, x, y, 98, 68, 42);
+      if (y + 1 < TILE) put(T.dirt, x, y + 1, 106, 74, 46);
+    }
+    speck(T.dirt, [96, 66, 40], 14, 2);
+  }
+  // —— 石头（矿斑云团 + 不规则裂纹，避免规则的横向条纹）——
+  fill(T.stone, [124, 124, 124], 10, 1);
+  {
+    const r = rng(T.stone, 21);
+    // 6 团明暗矿斑：柔和过渡，做出花岗岩般的云纹而非条纹
+    for (let n = 0; n < 6; n++) {
+      const cx = r() * TILE, cy = r() * TILE, rr = 2.2 + r() * 3.4;
+      const tone = (r() - 0.5) * 26;
+      for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+        const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+        const dd = dx * dx + dy * dy;
+        if (dd > rr * rr) continue;
+        const k = (1 - Math.sqrt(dd) / rr) * tone;   // 中心最强，边缘淡出
+        const v = clamp(124 + k);
+        put(T.stone, x, y, v, v, v);
+      }
+    }
+    // 4 条随机游走的裂纹（带一点分叉感）
+    for (let n = 0; n < 4; n++) {
+      let cx = (r() * TILE) | 0, cy = (r() * TILE) | 0;
+      const len = 5 + ((r() * 7) | 0);
+      for (let s = 0; s < len; s++) {
+        if (cx >= 0 && cx < TILE && cy >= 0 && cy < TILE) {
+          put(T.stone, cx, cy, 92, 92, 94);
+          if (r() < 0.35 && cy + 1 < TILE) put(T.stone, cx, cy + 1, 104, 104, 106);   // 裂纹旁稍亮
+        }
+        cx += r() < 0.6 ? 1 : (r() < 0.5 ? 0 : -1);
+        cy += r() < 0.65 ? 1 : -1;
+      }
+    }
+    speck(T.stone, [156, 156, 158], 10, 3);   // 少量浅色矿点，提亮整体
+  }
+  // —— 圆石（Voronoi 石块 + 深灰浆缝 + 克制的倒角）——
+  fill(T.cobble, [84, 84, 87], 5, 1);
+  {
+    const r = rng(T.cobble, 31);
+    const pts = [];
+    for (let n = 0; n < 8; n++) pts.push([r() * TILE, r() * TILE, 112 + r() * 44]);
+    for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+      let d1 = 1e9, d2 = 1e9, best = 0;
+      const px = x + 0.5, py = y + 0.5;
+      for (let n = 0; n < pts.length; n++) {
+        const ddx = px - pts[n][0], ddy = py - pts[n][1];
+        const d = ddx * ddx + ddy * ddy;
+        if (d < d1) { d2 = d1; d1 = d; best = n; }
+        else if (d < d2) d2 = d;
+      }
+      const edge = (Math.sqrt(d2) - Math.sqrt(d1)) * 0.5;
+      if (edge < 0.72) { put(T.cobble, x, y, 54, 54, 57); continue; }   // 深灰浆缝
+      let s = pts[best][2];
+      if (edge < 1.35) s += 10;                       // 石块靠近缝隙的一圈提亮（磨边）
+      const bdx = px - pts[best][0], bdy = py - pts[best][1];
+      if (bdx + bdy > 0) s -= 9;                      // 只压暗右下，避免斜向亮条纹
+      put(T.cobble, x, y, clamp(s), clamp(s), clamp(s + 3));
+    }
+  }
+  // —— 沙（细密颗粒 + 缓丘波痕，不再是均匀噪点）——
+  fill(T.sand, [214, 196, 150], 6, 1);
+  {
+    for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+      // 两组正弦叠加做出沙丘的缓波，振幅很小只做质感
+      const ripple = Math.sin(x * 0.78 + Math.sin(y * 0.42) * 1.7) * 6 + Math.sin(y * 1.35) * 2.5;
+      const v = Math.round(214 + ripple);
+      put(T.sand, x, y, clamp(v), clamp(v - 18), clamp(v - 62));
+    }
+    speck(T.sand, [188, 168, 120], 16, 2);
+    speck(T.sand, [232, 216, 176], 10, 3);
+  }
+  // —— 沙砾（小卵石 Voronoi，比原来更像散落的碎石）——
+  fill(T.gravel, [92, 82, 74], 8, 1);
+  {
+    const r = rng(T.gravel, 41);
+    const pts = [];
+    for (let n = 0; n < 16; n++) {
+      const tone = r();
+      // 灰、褐、深褐三种卵石混在一起
+      pts.push([
+        r() * TILE, r() * TILE,
+        tone < 0.4 ? [124, 112, 100] : tone < 0.75 ? [150, 138, 124] : [96, 86, 78],
+      ]);
+    }
+    for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+      let d1 = 1e9, d2 = 1e9, best = 0;
+      const px = x + 0.5, py = y + 0.5;
+      for (let n = 0; n < pts.length; n++) {
+        const ddx = px - pts[n][0], ddy = py - pts[n][1];
+        const d = ddx * ddx + ddy * ddy;
+        if (d < d1) { d2 = d1; d1 = d; best = n; } else if (d < d2) d2 = d;
+      }
+      const edge = (Math.sqrt(d2) - Math.sqrt(d1)) * 0.5;
+      if (edge < 0.35) { put(T.gravel, x, y, 74, 66, 60); continue; }
+      const c = pts[best][2];
+      const bdx = px - pts[best][0], bdy = py - pts[best][1];
+      const lift = (-bdx - bdy) * 2.0;
+      put(T.gravel, x, y, clamp(c[0] + lift), clamp(c[1] + lift), clamp(c[2] + lift));
+    }
+  }
   // —— 原木侧 ——
   fill(T.logSide, [102, 74, 44], 14, 1);
   for (let x = 0; x < TILE; x += 2) for (let y = 0; y < TILE; y++) put(T.logSide, x, y, 78, 56, 32);
@@ -989,10 +1117,29 @@ function makeAtlas() {
       if (Math.abs(dist - r2) < 0.7) put(T.logTop, x, y, 78, 56, 32);
     }
   }
-  // —— 树叶 ——
-  fill(T.leaves, [62, 130, 46], 30, 1);
-  speck(T.leaves, [40, 96, 30], 30, 2);
-  speck(T.leaves, [92, 168, 66], 18, 3);
+  // —— 树叶（成簇叶团：亮面高处受光、层叠阴影与细碎叶隙）——
+  fill(T.leaves, [56, 118, 42], 20, 1);
+  {
+    const r = rng(T.leaves, 63);
+    // 5 个叶团：每个是一小片椭圆亮块，模拟伸展的叶片
+    for (let n = 0; n < 5; n++) {
+      const cx = r() * TILE, cy = r() * TILE, rr = 2.0 + r() * 2.2;
+      for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+        const ddx = x + 0.5 - cx, ddy = y + 0.5 - cy;
+        const dd = ddx * ddx + ddy * ddy;
+        if (dd > rr * rr) continue;
+        const lit = (-ddx - ddy) * 5.5;               // 左上受光
+        const fade = (1 - Math.sqrt(dd) / rr) * 16;   // 团心更亮
+        put(T.leaves, x, y, clamp(56 + lit + fade), clamp(118 + lit + fade), clamp(42 + lit * 0.7 + fade * 0.6));
+      }
+    }
+    // 暗部叶隙：稀疏的深绿点，制造层次
+    for (let n = 0; n < 26; n++) {
+      const x = (r() * TILE) | 0, y = (r() * TILE) | 0;
+      put(T.leaves, x, y, 34, 82, 28);
+    }
+    speck(T.leaves, [96, 168, 66], 12, 3);
+  }
   // —— 木板（错缝木板 + 板间阴影 + 铁钉）——
   fill(T.planks, [168, 128, 74], 14, 1);
   for (let row = 0; row < 4; row++) {
@@ -3455,9 +3602,11 @@ class World {
       const wz = baseZ + lz;
       for (let lx = 0; lx < CHUNK; lx++) {
         const wx = baseX + lx;
-        const surf = Math.floor(surfaceHeight(wx, wz));
+        // 同一列只算一次气候场：surfaceHeight 与 biomeOf 共用，省掉两次重复的 fbm 采样
+        const cl = climateAt(wx, wz);
+        const surf = Math.floor(surfaceHeightAt(wx, wz, cl));
         const beach = surf <= SEA + 2;
-        const bm = biomeOf(wx, wz);
+        const bm = biomeOfClimate(cl);
         const badlands = bm === 9 && !beach;                  // 恶地：分层砂岩/红砖
         const desert = (bm === 3 || badlands) && !beach;       // 沙漠（海滩仍为沙）
         const snowy = bm === 4 && !beach;                      // 雪地
@@ -4004,8 +4153,12 @@ function plantTrees(c) {
   c.treesPlanted = true;
   const rnd = mulberry32((c.cx * 374761393 + c.cz * 668265263) ^ 0x9e3779b9);
   const baseX = c.cx * 16, baseZ = c.cz * 16;
-  for (let lz = 2; lz < 14; lz++) {
-    for (let lx = 2; lx < 14; lx++) {
+  /* 树干只允许落在 [3, 13) 这个内圈：
+     树冠最大半径是 3（樱花/枫树与云杉底层），落在 3 时会正好顶到本区块边界（第 0 / 15 列），
+     不会溢出到邻块。原来从 2 开始，树冠会写进相邻区块，而 setRaw 不会把邻块标记为 edited，
+     于是飞远再飞回来（区块重载）时，边缘树的树冠就被地形重新生成冲掉——只剩半棵树。 */
+  for (let lz = 3; lz < 13; lz++) {
+    for (let lx = 3; lx < 13; lx++) {
       const wx = baseX + lx, wz = baseZ + lz;
       const surf = Math.floor(surfaceHeight(wx, wz));
       if (surf <= SEA) continue;
@@ -4037,7 +4190,7 @@ function plantTrees(c) {
         else if (r < 0.5) { log = B.BIRCH_LOG; leaf = B.BIRCH_LEAVES; }
       }
       else if (bm === 1) { if (rnd() < 0.1) { log = B.ACACIA_LOG; leaf = B.ACACIA_LEAVES; } }
-      if (rnd() > prob) continue;
+      if (rnd() > prob * 1.44) continue;   // 内圈面积是原来的 100/144，密度按比例补偿回来
       /* 确认长树后，仅把树干底下这唯一一格雪换成泥土，其余大片雪原完整保留薄雪覆盖 */
       if (ground === B.SNOW) world.setRaw(wx, surf, wz, B.DIRT);
 
@@ -5553,6 +5706,26 @@ const chickenHeadGeo = new THREE.BoxGeometry(0.22, 0.25, 0.22);
 const chickenLegGeo = new THREE.BoxGeometry(0.08, 0.22, 0.08);
 const chickenWingGeo = new THREE.BoxGeometry(0.05, 0.18, 0.28);
 
+// —— 生物配件（鼻/耳/尾/喙/冠/角）共用材质与几何 ——
+const mobBeakMat = new THREE.MeshLambertMaterial({ color: 0xe8a33d });   // 鸡喙 / 鸭黄色
+const mobCombMat = new THREE.MeshLambertMaterial({ color: 0xcf3b3b });   // 鸡冠与肉垂
+const mobHornMat = new THREE.MeshLambertMaterial({ color: 0xd9ceb0 });   // 牛角
+const mobDarkMat = new THREE.MeshLambertMaterial({ color: 0x2b2320 });   // 鼻孔、蹄、鼻头阴影
+const _mobGeoCache = new Map();
+function partGeo(w, h, d) {
+  const k = w + ',' + h + ',' + d;
+  let g = _mobGeoCache.get(k);
+  if (!g) { g = new THREE.BoxGeometry(w, h, d); _mobGeoCache.set(k, g); }
+  return g;
+}
+function addPart(g, mat, w, h, d, x, y, z, shadow = true) {
+  const m = new THREE.Mesh(partGeo(w, h, d), mat);
+  m.position.set(x, y, z);
+  if (shadow) { m.castShadow = true; m.receiveShadow = true; }
+  g.add(m);
+  return m;
+}
+
 function findGround(x, z) {
   const k = x * 65536 + z;               // 数值 key：避免 "x,z" 字符串分配与哈希
   const hit = groundCache.get(k);
@@ -5585,6 +5758,11 @@ function spawnAnimal(x, z, overrideKind = null, isBaby = false) {
     const wingL = new THREE.Mesh(chickenWingGeo, kind.bodyMat); wingL.position.set(0.20, 0.38, 0.02); wingL.castShadow = true; wingL.receiveShadow = true; g.add(wingL);
     const wingR = new THREE.Mesh(chickenWingGeo, kind.bodyMat); wingR.position.set(-0.20, 0.38, 0.02); wingR.castShadow = true; wingR.receiveShadow = true; g.add(wingR);
     wings = [wingL, wingR];
+    // 立体尖喙 + 头顶红色肉冠 + 颌下肉垂 + 尾羽（原来只有一个光头方块）
+    addPart(g, mobBeakMat, 0.10, 0.06, 0.09, 0, 0.62, -0.29, false);
+    addPart(g, mobCombMat, 0.05, 0.07, 0.12, 0, 0.78, -0.17, false);
+    addPart(g, mobCombMat, 0.04, 0.05, 0.04, 0, 0.57, -0.27, false);
+    addPart(g, kind.bodyMat, 0.06, 0.12, 0.14, 0, 0.50, 0.22, false);
   } else {
     // 四足牲畜（猪/羊/牛/灰狼）：各自对应精细比例
     let bGeo = cowBodyGeo, hGeo = cowHeadGeo, lGeo = cowLegGeo;
@@ -5603,6 +5781,40 @@ function spawnAnimal(x, z, overrideKind = null, isBaby = false) {
     const head = new THREE.Mesh(hGeo, kind.headMats); head.position.set(0, hY, hZ); head.castShadow = true; head.receiveShadow = true; g.add(head);
     for (const [dx, dz] of [[lDx, lDz], [lDx, -lDz], [-lDx, lDz], [-lDx, -lDz]]) {
       const leg = new THREE.Mesh(lGeo, kind.legMat); leg.position.set(dx, lH, dz); leg.castShadow = true; leg.receiveShadow = true; g.add(leg); legs.push(leg);
+    }
+    /* 各物种的立体五官与尾巴：让剪影一眼能认出猪/羊/牛/狼，
+       而不是四个长得一样的方块。位置按各自动作比例单独标定。 */
+    if (kind.name === 'pig') {
+      const fz = hZ - 0.20;                                   // 头部前表面 z
+      addPart(g, kind.bodyMat, 0.20, 0.14, 0.10, 0, hY - 0.04, fz - 0.05);   // 立体猪鼻
+      addPart(g, mobDarkMat, 0.05, 0.05, 0.02, 0.045, hY - 0.04, fz - 0.10, false);  // 鼻孔
+      addPart(g, mobDarkMat, 0.05, 0.05, 0.02, -0.045, hY - 0.04, fz - 0.10, false);
+      addPart(g, kind.headMats[0], 0.10, 0.12, 0.03, 0.15, hY + 0.16, hZ + 0.02, false);  // 立耳
+      addPart(g, kind.headMats[0], 0.10, 0.12, 0.03, -0.15, hY + 0.16, hZ + 0.02, false);
+      addPart(g, mobDarkMat, 0.05, 0.05, 0.10, 0, bY + 0.20, 0.46, false);   // 卷尾
+    } else if (kind.name === 'sheep') {
+      addPart(g, kind.bodyMat, 0.44, 0.16, 0.40, 0, hY + 0.24, hZ);          // 蓬松羊毛顶
+      addPart(g, kind.bodyMat, 0.08, 0.10, 0.14, 0.21, hY + 0.10, hZ + 0.02);   // 侧耳
+      addPart(g, kind.bodyMat, 0.08, 0.10, 0.14, -0.21, hY + 0.10, hZ + 0.02);
+      addPart(g, kind.bodyMat, 0.14, 0.14, 0.12, 0, bY + 0.12, 0.48, false);  // 短羊尾
+    } else if (kind.name === 'cow') {
+      const fz = hZ - 0.22;
+      addPart(g, kind.bodyMat, 0.30, 0.16, 0.10, 0, hY - 0.06, fz - 0.04);   // 宽吻部
+      addPart(g, mobDarkMat, 0.05, 0.04, 0.02, 0.09, hY - 0.06, fz - 0.09, false);
+      addPart(g, mobDarkMat, 0.05, 0.04, 0.02, -0.09, hY - 0.06, fz - 0.09, false);
+      addPart(g, kind.headMats[0], 0.10, 0.10, 0.16, 0.22, hY + 0.08, hZ + 0.04);   // 耳朵
+      addPart(g, kind.headMats[0], 0.10, 0.10, 0.16, -0.22, hY + 0.08, hZ + 0.04);
+      addPart(g, mobHornMat, 0.06, 0.10, 0.06, 0.15, hY + 0.26, hZ + 0.02, false);  // 牛角
+      addPart(g, mobHornMat, 0.06, 0.10, 0.06, -0.15, hY + 0.26, hZ + 0.02, false);
+      addPart(g, kind.bodyMat, 0.05, 0.42, 0.05, 0, bY + 0.10, 0.52, false);  // 长尾
+      addPart(g, mobDarkMat, 0.08, 0.08, 0.08, 0, bY + 0.32, 0.53, false);    // 尾端毛球
+    } else if (kind.name === 'wolf') {
+      const fz = hZ - 0.15;
+      addPart(g, kind.bodyMat, 0.16, 0.11, 0.12, 0, hY - 0.04, fz - 0.05);    // 长吻
+      addPart(g, mobDarkMat, 0.05, 0.04, 0.02, 0, hY - 0.01, fz - 0.11, false);  // 鼻头
+      addPart(g, kind.headMats[0], 0.08, 0.13, 0.04, 0.10, hY + 0.20, hZ + 0.02, false);  // 尖耳
+      addPart(g, kind.headMats[0], 0.08, 0.13, 0.04, -0.10, hY + 0.20, hZ + 0.02, false);
+      addPart(g, kind.bodyMat, 0.10, 0.10, 0.30, 0, bY + 0.16, 0.44, false);  // 尾巴
     }
   }
 
