@@ -380,7 +380,7 @@
     <div class="world-seed">世界种子 <b id="seedNum">0</b></div>
     <button class="pbtn danger" id="resetWorldBtn">🔄 重置世界</button>
     <button class="pbtn danger" id="newWorldBtn">🎲 生成新世界</button>
-    <div class="world-hint" id="worldHint">重置世界会清空存档（地形改动 + 背包 + 熔炉）后从同一片地形重新开始；生成新世界会换一片全新的地形。两个操作都需要点两次确认。</div>
+    <div class="world-hint" id="worldHint">快捷键：<b>F</b> 创造飞行 · <b>F5</b> 切换第一 / 第三人称视角 · <b>E</b> 背包 · <b>V</b> 望远镜 · <b>Q</b> 丢弃 · <b>0</b> 昼夜切换<br>重置世界会清空存档（地形改动 + 背包 + 熔炉）后从同一片地形重新开始；生成新世界会换一片全新的地形。两个操作都需要点两次确认。</div>
   </div>
 </div>
 
@@ -6813,7 +6813,7 @@ function updateEndermen(dt) {
   }
 
   const camDir = new THREE.Vector3();
-  camera.getWorldDirection(camDir);
+  aimDir(camDir);
 
   for (let i = endermen.length - 1; i >= 0; i--) {
     const e = endermen[i];
@@ -7296,10 +7296,10 @@ function updateIronGolems(dt) {
       }
     }
 
-    g.g.position.set(g.x, g.y, g.z);
+    const isMoving = target && minDist > 1.8;
+    g.g.position.set(g.x, g.y + mobBob(g.phase, isMoving, 0.022), g.z);
     g.g.rotation.y = g.heading + Math.PI;
 
-    const isMoving = target && minDist > 1.8;
     g.phase += dt * (isMoving ? 4.5 : 1.5);
     const swing = Math.sin(g.phase) * (isMoving ? 0.35 : 0.08);
 
@@ -7314,6 +7314,7 @@ function updateIronGolems(dt) {
       g.armR.rotation.x = -swing;
       g.armL.rotation.x = swing;
     }
+    mobHeadLook(g.head, g.g, 0.85);
   }
 }
 
@@ -7460,6 +7461,7 @@ function updateSnowGolems(dt) {
     s.phase += dt * 3.0;
     s.armL.rotation.x = Math.sin(s.phase) * 0.4;
     s.armR.rotation.x = -Math.sin(s.phase) * 0.4;
+    mobHeadLook(s.head, s.g, 0.8);      // 雪傀儡也会盯着你看
   }
 }
 
@@ -7570,6 +7572,31 @@ function findEntityGround(x, currY, z) {
   return topG;
 }
 
+/* 村民材质按职业缓存：原来每生成一个村民都要新建 3 个材质 + 3 张 16×16 贴图，
+   一座村庄 6 个村民就是 18 份资源。现在同职业共用一套，皮肤也换成带明暗的贴图。 */
+function paintVillagerSkin(ctx) {
+  ctx.fillStyle = '#c68c62'; ctx.fillRect(0, 0, 16, 16);
+  ctx.fillStyle = '#b87a52'; ctx.fillRect(0, 12, 16, 4);      // 下颌阴影
+  ctx.fillStyle = '#d69c72'; ctx.fillRect(2, 2, 3, 3); ctx.fillRect(11, 6, 2, 2);  // 高光
+}
+const _villagerSkinMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [198, 140, 98], 903, paintVillagerSkin) });
+const _villagerMatCache = new Map();
+function villagerMaterials(prof) {
+  let m = _villagerMatCache.get(prof);
+  if (m) return m;
+  let robeColor = '#8a542e', patColor = null, seed = 902;
+  if (prof === 'blacksmith') { robeColor = '#323438'; patColor = '#8a929a'; seed = 903; }
+  else if (prof === 'librarian') { robeColor = '#b82828'; patColor = '#e8b024'; seed = 904; }
+  else if (prof === 'cleric') { robeColor = '#6c1c82'; patColor = '#f2ce38'; seed = 905; }
+  else if (prof === 'shepherd') { robeColor = '#eae7dd'; patColor = '#734426'; seed = 906; }
+  m = {
+    face: new THREE.MeshLambertMaterial({ map: makeMobTex(16, [198, 140, 98], 901, paintVillagerFace) }),
+    robe: new THREE.MeshLambertMaterial({ map: makeMobTex(16, [140, 90, 50], seed, paintVillagerRobe(robeColor, patColor)) }),
+  };
+  _villagerMatCache.set(prof, m);
+  return m;
+}
+
 function spawnVillager(x, yOrProf, zOrNull = null, prof = 'farmer', isBaby = false) {
   let explicitY = null, actualZ = zOrNull, actualProf = prof;
   if (typeof yOrProf === 'number' && typeof zOrNull === 'number') {
@@ -7585,17 +7612,10 @@ function spawnVillager(x, yOrProf, zOrNull = null, prof = 'farmer', isBaby = fal
   const g = new THREE.Group();
   if (isBaby) g.scale.set(0.55, 0.55, 0.55);
 
-  const faceMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [198, 140, 98], 901, paintVillagerFace) });
-  const skinMat = new THREE.MeshLambertMaterial({ color: 0xc68c62 });
-  const headMats = [skinMat, skinMat, skinMat, skinMat, skinMat, faceMat];
-
-  let robeColor = '#8a542e', patColor = null;
-  if (actualProf === 'blacksmith') { robeColor = '#323438'; patColor = '#8a929a'; }
-  else if (actualProf === 'librarian') { robeColor = '#b82828'; patColor = '#e8b024'; }
-  else if (actualProf === 'cleric') { robeColor = '#6c1c82'; patColor = '#f2ce38'; }
-  else if (actualProf === 'shepherd') { robeColor = '#eae7dd'; patColor = '#734426'; }
-
-  const robeMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [140, 90, 50], 902 + (actualProf === 'blacksmith' ? 1 : actualProf === 'librarian' ? 2 : actualProf === 'cleric' ? 3 : actualProf === 'shepherd' ? 4 : 0), paintVillagerRobe(robeColor, patColor)) });
+  const mats = villagerMaterials(actualProf);
+  const skinMat = _villagerSkinMat;
+  const headMats = [skinMat, skinMat, skinMat, skinMat, skinMat, mats.face];
+  const robeMat = mats.robe;
 
   // 头部
   const head = new THREE.Mesh(villagerHeadGeo, headMats);
@@ -7714,7 +7734,7 @@ function updateVillagers(dt) {
       }
     }
 
-    v.g.position.set(v.x, v.y, v.z);
+    v.g.position.set(v.x, v.y + mobBob(v.phase, !v.isIdle || v.fleeing, 0.022), v.z);
     v.g.rotation.y = v.heading + Math.PI;
 
     if (!v.isIdle || v.fleeing) {
@@ -7723,10 +7743,11 @@ function updateVillagers(dt) {
       v.legs.forEach((leg, idx) => {
         leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
       });
-      v.head.rotation.y = Math.sin(v.phase * 0.5) * 0.12;
+      mobHeadLook(v.head, v.g, 0.75);      // 走路时也会转头看玩家
     } else {
       v.legs.forEach((leg) => { leg.rotation.x *= 0.8; });
-      v.head.rotation.y = 0;
+      // 站着发呆时更明显地"打量"玩家，比死板地回正自然
+      mobHeadLook(v.head, v.g, 0.95);
     }
   }
 }
@@ -8602,7 +8623,7 @@ function updateCats(dt) {
       }
     }
 
-    c.g.position.set(c.x, c.y, c.z);
+    c.g.position.set(c.x, c.y + mobBob(c.phase, !c.isIdle, 0.012), c.z);
     c.g.rotation.y = c.heading + Math.PI;
 
     c.phase += dt * (c.isIdle ? 1.5 : 6.5);
@@ -8615,6 +8636,7 @@ function updateCats(dt) {
     c.body.position.y = 0.26 + (c.isIdle ? 0 : Math.abs(Math.sin(c.phase * 2)) * 0.02);
     c.tail.rotation.y = Math.sin(c.phase) * 0.35;
     c.tail.rotation.z = Math.sin(c.phase * 1.2) * 0.15;
+    mobHeadLook(c.head, c.g, 1.0);     // 猫咪会一直盯着你
   }
 }
 
@@ -8925,13 +8947,14 @@ function updateHorses(dt) {
       h.phase = 0;
     }
 
-    h.g.position.set(h.x, h.y, h.z);
+    h.g.position.set(h.x, h.y + mobBob(h.phase, h.phase > 0, 0.02), h.z);
     h.g.rotation.y = h.heading + Math.PI;
 
     const swing = Math.sin(h.phase) * 0.25;
     h.legs.forEach((leg, idx) => {
       leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
     });
+    mobHeadLook(h.head, h.g, 0.9);      // 马也会回头看你
   }
 }
 
@@ -9819,9 +9842,10 @@ function meleeDamage() {
    原来的写法是对每一类生物都跑一遍判定，锥内挤在一起的两三只会被同一剑一起打中。 */
 function meleeAimScore(m, dir, maxDist = 4.6) {
   if (!m || !m.g) return null;
-  const dx = m.x - camera.position.x;
-  const dy = (m.g.position.y + 0.8) - camera.position.y;
-  const dz = m.z - camera.position.z;
+  const eye = aimOrigin();
+  const dx = m.x - eye.x;
+  const dy = (m.g.position.y + 0.8) - eye.y;
+  const dz = m.z - eye.z;
   const d = Math.hypot(dx, dy, dz);
   if (d > maxDist || d < 0.05) return null;
   const dot = (dx * dir.x + dy * dir.y + dz * dir.z) / d;
@@ -9834,9 +9858,10 @@ function meleeAimScore(m, dir, maxDist = 4.6) {
 }
 
 function meleeHitMob(m, dir) {
-  const dx = m.x - camera.position.x;
-  const dy = (m.g.position.y + 0.8) - camera.position.y;
-  const dz = m.z - camera.position.z;
+  const eye = aimOrigin();
+  const dx = m.x - eye.x;
+  const dy = (m.g.position.y + 0.8) - eye.y;
+  const dz = m.z - eye.z;
   const d = Math.hypot(dx, dy, dz) || 1;
   const ndx = dx / d, ndy = dy / d, ndz = dz / d;
   const zgy = m.g.position.y;
@@ -9854,7 +9879,7 @@ function alertWolves(target) {
 
 function meleeAttack() {
   const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
+  aimDir(dir);                      // 以玩家朝向为准，第三人称正面视角也不会反手
   const dmg = meleeDamage();
 
   /* 1) 收集全部候选，挑"最正对"的那一个。
@@ -9939,7 +9964,7 @@ function meleeAttack() {
 
   // 2) 只有这一剑什么都没打中时，才去试着拍水面捞鱼
   if (!hitAny) {
-    const wt = raycastWater(camera.position, dir, 4.5);
+    const wt = raycastWater(aimOrigin(), dir, 4.5);
     if (wt && Math.random() < 0.28) {
       dropItem(B.RAW_FISH, wt.x, wt.y, wt.z);
       spawnParticles(wt.x, wt.y, wt.z, 0x4c86a8, 6);
@@ -10195,8 +10220,8 @@ function throwSnowball() {
   refreshHotbar();
 
   const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
-  const origin = camera.position.clone().addScaledVector(dir, 0.4);
+  aimDir(dir);
+  const origin = aimOrigin().clone().addScaledVector(dir, 0.4);
 
   const mesh = new THREE.Mesh(snowballGeo, snowballMat);
   mesh.position.copy(origin);
@@ -10436,8 +10461,8 @@ function throwEnderPearl() {
   refreshHotbar();
 
   const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
-  const origin = camera.position.clone().addScaledVector(dir, 0.4);
+  aimDir(dir);
+  const origin = aimOrigin().clone().addScaledVector(dir, 0.4);
 
   const mesh = new THREE.Mesh(enderPearlGeo, enderPearlMat);
   mesh.position.copy(origin);
@@ -10500,8 +10525,8 @@ const enderEyeMat = new THREE.MeshBasicMaterial({ color: 0x16a085 });
 
 function launchEnderEye() {
   const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
-  const spawnPos = camera.position.clone().addScaledVector(dir, 0.5);
+  aimDir(dir);
+  const spawnPos = aimOrigin().clone().addScaledVector(dir, 0.5);
   const mesh = new THREE.Mesh(enderEyeGeo, enderEyeMat);
   mesh.position.copy(spawnPos);
   scene.add(mesh);
@@ -11374,8 +11399,8 @@ function shootArrow(power) {
   playBowShoot();
 
   const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
-  const origin = camera.position.clone().addScaledVector(dir, 0.35);
+  aimDir(dir);
+  const origin = aimOrigin().clone().addScaledVector(dir, 0.35);
 
   const arrowMatToUse = isSpectral ? new THREE.MeshLambertMaterial({ color: 0xffea00 }) : arrowMat;
   const mesh = new THREE.Mesh(arrowGeo, arrowMatToUse);
@@ -11414,8 +11439,8 @@ function shootCrossbow() {
   burst(0.08, 0.1, 900);
 
   const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
-  const origin = camera.position.clone().addScaledVector(dir, 0.4);
+  aimDir(dir);
+  const origin = aimOrigin().clone().addScaledVector(dir, 0.4);
 
   const arrowMatToUse = isSpectral ? new THREE.MeshLambertMaterial({ color: 0xffea00 }) : arrowMat;
   const mesh = new THREE.Mesh(arrowGeo, arrowMatToUse);
@@ -11693,8 +11718,8 @@ function castFishingRod() {
   }
 
   const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
-  const origin = camera.position.clone().addScaledVector(dir, 0.4);
+  aimDir(dir);
+  const origin = aimOrigin().clone().addScaledVector(dir, 0.4);
 
   const mesh = new THREE.Mesh(bobberGeo, bobberMat);
   mesh.position.copy(origin);
@@ -11765,7 +11790,7 @@ function updateFishing(dt) {
   const b = activeBobber;
   const sel = hotbar[selected];
 
-  const distPlayer = b.pos.distanceTo(camera.position);
+  const distPlayer = b.pos.distanceTo(aimOrigin());
   if (!sel || sel.id !== B.FISHING_ROD || distPlayer > 32) {
     scene.remove(b.mesh);
     fishingLineMesh.visible = false;
@@ -11773,9 +11798,9 @@ function updateFishing(dt) {
     return;
   }
 
-  const handPos = camera.position.clone();
+  const handPos = aimOrigin().clone();
   const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
+  aimDir(dir);
   const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
   handPos.addScaledVector(dir, 0.35).addScaledVector(right, 0.22).add(new THREE.Vector3(0, -0.22, 0));
 
@@ -11869,6 +11894,134 @@ const player = {
   air: 20,
 };
 let maxFallY = null;   // 摔落起点高度（用于计算摔落伤害）
+
+/* ============================ 🧍 玩家模型（第三人称可见） ============================
+   和村民/僵尸同一套方块比例：腿 0.7 + 躯干 0.6 + 头 0.5 = 1.8 格，
+   与碰撞盒（height 1.8 / eye 1.62）完全对齐，第三人称时脚下不会浮空。 */
+function paintPlayerFace(ctx) {
+  // 额前棕色刘海
+  ctx.fillStyle = '#4a3320'; ctx.fillRect(0, 0, 16, 4);
+  ctx.fillRect(1, 4, 2, 1); ctx.fillRect(13, 4, 2, 1);
+  // 眉毛
+  ctx.fillStyle = '#3a2818'; ctx.fillRect(3, 5, 3, 1); ctx.fillRect(10, 5, 3, 1);
+  // 眼白 + 蓝色瞳孔 + 高光
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(3, 6, 3, 3); ctx.fillRect(10, 6, 3, 3);
+  ctx.fillStyle = '#3a5a8c'; ctx.fillRect(4, 7, 2, 2); ctx.fillRect(11, 7, 2, 2);
+  ctx.fillStyle = '#141821'; ctx.fillRect(4, 7, 1, 1); ctx.fillRect(11, 7, 1, 1);
+  // 鼻梁阴影
+  ctx.fillStyle = '#cf9f7d'; ctx.fillRect(7, 8, 2, 3);
+  // 嘴
+  ctx.fillStyle = '#8a5a4a'; ctx.fillRect(6, 12, 4, 1);
+  // 下颚阴影
+  ctx.fillStyle = '#c9977a'; ctx.fillRect(4, 13, 8, 2);
+}
+function paintPlayerHair(ctx) {
+  ctx.fillStyle = '#4a3320'; ctx.fillRect(0, 0, 16, 16);
+  ctx.fillStyle = '#5c4028';
+  for (let i = 0; i < 12; i++) ctx.fillRect((i * 5) % 14, (i * 7) % 13, 2, 3);
+  ctx.fillStyle = '#39260f'; ctx.fillRect(0, 13, 16, 3);   // 后颈发根更暗
+}
+function paintPlayerBody(ctx) {
+  ctx.fillStyle = '#00a8a8'; ctx.fillRect(0, 0, 16, 16);        // 青色 T 恤
+  ctx.fillStyle = '#0a8c8c'; ctx.fillRect(0, 0, 16, 2);         // 肩线
+  ctx.fillStyle = '#0a8c8c'; ctx.fillRect(0, 14, 16, 2);        // 下摆
+  ctx.fillStyle = '#e8e8e8'; ctx.fillRect(6, 0, 4, 2);          // 领口内衬
+  ctx.fillStyle = '#008c8c'; ctx.fillRect(7, 2, 2, 1);
+  ctx.fillStyle = '#26bcbc'; ctx.fillRect(2, 5, 3, 5); ctx.fillRect(11, 5, 3, 5);  // 布料高光
+}
+function paintPlayerArm(ctx) {
+  ctx.fillStyle = '#00a8a8'; ctx.fillRect(0, 0, 16, 5);         // 短袖
+  ctx.fillStyle = '#0a8c8c'; ctx.fillRect(0, 4, 16, 1);
+  ctx.fillStyle = '#e2ba96'; ctx.fillRect(0, 5, 16, 11);        // 小臂肤色
+  ctx.fillStyle = '#d2a882'; ctx.fillRect(0, 14, 16, 2);        // 手腕阴影
+}
+function paintPlayerLeg(ctx) {
+  ctx.fillStyle = '#46408f'; ctx.fillRect(0, 0, 16, 12);        // 牛仔裤
+  ctx.fillStyle = '#5a52ad'; ctx.fillRect(2, 3, 4, 4);          // 膝部磨白
+  ctx.fillStyle = '#3a3a44'; ctx.fillRect(0, 12, 16, 4);        // 鞋
+  ctx.fillStyle = '#22222a'; ctx.fillRect(0, 15, 16, 1);
+}
+const playerHeadMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [226, 186, 150], 9001, null) });
+const playerFaceMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [226, 186, 150], 9002, paintPlayerFace) });
+const playerHairMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [74, 51, 32], 9003, paintPlayerHair) });
+// 头部 6 面：只把脸放在 -Z，其余是头发/皮肤
+const playerHeadMats = [playerHairMat, playerHairMat, playerHairMat, playerHeadMat, playerHairMat, playerFaceMat];
+const playerBodyMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [0, 168, 168], 9004, paintPlayerBody) });
+const playerArmMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [226, 186, 150], 9005, paintPlayerArm) });
+const playerLegMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [70, 64, 143], 9006, paintPlayerLeg) });
+
+const playerModel = new THREE.Group();
+const playerHead = new THREE.Mesh(partGeo(0.5, 0.5, 0.5), playerHeadMats);
+playerHead.position.set(0, 1.55, 0);
+playerHead.castShadow = true; playerHead.receiveShadow = true;
+playerModel.add(playerHead);
+
+const playerTorso = new THREE.Mesh(partGeo(0.5, 0.6, 0.25), playerBodyMat);
+playerTorso.position.set(0, 1.0, 0);
+playerTorso.castShadow = true; playerTorso.receiveShadow = true;
+playerModel.add(playerTorso);
+
+// 手臂 / 腿都以关节为轴（Group 做枢轴，网格下移半个长度），摆动才自然
+const playerArms = [], playerLegs = [];
+for (const sx of [-1, 1]) {
+  const pivot = new THREE.Group();
+  pivot.position.set(sx * 0.375, 1.3, 0);
+  const arm = new THREE.Mesh(partGeo(0.25, 0.6, 0.25), playerArmMat);
+  arm.position.y = -0.3;
+  arm.castShadow = true; arm.receiveShadow = true;
+  pivot.add(arm);
+  playerModel.add(pivot);
+  playerArms.push(pivot);
+}
+for (const sx of [-1, 1]) {
+  const pivot = new THREE.Group();
+  pivot.position.set(sx * 0.125, 0.7, 0);
+  const leg = new THREE.Mesh(partGeo(0.25, 0.7, 0.25), playerLegMat);
+  leg.position.y = -0.35;
+  leg.castShadow = true; leg.receiveShadow = true;
+  pivot.add(leg);
+  playerModel.add(pivot);
+  playerLegs.push(pivot);
+}
+playerModel.visible = false;
+scene.add(playerModel);
+
+let playerWalkPhase = 0;
+/* 第三人称下同步玩家模型的位置、朝向与四肢摆动。
+   朝向和相机一致：相机前向是 (-sin yaw, ·, -cos yaw)，模型本地 -Z 朝前，所以直接取 yaw。 */
+function updatePlayerModel(dt) {
+  if (!playerModel.visible) return;
+  const riding = !!player.ridingHorse;
+  playerModel.position.set(player.pos.x, player.pos.y, player.pos.z);
+  playerModel.rotation.y = player.yaw;
+  const spd = Math.hypot(player.vel.x, player.vel.z);
+  const moving = !player.fly && spd > 0.3;
+  if (moving) playerWalkPhase += dt * (4 + spd * 1.4);
+  const swing = moving ? Math.sin(playerWalkPhase) * 0.55 : 0;
+  playerLegs[0].rotation.x = swing;
+  playerLegs[1].rotation.x = -swing;
+  // 手臂与腿反相，像真正的对侧摆动；游泳/滑翔时手臂抬起
+  if (player.gliding) {
+    playerArms[0].rotation.x = -1.35;
+    playerArms[1].rotation.x = -1.35;
+    playerArms[0].rotation.z = 0.22;
+    playerArms[1].rotation.z = -0.22;
+  } else if (riding) {
+    playerArms[0].rotation.x = -0.85;
+    playerArms[1].rotation.x = -0.85;
+    playerArms[0].rotation.z = 0;
+    playerArms[1].rotation.z = 0;
+    playerLegs[0].rotation.x = -0.9;
+    playerLegs[1].rotation.x = -0.9;
+  } else {
+    playerArms[0].rotation.x = -swing * 0.85;
+    playerArms[1].rotation.x = swing * 0.85;
+    playerArms[0].rotation.z = 0;
+    playerArms[1].rotation.z = 0;
+  }
+  // 抬头/低头：模型头部跟着视角轻微俯仰，第三人称也能看出你在看哪
+  playerHead.rotation.x = Math.max(-0.55, Math.min(0.55, player.pitch * 0.6));
+}
 function findSpawn() {
   for (let r = 0; r < 200; r += 4) {
     for (let a = 0; a < 8; a++) {
@@ -12448,7 +12601,7 @@ function updatePlayer(dt) {
       }
     } else if (player.gliding) {
       const camDir = new THREE.Vector3();
-      camera.getWorldDirection(camDir);
+      aimDir(camDir);
       let spd = Math.hypot(player.vel.x, player.vel.z);
       if (spd < 11) spd = 11;
 
@@ -12605,9 +12758,13 @@ function updatePlayer(dt) {
   const bobY = Math.sin(bobT) * 0.05 * Math.min(1, bob / 5);
   const bobX = Math.cos(bobT * 0.5) * 0.025 * Math.min(1, bob / 5);
 
-  camera.position.set(player.pos.x, player.pos.y + player.eye + bobY, player.pos.z);
-  camera.rotation.set(player.pitch, player.yaw, 0);
-  camera.translateX(bobX);
+  if (cameraMode === 0) {
+    camera.position.set(player.pos.x, player.pos.y + player.eye + bobY, player.pos.z);
+    camera.rotation.set(player.pitch, player.yaw, 0);
+    camera.translateX(bobX);
+  } else {
+    applyThirdPersonCamera();
+  }
   if (screenShake > 0) {
     camera.position.x += (Math.random() - 0.5) * screenShake;
     camera.position.y += (Math.random() - 0.5) * screenShake;
@@ -12617,6 +12774,68 @@ function updatePlayer(dt) {
 }
 let bob = 0, bobT = 0;
 let stepDist = 0, stepFoot = false, wasInWater = false;
+
+/* ============================ 🎥 F5 视角（第一人称 / 第三人称后 / 第三人称前） ============================ */
+let cameraMode = 0;                              // 0 = 第一人称，1 = 背后，2 = 正面
+const TP_DIST = 3.9;                             // 第三人称默认距离
+const _tpDir = new THREE.Vector3();
+const _tpScratch = new THREE.Vector3();
+const _tpTarget = new THREE.Vector3();
+const _tpPos = new THREE.Vector3();
+
+/* 使用当前 yaw/pitch 构造视线方向（与 camera.rotation.set(pitch, yaw, 0) 等价） */
+function viewDir(out) {
+  const cp = Math.cos(player.pitch);
+  return out.set(-cp * Math.sin(player.yaw), Math.sin(player.pitch), -cp * Math.cos(player.yaw));
+}
+
+/* 交互 / 攻击 / 投掷的基准点与方向。
+   第三人称只是把"观察点"挪到相机上，射线起点仍应固定在玩家眼睛上 ——
+   否则从背后 4 格的相机往前打，实际够到的距离会凭空少掉 4 格。 */
+const _aimO = new THREE.Vector3();
+function aimOrigin() { return _aimO.set(player.pos.x, player.pos.y + player.eye, player.pos.z); }
+function aimDir(out) { return viewDir(out); }
+
+/* 第三人称相机：
+   mode 1 = 相机站在玩家背后、朝玩家看去的同向视角（经典背后视角）；
+   mode 2 = 相机移到玩家正前方、回头看脸（自拍视角）。
+   相机与玩家之间用射线检测，遇到方块就向内收，避免镜头穿墙看到"黑屏"。 */
+function applyThirdPersonCamera() {
+  _tpTarget.set(player.pos.x, player.pos.y + player.eye * 0.92, player.pos.z);
+  viewDir(_tpDir);
+  const front = cameraMode === 2;
+  const sign = front ? 1 : -1;                    // 正面视角把相机放到视线前方
+
+  // 先按最大距离试放，若中间被墙挡住就把距离收短
+  let dist = TP_DIST;
+  _tpScratch.copy(_tpDir).multiplyScalar(sign);
+  const hit = raycast(_tpTarget, _tpScratch, TP_DIST);
+  if (hit) {
+    const hd = Math.hypot(hit.x + 0.5 - _tpTarget.x, hit.y + 0.5 - _tpTarget.y, hit.z + 0.5 - _tpTarget.z);
+    dist = Math.max(1.05, hd - 0.35);
+  }
+  _tpPos.copy(_tpTarget).addScaledVector(_tpDir, sign * dist);
+  camera.position.copy(_tpPos);
+  if (front) {
+    // 回头看玩家：yaw 转半圈，pitch 取反
+    camera.rotation.set(-player.pitch, player.yaw + Math.PI, 0);
+  } else {
+    camera.rotation.set(player.pitch, player.yaw, 0);
+  }
+}
+
+/* 切换视角：同时同步玩家模型的可见性（第一人称看不见自己，但仍要投影子） */
+function setCameraMode(mode) {
+  cameraMode = ((mode % 3) + 3) % 3;
+  const third = cameraMode !== 0;
+  if (typeof playerModel !== 'undefined') playerModel.visible = third;
+  if (typeof playerShadowMesh !== 'undefined') playerShadowMesh.visible = !third;   // 有实体模型时由它自己投影
+  return cameraMode;
+}
+function cycleCameraMode() {
+  const m = setCameraMode(cameraMode + 1);
+  toast(m === 0 ? '🎥 第一人称视角' : (m === 1 ? '🎥 第三人称 · 背后视角' : '🎥 第三人称 · 正面视角'));
+}
 
 /* ============================ 射线拾取 ============================ */
 /* 原实现每步都重建 face 数组字面量；这里改成 3 个标量，
@@ -15309,8 +15528,8 @@ scene.add(breakingMesh);
 
 function startBreaking() {
   const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
-  const hit = raycast(camera.position, dir, 6);
+  aimDir(dir);
+  const hit = raycast(aimOrigin(), dir, 6);
   if (!hit || hit.id === B.AIR || hit.id === B.WATER) { stopBreaking(); return; }
   breaking = { x: hit.x, y: hit.y, z: hit.z, id: hit.id, progress: 0 };
   breakingMesh.position.set(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5);
@@ -15326,8 +15545,8 @@ function updateBreaking(dt) {
   /* 按住左键 = 连续挖：一个方块挖掉后自动对准准星里的下一个（射程内一直挖下去） */
   if (!breaking) { startBreaking(); if (!breaking) return; }
   const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
-  const hit = raycast(camera.position, dir, 6);
+  aimDir(dir);
+  const hit = raycast(aimOrigin(), dir, 6);
   if (!hit || hit.x !== breaking.x || hit.y !== breaking.y || hit.z !== breaking.z) { stopBreaking(); return; }
   const base = hardnessOf(breaking.id);
   const h = base / effSpeed(breaking.id);           // 手持工具加速挖掘
@@ -15452,6 +15671,11 @@ document.addEventListener('keydown', (e) => {
     player.vel.y = 0;
     toast(player.fly ? '✨ 已开启创造模式（自由翱翔，无伤害）' : '🚶 已切换为生存模式');
   }
+  if (e.code === 'F5') {
+    e.preventDefault();          // 拦掉浏览器的刷新
+    cycleCameraMode();
+    return;
+  }
   if (e.code === 'KeyN') { timeOfDay = 0.24; }                 // 跳到白天
   if (e.code === 'KeyE' || e.key === 'e' || e.key === 'E') {
     e.preventDefault();
@@ -15471,8 +15695,8 @@ document.addEventListener('keydown', (e) => {
     const sel = hotbar[selected];
     if (sel && sel.count > 0) {
       const dir = new THREE.Vector3();
-      camera.getWorldDirection(dir);
-      const dropPos = camera.position.clone().addScaledVector(dir, 0.6);
+      aimDir(dir);
+      const dropPos = aimOrigin().clone().addScaledVector(dir, 0.6);
       dropItem(sel.id, dropPos.x - 0.5, dropPos.y - 0.7, dropPos.z - 0.5);
       const it = items[items.length - 1];
       if (it) {
@@ -15518,9 +15742,9 @@ addEventListener('wheel', (e) => {
 });
 
 function onMousedown(btn) {
-  const origin = camera.position;
+  const origin = aimOrigin();
   const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
+  aimDir(dir);
   const sel = hotbar[selected];
   if (btn === 2) { // 放置 / 交互
     // 手持木弓右键拉弦蓄力
@@ -17248,6 +17472,7 @@ function animate() {
   moon.target.updateMatrixWorld();
   sky.position.copy(player.pos);
   playerShadowMesh.position.set(player.pos.x, player.pos.y + 0.88, player.pos.z);
+  updatePlayerModel(dt);   // 第三人称玩家模型的位置 / 朝向 / 四肢摆动
 
   // 云层在平流层缓缓漂移（高空大尺度离散方块云，随风向天际悠然流淌）
   cloudTex.offset.x = (clock.elapsedTime * 0.0005) % 1;
