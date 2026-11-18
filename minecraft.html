@@ -3931,6 +3931,15 @@ class World {
     this.ensureChunk(cx, cz);
     const c = this.chunks.get(key(cx, cz));
     const idx = y * 256 + (z - cz * 16) * 16 + (x - cx * 16);
+    /* 写入相同方块时直接返回：村庄/道路生成与玩家放置都会产生大量"原值覆盖"，
+       每次都会 markDirtyBlock 触发整块区域重新网格化，纯属白烧 CPU。 */
+    if (c.blocks[idx] === id) {
+      if (id !== B.AIR && id !== B.WATER && c.water[idx] > 0) {
+        c.water[idx] = 0; c.edited = true;
+        markDirtyBlock(x, y, z);
+      }
+      return;
+    }
     c.blocks[idx] = id;
     if (id !== B.AIR && id !== B.WATER && c.water[idx] > 0) {
       c.water[idx] = 0;
@@ -4056,7 +4065,26 @@ function saveWorld() {
   for (const c of world.chunks.values()) if (c.edited) push(c.cx, c.cz, c.blocks, c.water);
   for (const s of editedChunks.values()) push(s.cx, s.cz, s.blocks, s.water);
   try {
-    if (saved.length > 0) localStorage.setItem('mc_world_v1', JSON.stringify(saved));
+    if (saved.length > 0) {
+      /* 村庄/道路会横跨十几个区块，每个区块 base64 后约 33KB —— 存档很容易顶到
+         localStorage 的 5MB 配额。配额爆掉时如果直接放弃，玩家连身边的家都会丢。
+         这里做"按距离裁剪"降级：先保玩家附近，逐步砍半，直到写得进去。 */
+      const writeWorld = (list) => localStorage.setItem('mc_world_v1', JSON.stringify(list));
+      try {
+        writeWorld(saved);
+      } catch (quotaErr) {
+        const px = Math.floor(player.pos.x / 16), pz = Math.floor(player.pos.z / 16);
+        const ranked = saved.slice().sort((a, b) =>
+          (Math.abs(a.cx - px) + Math.abs(a.cz - pz)) - (Math.abs(b.cx - px) + Math.abs(b.cz - pz)));
+        let keep = ranked;
+        let ok = false;
+        for (let attempt = 0; attempt < 8 && !ok; attempt++) {
+          keep = ranked.slice(0, Math.max(12, Math.ceil(keep.length / 2)));
+          try { writeWorld(keep); ok = true; } catch (e2) { /* 继续砍半 */ }
+        }
+        if (!ok) console.warn('[save] localStorage 配额不足，本次仅保存背包');
+      }
+    }
     // 背包存档（含工具耐久）
     const invData = {
       hotbar: hotbar.map((s) => (s ? [s.id, s.count, s.dur || 0] : null)),
@@ -7315,6 +7343,8 @@ function updateSnowGolems(dt) {
 /* ============================ 👨‍🌾 村庄与村民生态系统 (Villages & Villager Trading) ============================ */
 const villagers = [];
 const villageCenters = new Set();
+/* 已建成村庄的世界坐标（环境音用它判断"是否靠近村庄"）。 */
+const villagePositions = [];
 let tradeOpen = false;
 let currentTradingVillager = null;
 
@@ -7531,7 +7561,7 @@ function updateVillagers(dt) {
           v.x = nx; v.z = nz; v.y = tg;
         }
       }
-      if (Math.random() < 0.04) playVillagerHmm();
+      if (Math.random() < 0.04) sfxAt(v.x, v.y, v.z, playVillagerHmm, 30);
     } else {
       v.fleeing = false;
       v.timer -= dt;
@@ -7539,7 +7569,7 @@ function updateVillagers(dt) {
         v.isIdle = Math.random() < 0.55;
         v.timer = v.isIdle ? (3 + Math.random() * 4) : (2.5 + Math.random() * 3.5);
         if (!v.isIdle) v.heading = Math.random() * Math.PI * 2;
-        if (Math.random() < 0.25) playVillagerHmm();
+        if (Math.random() < 0.25) sfxAt(v.x, v.y, v.z, playVillagerHmm, 30);
       }
 
       if (!v.isIdle) {
@@ -7708,6 +7738,7 @@ function buildVillage(c) {
   const vk = `${c.cx},${c.cz}`;
   if (villageCenters.has(vk)) return;
   villageCenters.add(vk);
+  villagePositions.push({ x: cx8, y: gy, z: cz8 });
 
   // —— 建筑基底填充函数：彻底根除建筑浮空问题，向下深填实心圆石支撑柱 ——
   const fillFoundation = (minX, maxX, minZ, maxZ, floorY, floorMat = B.COBBLE) => {
@@ -7776,12 +7807,20 @@ function buildVillage(c) {
   const paveSmoothStrip = (steps, startY = gy) => {
     let curY = startY;
     for (const step of steps) {
-      if (step.some(([x, z]) => isBuildingZone(x, z))) continue;
+      /* 原来只要这一步里有一格落在建筑保护区，就丢掉整个 2 格宽的台阶 ——
+         道路贴着房子走时会留下一块块空洞。现在改成过滤掉保护区里的格子，
+         只要还剩至少一格就继续铺，路宽变窄但不断头。 */
+      const cells = step.filter(([x, z]) => !isBuildingZone(x, z));
+      if (cells.length === 0) continue;
 
       let avgGround = 0;
-      for (const [x, z] of step) {
-        let sy = 0;
-        for (let y = HEIGHT - 2; y >= 1; y--) {
+      for (const [x, z] of cells) {
+        let sy = curY;
+        /* 只从 curY + 8 往下扫：道路高度被限制在每步 ±1 格，往下找 10 格足够；
+           原来从 HEIGHT-2 全高度扫，每条路要多做几十倍的 getBlock。 */
+        const from = Math.min(HEIGHT - 2, curY + 8);
+        const to = Math.max(1, curY - 10);
+        for (let y = from; y >= to; y--) {
           const b = world.getBlock(x, y, z);
           if (isSolid(b) && b !== B.LOG && b !== B.PLANKS && b !== B.DOOR && b !== B.GLASS && b !== B.STONE_BRICK && !isLeaf(b)) {
             sy = y; break;
@@ -7789,17 +7828,21 @@ function buildVillage(c) {
         }
         avgGround += sy;
       }
-      avgGround = Math.round(avgGround / step.length);
+      avgGround = Math.round(avgGround / cells.length);
 
       if (avgGround > curY) curY += 1;
       else if (avgGround < curY) curY -= 1;
 
-      for (const [x, z] of step) {
+      for (const [x, z] of cells) {
         // 若当前格已有建筑方块（木板、原木、石砖、玻璃、门、箱子、熔炉等），严格跳过保留，绝不破坏！
         const checkB = world.getBlock(x, curY, z);
         if (checkB === B.PLANKS || checkB === B.LOG || checkB === B.STONE_BRICK || checkB === B.DOOR || checkB === B.GLASS || checkB === B.CHEST || checkB === B.FURNACE || checkB === B.BED || checkB === B.QUARTZ) continue;
 
-        const mat = ((x * 5 + z * 11) % 4 === 0) ? B.COBBLE : B.GRAVEL;
+        /* 路面材质：原来用 (x*5+z*11)%4 会形成规则的斜条纹，
+           改成哈希混合 → 圆石为主、掺沙砾与苔石，像被踩出来的乡间土路。 */
+        const hsh = (Math.imul(x, 73856093) ^ Math.imul(z, 19349663)) >>> 0;
+        const pick = hsh % 100;
+        const mat = pick < 52 ? B.COBBLE : (pick < 84 ? B.GRAVEL : (pick < 94 ? B.COBBLE : B.MOSSY));
         world.setBlock(x, curY, z, mat);
 
         // 仅在上方是自然方块（空气/花草/树叶/泥土/沙子）时清理净空，绝不掏空建筑屋顶或室内
@@ -7822,6 +7865,14 @@ function buildVillage(c) {
 
   // 1. 中央集市广场与水井金钟 (Town Plaza & Well)
   fillFoundation(cx8 - 4, cx8 + 4, cz8 - 4, cz8 + 4, gy, B.STONE_BRICK);
+  /* 广场铺装细节：外圈圆石镶边 + 四角石英镶嵌，
+     中间仍保持开阔石砖（水井随后覆盖中心 4×4）。 */
+  for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++) {
+    const onEdge = (Math.abs(dx) === 4 || Math.abs(dz) === 4);
+    const onCorner = (Math.abs(dx) >= 3 && Math.abs(dz) >= 3);
+    if (onEdge) world.setBlock(cx8 + dx, gy - 1, cz8 + dz, B.COBBLE);
+    else if (onCorner) world.setBlock(cx8 + dx, gy - 1, cz8 + dz, B.QUARTZ);
+  }
   // 原版经典敞开式水井 (4x4 外部，2x2 内部开阔泉水井道，严禁堵塞)
   for (let dz = -1; dz <= 2; dz++) {
     for (let dx = -1; dx <= 2; dx++) {
@@ -8138,13 +8189,25 @@ function buildVillage(c) {
   for (let dz = -6; dz >= -16; dz--) ranBranch.push([[cx8 + 9, cz8 + dz], [cx8 + 10, cz8 + dz]]);
   paveSmoothStrip(ranBranch, gy);
 
-  // 街道火把立柱路灯
-  for (const [lx, lz] of [[-6, -6], [6, -6], [-6, 6], [6, 6], [0, -18], [0, 19], [-18, 0], [18, 0]]) {
-    const px = cx8 + lx, pz = cz8 + lz;
-    const sy = findGround(px, pz);
+  // 街道火把立柱路灯：广场四角 + 沿四条主干道每 6 格一盏（立在路侧，不挡道）
+  const placeLamp = (px, pz) => {
+    if (isBuildingZone(px, pz)) return;
+    const sy = findGround(px, pz);                 // 最高的实体方块之上的空气层
+    const ground = world.getBlock(px, sy - 1, pz);
+    if (!isSolid(ground) || ground === B.WATER) return;   // 悬空或水面上不立灯
     world.setBlock(px, sy, pz, B.LOG);
     world.setBlock(px, sy + 1, pz, B.LOG);
     world.setBlock(px, sy + 2, pz, B.TORCH);
+    world.setBlock(px, sy + 3, pz, B.AIR);
+  };
+  for (const [lx, lz] of [[-6, -6], [6, -6], [-6, 6], [6, 6]]) placeLamp(cx8 + lx, cz8 + lz);
+  for (let d = 6; d <= 24; d += 6) {
+    // 东西主干道：两侧交替立灯
+    placeLamp(cx8 + d, cz8 + 3);
+    placeLamp(cx8 - d, cz8 - 1);
+    // 南北主干道：两侧交替立灯
+    placeLamp(cx8 + 2, cz8 + d);
+    placeLamp(cx8 - 3, cz8 - d);
   }
 
   // 建立村庄自然干草垛堆群（原版风貌：在农田、粮仓与外围集聚成堆）
@@ -8383,7 +8446,7 @@ function updateCats(dt) {
         c.isIdle = Math.random() < 0.6;
         c.timer = c.isIdle ? (3 + Math.random() * 4) : (2 + Math.random() * 3);
         if (!c.isIdle) c.heading = Math.random() * Math.PI * 2;
-        if (Math.random() < 0.2) playCatMeow();
+        if (Math.random() < 0.2) sfxAt(c.x, c.y, c.z, playCatMeow, 24);
       }
       if (!c.isIdle) {
         const nx = c.x + Math.sin(c.heading) * c.speed * dt;
@@ -9535,7 +9598,7 @@ function updateWanderingTrader(dt) {
     tr.isIdle = Math.random() < 0.6;
     tr.timer = tr.isIdle ? (3 + Math.random() * 4) : (2 + Math.random() * 3);
     if (!tr.isIdle) tr.heading = Math.random() * Math.PI * 2;
-    if (Math.random() < 0.3) playVillagerHmm();
+    if (Math.random() < 0.3) sfxAt(tr.x, tr.y, tr.z, playVillagerHmm, 28);
   }
 
   if (!tr.isIdle) {
@@ -12495,6 +12558,26 @@ function ensureNoise() {
   return noiseBuf;
 }
 // 原版 MC 纯正自然音调合成器（正弦波/三角波/自然平滑指数衰减）
+/* 全局音效增益：供「按距离衰减」的 3D 音效临时压低声压。
+   tone/burst/playPop 等合成函数在创建节点时同步读取它，不会影响已排程的声音。 */
+let sfxGain = 1;
+function withGain(scale, fn) {
+  const prev = sfxGain;
+  sfxGain = prev * scale;
+  try { fn(); } finally { sfxGain = prev; }
+}
+/* 3D 音效：按与玩家的距离做平方衰减，远处的声音不再和贴脸一样响。 */
+function sfxAt(x, y, z, fn, maxDist = 32) {
+  const dx = x - player.pos.x;
+  const dy = y - (player.pos.y + (player.eye || 1.6));
+  const dz = z - player.pos.z;
+  const d2 = dx * dx + dy * dy + dz * dz;
+  const md2 = maxDist * maxDist;
+  if (d2 > md2) return;
+  const falloff = 1 - Math.sqrt(d2) / maxDist;
+  withGain(0.18 + 0.82 * falloff * falloff, fn);
+}
+
 function tone(f0, f1, dur, type = 'sine', vol = 0.08, delay = 0) {
   if (!ensureAudio()) return;
   const t = audioCtx.currentTime + (delay || 0);
@@ -12504,7 +12587,7 @@ function tone(f0, f1, dur, type = 'sine', vol = 0.08, delay = 0) {
   if (f1 && f1 !== f0) {
     o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur * 0.9);
   }
-  g.gain.setValueAtTime(Math.max(0.0001, (vol || 0.08)), t);
+  g.gain.setValueAtTime(Math.max(0.0001, (vol || 0.08) * sfxGain), t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   o.connect(g); g.connect(masterGain);
   o.start(t); o.stop(t + dur + 0.02);
@@ -12530,7 +12613,7 @@ function burst(dur, vol, freq, type, delay) {
   f.type = type || 'lowpass';
   f.frequency.value = freq || 800;
   const g = audioCtx.createGain();
-  g.gain.setValueAtTime(Math.max(0.0001, (vol || 0.08)), t);
+  g.gain.setValueAtTime(Math.max(0.0001, (vol || 0.08) * sfxGain), t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   src.connect(f); f.connect(g); g.connect(masterGain);
   src.start(t, Math.random() * 0.25, dur);
@@ -12550,6 +12633,22 @@ function isPlantMat(id) {
 function isEarthMat(id) {
   return id === B.DIRT || id === B.GRASS || id === B.SAND || id === B.GRAVEL || id === B.SNOW;
 }
+// 金属：清脆带余韵的金属声（铁块/金块/铜块/磁石/钟/锁链/铁砧/避雷针/信标/标靶）
+function isMetalMat(id) {
+  return id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.COPPER_BLOCK || id === B.LODESTONE ||
+         id === B.BELL || id === B.CHAIN || id === B.ANVIL || id === B.LIGHTNING_ROD ||
+         id === B.BEACON || id === B.TARGET || id === B.RESPAWN_ANCHOR || id === B.CRYING_OBSIDIAN;
+}
+// 晶体/灯具：玻璃质的高频叮咛（紫水晶/海晶灯/荧石/点亮的红石灯/末影箱）
+function isCrystalMat(id) {
+  return id === B.AMETHYST_BLOCK || id === B.SEA_LANTERN || id === B.GLOWSTONE ||
+         id === B.REDSTONE_LAMP_ON || id === B.ENDER_CHEST || id === B.SCULK_SENSOR;
+}
+// 软质：黏糊/闷响（粘液块、蜂蜜块、海绵、羊毛、床）
+function isSoftMat(id) {
+  return id === B.SLIME_BLOCK || id === B.HONEY_BLOCK || id === B.SPONGE ||
+         id === B.WET_SPONGE || id === B.WOOL || id === B.BED;
+}
 
 /* 原版经典圆润气泡拾取物品音（Pop） */
 function playPop(id) {
@@ -12568,7 +12667,18 @@ function playPop(id) {
 
 /* 放置方块：原版厚重敲击声 */
 function playPlace(id) {
-  if (isStoneMat(id)) {
+  const jit = 0.94 + Math.random() * 0.12;   // 每次落手略有音高差，避免机械重复感
+  if (isMetalMat(id)) {
+    tone(1180 * jit, 880 * jit, 0.09, 'triangle', 0.10);
+    tone(2360 * jit, 1760 * jit, 0.05, 'sine', 0.05, 0.012);
+    burst(0.03, 0.06, 2600, 'bandpass');
+  } else if (isCrystalMat(id)) {
+    tone(1560 * jit, 2080 * jit, 0.10, 'sine', 0.09);
+    tone(3120 * jit, 2600 * jit, 0.06, 'sine', 0.04, 0.02);
+  } else if (isSoftMat(id)) {
+    burst(0.05, 0.05, 320, 'lowpass');
+    tone(140 * jit, 90 * jit, 0.06, 'sine', 0.05);
+  } else if (isStoneMat(id)) {
     tone(120, 60, 0.05, 'triangle', 0.12);
     burst(0.03, 0.08, 1200, 'bandpass');
   } else if (isWoodMat(id)) {
@@ -12588,7 +12698,19 @@ function playPlace(id) {
 
 /* 破坏方块：原版清脆破碎声 */
 function playBreak(id) {
-  if (isStoneMat(id)) {
+  const jit = 0.94 + Math.random() * 0.12;
+  if (isMetalMat(id)) {
+    burst(0.05, 0.10, 3000, 'bandpass');
+    tone(1420 * jit, 720 * jit, 0.12, 'triangle', 0.11);
+    tone(2840 * jit, 1400 * jit, 0.07, 'sine', 0.05, 0.01);
+  } else if (isCrystalMat(id)) {
+    burst(0.07, 0.12, 3600, 'highpass');
+    tone(1980 * jit, 1240 * jit, 0.14, 'sine', 0.10);
+    tone(2960 * jit, 2400 * jit, 0.10, 'sine', 0.06, 0.03);
+  } else if (isSoftMat(id)) {
+    burst(0.07, 0.06, 300, 'lowpass');
+    tone(180, 70, 0.09, 'sine', 0.05);
+  } else if (isStoneMat(id)) {
     burst(0.06, 0.14, 1300, 'bandpass');
     burst(0.08, 0.16, 260, 'lowpass');
   } else if (isWoodMat(id)) {
@@ -12616,7 +12738,15 @@ function playStep(matId, inWater, isRightFoot) {
   }
   const footMod = isRightFoot ? 1.05 : 0.95;
   const jitter = (0.95 + Math.random() * 0.1) * footMod;
-  if (isWoodMat(matId)) {
+  if (isMetalMat(matId)) {
+    burst(0.02, 0.035, 2600 * jitter, 'bandpass');
+    tone(1250 * footMod, 980 * footMod, 0.02, 'triangle', 0.03);
+  } else if (isCrystalMat(matId) || matId === B.GLASS || matId === B.ICE) {
+    burst(0.02, 0.04, 3000 * jitter, 'highpass');
+    tone(1900 * footMod, 1600 * footMod, 0.018, 'sine', 0.025);
+  } else if (isSoftMat(matId)) {
+    burst(0.03, 0.025, 260 * jitter, 'lowpass');
+  } else if (isWoodMat(matId)) {
     tone(150 * footMod, 100 * footMod, 0.025, 'triangle', 0.04);
     burst(0.02, 0.04, 650 * jitter, 'bandpass');
   } else if (matId === B.SAND || matId === B.GRAVEL) {
@@ -12719,6 +12849,128 @@ function playSpiderHiss() {
 }
 function playFishCatch() {
   playArp([440, 554, 659, 880], 0.045, 'sine', 0.12);
+}
+
+/* ============================ 环境音景 (Ambience) ============================
+   昼夜、群系、水体、海拔、村庄各自对应不同的环境音，随机挑选播放，避免循环感。
+   全部走 tone/burst 合成，音量压得很低，只作为氛围底噪。 */
+
+function playBirdChirp() {
+  const base = 1750 + Math.random() * 1500;
+  const n = 2 + ((Math.random() * 3) | 0);
+  let d = 0;
+  for (let i = 0; i < n; i++) {
+    const f0 = base * (0.82 + Math.random() * 0.45);
+    const f1 = f0 * (1.12 + Math.random() * 0.42);
+    tone(f0, f1, 0.045 + Math.random() * 0.05, 'sine', 0.030, d);
+    d += 0.06 + Math.random() * 0.07;
+  }
+}
+function playCricketChirp() {
+  const f = 3500 + Math.random() * 1100;
+  const n = 3 + ((Math.random() * 3) | 0);
+  for (let i = 0; i < n; i++) tone(f, f * 0.94, 0.016, 'sine', 0.016, i * 0.042);
+}
+function playOwlHoot() {
+  const f = 330 + Math.random() * 70;
+  tone(f, f * 0.86, 0.34, 'sine', 0.030);
+  tone(f * 1.01, f * 0.88, 0.28, 'sine', 0.022, 0.42);
+}
+function playWindGust() {
+  // 时长压在 0.75s 内：噪声源缓冲只有 1 秒，offset 最多 0.25s，超了会被截断
+  burst(0.55 + Math.random() * 0.2, 0.035, 420 + Math.random() * 260, 'lowpass');
+}
+function playWaterLap() {
+  const d = 0.16 + Math.random() * 0.14;
+  burst(d, 0.030, 620 + Math.random() * 320, 'bandpass');
+  tone(210 + Math.random() * 90, 120, d * 0.7, 'sine', 0.014);
+}
+function playVillageChatter() {
+  // 远处两句模糊的"哼哼"交谈，音高随机，像村民在说话但听不清
+  const b = 210 + Math.random() * 90;
+  tone(b, b * 1.24, 0.10, 'triangle', 0.022);
+  tone(b * 1.1, b * 0.92, 0.12, 'triangle', 0.018, 0.14 + Math.random() * 0.1);
+}
+function playDistantBell() {
+  // 村庄钟声：低频洪钟 + 长余韵，只偶尔响一次
+  tone(520, 392, 0.9, 'sine', 0.028);
+  tone(392, 294, 1.2, 'triangle', 0.020, 0.10);
+  tone(784, 588, 0.5, 'sine', 0.012, 0.05);
+}
+function playCaveDrip() {
+  const f = 900 + Math.random() * 900;
+  tone(f, f * 0.45, 0.13, 'sine', 0.020);
+  burst(0.05, 0.010, 1800, 'bandpass', 0.01);
+}
+
+let ambTimer = 5 + Math.random() * 7;
+let ambBellCooldown = 90;      // 钟声很稀疏，单独计时
+function updateAmbience(dt) {
+  if (!locked) return;
+  if (ambBellCooldown > 0) ambBellCooldown -= dt;
+  ambTimer -= dt;
+  if (ambTimer > 0) return;
+  ambTimer = 4.5 + Math.random() * 8.5;
+
+  const px = player.pos.x, py = player.pos.y, pz = player.pos.z;
+  const surf = surfaceHeight(Math.floor(px), Math.floor(pz));
+  const underground = py < surf - 3 && !inWater();
+
+  // 地下：滴水回声
+  if (underground) {
+    if (Math.random() < 0.7) playCaveDrip();
+    return;
+  }
+  // 水下：闷响水泡
+  if (inWater()) {
+    burst(0.22, 0.028, 480 + Math.random() * 300, 'lowpass');
+    return;
+  }
+
+  const night = timeOfDay >= 0.5;
+  const bm = biomeOf(Math.floor(px), Math.floor(pz));
+  const forestBiome = bm === 2 || bm === 7 || bm === 8 || bm === 15 || bm === 17 || bm === 18 || bm === 19 || bm === 21;
+
+  // 附近村庄：交谈声 + 偶发钟声
+  let nearVillage = false;
+  for (let i = 0; i < villagePositions.length; i++) {
+    const v = villagePositions[i];
+    const dx = v.x - px, dz = v.z - pz;
+    if (dx * dx + dz * dz < 48 * 48) { nearVillage = true; break; }
+  }
+  if (nearVillage) {
+    if (ambBellCooldown <= 0 && Math.random() < 0.25) {
+      ambBellCooldown = 120 + Math.random() * 120;
+      playDistantBell();
+      return;
+    }
+    if (Math.random() < 0.55) { playVillageChatter(); return; }
+  }
+
+  // 高空：风啸（世界高度上限 96，84 以上即算高空）
+  if (py > 84) { playWindGust(); return; }
+
+  // 水边：轻拍水声（真正检查 6 格外是否存在低于海平面的水体，而不是只看高度）
+  if (py > SEA && py < SEA + 4) {
+    let nearWater = false;
+    const bx = Math.floor(px), bz = Math.floor(pz);
+    for (const [ox, oz] of [[6, 0], [-6, 0], [0, 6], [0, -6]]) {
+      if (surfaceHeight(bx + ox, bz + oz) < SEA) { nearWater = true; break; }
+    }
+    if (nearWater && Math.random() < 0.6) { playWaterLap(); return; }
+  }
+
+  if (night) {
+    if (Math.random() < 0.72) playCricketChirp();
+    else if (forestBiome) playOwlHoot();
+    else playWindGust();
+  } else if (forestBiome) {
+    playBirdChirp();
+  } else if (Math.random() < 0.45) {
+    playBirdChirp();
+  } else {
+    playWindGust();
+  }
 }
 
 // —— 木门开关状态 ——
@@ -16825,6 +17077,7 @@ function animate() {
       setTimeout(() => tone(96, 52, 2.0, 'sine', 0.04), 320);
     }
   }
+  updateAmbience(dt);   // 昼夜/群系/水体/村庄的环境音景
   const targetFogColor = submerged ? FOG_UNDERWATER : (underground ? _caveFogTarget.copy(FOG_COLOR).lerp(FOG_CAVE, 0.78) : FOG_COLOR);
   scene.fog.color.lerp(targetFogColor, Math.min(1, 4 * dt));
   const targetFogNear = submerged ? 8 : (underground ? 4 : FOG_NEAR);
