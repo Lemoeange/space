@@ -3079,29 +3079,46 @@ void main() {
   float sunSpecSpread = pow(sDotR, 18.0) * 0.22;
   vec3 sunSpecular = uSunColor * (sunSpecSharp + sunSpecSpread) * (1.0 - uNight) * specFade;
 
+  /* 真实水面会映出太阳所在的那片天空：逆光时整片水面上会浮起一层暖色的天光反射，
+     而不只是一个锐利的高光点。这里把宽角度（pow 6）的日光加进天空反射色。 */
+  skyRefl += uSunColor * pow(sDotR, 6.0) * 0.30 * (1.0 - uNight);
+
   // 月光清冷波光
   vec3 Lmoon = normalize(uMoonDir);
   float mDotR = max(dot(R, Lmoon), 0.0);
   float moonSpec = (pow(mDotR, 64.0) * 0.55 + pow(mDotR, 16.0) * 0.15) * specFade;
   vec3 moonSpecular = vec3(0.72, 0.85, 1.0) * moonSpec * uNight;
 
-  // 水深与吸收色（浅滩碧绿、深海深蔚蓝）
-  float depthFactor = clamp(vWorld.y / 48.0, 0.0, 1.0);
-  vec3 waterBody = mix(uWaterShallow, uWaterDeep, depthFactor);
+  /* ---- 水体本色 ----
+     以前这里把图集里的 T.water（16×16 的横条纹贴图）按 35% 混进水面，
+     平铺 + 时间偏移之后就变成一片缓慢移动的灰蓝色条纹 —— 这正是"水面上灰色条纹"的来源。
+     现在水面改用波高调制的深浅过渡，条纹只保留在立面上（瀑布的垂直水流）。 */
+  float tone = clamp(0.5 + h * 0.42, 0.0, 1.0);
+  vec3 waterBody = mix(uWaterDeep, uWaterShallow, tone);
 
-  // 采样原版水体材质纹理（流动侧面呈现自上而下的瀑布水流纹理）
-  vec2 uvTex = isSide ? vec2(abs(vNormal.x) > 0.5 ? vWorld.z : vWorld.x, vWorld.y - uTime * 1.8) : (vWorld.xz + vec2(uTime * 0.12, uTime * 0.08));
-  vec4 texWater = texture(uAtlas, vec3(fract(uvTex), uWaterLayer));
-  waterBody = mix(waterBody, texWater.rgb * 1.15, isSide ? 0.70 : 0.35);
+  // 细波纹：给水面加一层高频微起伏，远处波光才不会糊成一片死色块
+  float rip = sin(p.x * 2.15 + t * 1.55) * 0.5 + sin(p.y * 2.65 - t * 1.75) * 0.5;
+  waterBody += vec3(0.020, 0.045, 0.055) * rip * (1.0 - uNight * 0.5);
 
   // 动态焦散波光注入水体
   float c = getCaustics(p, t);
-  waterBody += vec3(0.06, 0.12, 0.16) * c * (1.0 - uNight * 0.6);
+  waterBody += vec3(0.05, 0.10, 0.14) * c * (1.0 - uNight * 0.6);
 
-  // 波峰碎浪微白浮沫（平缓渐变）
-  float foam = smoothstep(0.42, 0.65, h);
+  // 波峰碎浪微白浮沫（平缓渐变，避免生硬条带）
+  float foam = smoothstep(0.46, 0.70, h + rip * 0.05);
   vec3 foamCol = vec3(0.88, 0.94, 0.98);
-  waterBody = mix(waterBody, foamCol, foam * 0.30);
+  waterBody = mix(waterBody, foamCol, foam * 0.26);
+
+  // 立面（瀑布 / 水墙）：保留自上而下的流动条纹质感
+  if (isSide) {
+    vec2 uvTex = vec2(abs(vNormal.x) > 0.5 ? vWorld.z : vWorld.x, vWorld.y - uTime * 1.8);
+    vec4 texWater = texture(uAtlas, vec3(fract(uvTex), uWaterLayer));
+    waterBody = mix(waterBody, texWater.rgb * 1.08, 0.65);
+  }
+
+  // 阳光在细碎波峰上炸开的点点碎金（只在受光面、近处可见）
+  float glitter = pow(max(0.0, rip * 0.5 + 0.5), 16.0) * pow(sDotR, 10.0) * 0.40;
+  sunSpecular += uSunColor * glitter * (1.0 - uNight) * specFade;
 
   // 菲涅尔融合水体色与天空反射
   vec3 col = mix(waterBody, skyRefl, fres * 0.80 + 0.15);
@@ -3112,9 +3129,11 @@ void main() {
   col = mix(col, uFogColor, fogFactor);
 
   // 通透度：侧面保持高质感立体水流质地与通透度
-  float alpha = isSide ? 0.88 : mix(0.78 + fres * 0.20, 1.0, fogFactor);
+  float alpha = isSide ? 0.88 : mix(0.80 + fres * 0.20, 1.0, fogFactor);
 
-  gl_FragColor = vec4(col, alpha);
+  // 大面积水面同样需要抖动，否则远处会量化成一道道灰蓝色台阶
+  float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+  gl_FragColor = vec4(col + dither * (1.5 / 255.0), alpha);
 }`;
 
 // —— 时间与日月方向（昼夜循环）——
@@ -3198,7 +3217,10 @@ const skyMat = new THREE.ShaderMaterial({
       float h = d.y;
       vec3 col;
       if (h > 0.0) {
-        col = mix(uHorizon, uZenith, pow(clamp(h, 0.0, 1.0), 0.38));
+        float hh = clamp(h, 0.0, 1.0);
+        col = mix(uHorizon, uZenith, pow(hh, 0.42));
+        // 地平线上方一圈更亮的大气散射带，天空与地面衔接不再是硬渐变
+        col += uHorizon * 0.10 * exp(-hh * 12.0);
         float s = max(dot(d, normalize(uSunDir)), 0.0);
         float sunVis = clamp(1.0 - uNight * 2.2, 0.0, 1.0); // 夜晚彻底屏蔽太阳圆盘与日晕，彻底消除夜空角落残余太阳
         if (sunVis > 0.0) {
@@ -3224,7 +3246,10 @@ const skyMat = new THREE.ShaderMaterial({
       }
       col = ACESFilm(col);
       col = pow(col, vec3(1.0 / 2.2));
-      gl_FragColor = vec4(col, 1.0);
+      /* 8 位色深下，这样大面积的平滑渐变很容易被量化成一道道横向条纹
+         （天空和远处水面都会中招）。加半个色阶的随机抖动把台阶打散。 */
+      float dither = (hash13(vec3(gl_FragCoord.xy, 0.5)) - 0.5) * (1.5 / 255.0);
+      gl_FragColor = vec4(col + dither, 1.0);
     }`
 });
 const sky = new THREE.Mesh(new THREE.SphereGeometry(600, 32, 16), skyMat);
@@ -3236,6 +3261,7 @@ scene.add(sky);
 const hemi = new THREE.HemisphereLight(0xbfd8ff, 0x8a7a5a, 0.7);
 scene.add(hemi);
 const ambient = new THREE.AmbientLight(0xfff2e0, 0.35);   // 均匀环境光：提亮侧面、缩小顶面与侧面的亮度差
+const _ambientNeutral = new THREE.Color(0xfff6ea);        // 环境光染色时的中性参考色
 scene.add(ambient);
 const sun = new THREE.DirectionalLight(0xffe9c8, 2.0);
 sun.castShadow = true;
@@ -3470,6 +3496,10 @@ function updateEnvironment(t) {
 
   // 雾：与地平线同源、略微偏向天顶，更像大气散射
   FOG_COLOR.copy(skyMat.uniforms.uHorizon.value).lerp(skyMat.uniforms.uZenith.value, 0.18);
+
+  /* 环境光跟随天光染色：日出日落时阴影带暖调、夜晚带冷蓝，
+     而不是一片恒定的暖白把"光照氛围"抹平。 */
+  ambient.color.copy(skyMat.uniforms.uHorizon.value).lerp(_ambientNeutral, 0.45);
 
   if (inNether) {
     // 下界异次元氛围：幽暗赤红天幕、熔岩翻滚霞光与深红迷雾
@@ -6012,7 +6042,8 @@ function updateAnimals(dt) {
     );
     const pDist = Math.hypot(player.pos.x - a.x, player.pos.z - a.z);
     if (isAttracted && pDist < 10.0 && a.love <= 0) {
-      a.heading = Math.atan2(player.pos.x - a.x, player.pos.z - a.z);
+      // 玩家几乎正上方时不转向：否则 atan2(≈0, ≈0) 会让动物原地打转
+      aimHeading(a, player.pos.x, player.pos.z, 1.0);
       if (pDist > 2.0) {
         a.x += Math.sin(a.heading) * 1.6 * dt;
         a.z += Math.cos(a.heading) * 1.6 * dt;
@@ -6093,6 +6124,23 @@ function killAnimal(i) {
 }
 
 /* ============================ 生物动作辅助 ============================ */
+/* 玩家是否"飞在天上"：创造飞行、鞘翅滑翔都算。
+   原来各处只判断 player.fly，导致生存模式用鞘翅从怪物头顶掠过时全都被追着打。 */
+function playerIsFlying() {
+  return !!player.fly || !!player.gliding;
+}
+
+/* 朝 (tx,tz) 转头并返回是否真的更新了朝向。
+   水平距离小于 deadzone 时**不更新**：玩家正悬在头顶时 dx、dz 都接近 0，
+   atan2(≈0, ≈0) 会因浮点噪声在 ±180° 之间乱跳，怪物就会原地疯狂打转。
+   顺带也省掉了这种情况下每帧一次的三角函数计算。 */
+function aimHeading(ent, tx, tz, deadzone = 1.0) {
+  const dx = tx - ent.x, dz = tz - ent.z;
+  if (dx * dx + dz * dz < deadzone * deadzone) return false;
+  ent.heading = Math.atan2(dx, dz);
+  return true;
+}
+
 /* 让生物的头部随玩家方向偏转（限制在 ±maxYaw 内），转身时有自然的"回头"感。
    大多数模型朝向本地 -Z（人脸在 -z 面），僵尸/骷髅/末影人都是这样；
    蜘蛛的模型是 +Z 朝前（头、獠牙、复眼都在 +z），所以用 plusZ 参数切换。 */
@@ -6100,12 +6148,21 @@ function mobHeadLook(head, g, maxYaw = 0.9, plusZ = false) {
   if (!head) return;
   const dx = player.pos.x - g.position.x;
   const dz = player.pos.z - g.position.z;
-  if (dx * dx + dz * dz > 40 * 40) return;          // 太远就不必转头
+  const d2 = dx * dx + dz * dz;
+  /* 玩家几乎正上方时不要转头：方向向量趋于零向量，会让头疯狂甩动。
+     保留上一帧的偏角并平滑衰减回正前方，看起来像"抬头看着你"自然停下。 */
+  if (d2 < 1.0) {
+    head.rotation.y *= 0.85;
+    return;
+  }
+  if (d2 > 40 * 40) return;                         // 太远就不必转头
   const desired = plusZ ? Math.atan2(dx, dz) : Math.atan2(-dx, -dz);
   let rel = desired - g.rotation.y;
   while (rel < -Math.PI) rel += Math.PI * 2;
   while (rel > Math.PI) rel -= Math.PI * 2;
-  head.rotation.y = Math.max(-maxYaw, Math.min(maxYaw, rel));
+  rel = Math.max(-maxYaw, Math.min(maxYaw, rel));
+  // 平滑跟随，避免每帧硬切造成的"抽搐感"
+  head.rotation.y += (rel - head.rotation.y) * 0.25;
 }
 /* 行走时的上下起伏：幅度很小，只是让方块生物"有重量感" */
 function mobBob(phase, moving, amp = 0.028) {
@@ -6228,7 +6285,10 @@ function updateZombies(dt) {
       z.hp -= 2.5 * dt;
       if (z.hp <= 0) { killZombie(i); continue; }
     }
-    if (dist > 80) {   // 太远 → 拉回玩家附近的干燥陆地
+    /* 太远 → 拉回玩家附近的干燥陆地。
+       但玩家飞在天上时不拉：否则僵尸会像跟班一样被一路搬到玩家脚下，
+       看起来就像"飞行时还会被索敌"。 */
+    if (dist > 80 && !playerIsFlying()) {
       for (let k = 0; k < 16; k++) {
         const rx = Math.floor(player.pos.x + (Math.random() - 0.5) * 30);
         const rz = Math.floor(player.pos.z + (Math.random() - 0.5) * 30);
@@ -6242,9 +6302,10 @@ function updateZombies(dt) {
       continue;
     }
 
-    let targetX = player.fly ? null : player.pos.x;
-    let targetZ = player.fly ? null : player.pos.z;
-    let targetDist = player.fly ? Infinity : dist;
+    const flying = playerIsFlying();
+    let targetX = flying ? null : player.pos.x;
+    let targetZ = flying ? null : player.pos.z;
+    let targetDist = flying ? Infinity : dist;
     let targetVillager = null;
     for (const v of villagers) {
       const vd = Math.hypot(v.x - z.x, v.z - z.z);
@@ -6260,7 +6321,7 @@ function updateZombies(dt) {
     const playerTooHigh = !targetVillager && (player.pos.y - zy > 5);   // 玩家在上方 5 格以上（飞行）→ 不追击不攻击
     if (hasTarget && !playerTooHigh) {
       if (targetDist > 1.8) {   // 追击
-        z.heading = Math.atan2(targetX - z.x, targetZ - z.z);
+        aimHeading(z, targetX, targetZ, 0.8);   // 玩家几乎正上方时不转身（避免原地打转）
         const speed = z.hurtT > 0 ? 0.3 : 1.1;
         const nx = z.x + Math.sin(z.heading) * speed * dt;
         const nz = z.z + Math.cos(z.heading) * speed * dt;
@@ -6293,7 +6354,7 @@ function updateZombies(dt) {
                 toast('💀 村民被僵尸击败了！');
               }
             }
-          } else if (!player.fly) {
+          } else if (!playerIsFlying()) {
             damagePlayer(2);
           }
         }
@@ -6421,7 +6482,8 @@ function updateCreepers(dt) {
     }
 
     const playerTooHigh = dy3 > 5;
-    const shouldIgnite = !player.fly && !playerTooHigh && dist3 < 3.2;
+    const flying = playerIsFlying();
+    const shouldIgnite = !flying && !playerTooHigh && dist3 < 3.2;
     if (shouldIgnite) {
       // 进入引爆倒计时
       c.fuse += dt;
@@ -6448,9 +6510,9 @@ function updateCreepers(dt) {
         const swell = 1.0 + (c.fuse / 1.4) * 0.28;
         c.g.scale.set(swell, swell, swell);
       }
-      // 追击玩家（飞行模式下不寻找追击玩家）
-      if (!player.fly && !playerTooHigh && dist3 < 24) {
-        c.heading = Math.atan2(dxp, dzp);
+      // 追击玩家（飞行/滑翔中不寻找追击玩家）
+      if (!flying && !playerTooHigh && dist3 < 24) {
+        aimHeading(c, player.pos.x, player.pos.z, 0.8);
         const speed = c.hurtT > 0 ? 0.3 : 1.35;
         const nx = c.x + Math.sin(c.heading) * speed * dt;
         const nz = c.z + Math.cos(c.heading) * speed * dt;
@@ -6602,8 +6664,8 @@ function updateSkeletons(dt) {
     }
 
     const playerTooHigh = Math.abs(dyp) > 6;
-    if (!player.fly && !playerTooHigh && dist3 < 20) {
-      s.heading = Math.atan2(dxp, dzp);
+    if (!playerIsFlying() && !playerTooHigh && dist3 < 20) {
+      aimHeading(s, player.pos.x, player.pos.z, 0.8);
       s.rightArmGroup.rotation.x = Math.PI * 0.45;
 
       let moveDir = 0;
@@ -6783,7 +6845,7 @@ function updateEndermen(dt) {
       if (e.hp <= 0) { killEnderman(i); continue; }
     }
 
-    if (!player.fly && !e.angry && dist3 < 28) {
+    if (!playerIsFlying() && !e.angry && dist3 < 28) {
       const headPos = new THREE.Vector3(e.x, ey + 2.25, e.z);
       const toHead = headPos.clone().sub(camera.position).normalize();
       if (camDir.dot(toHead) > 0.985) {
@@ -6793,8 +6855,8 @@ function updateEndermen(dt) {
       }
     }
 
-    if (!player.fly && e.angry) {
-      e.heading = Math.atan2(dxp, dzp);
+    if (!playerIsFlying() && e.angry) {
+      aimHeading(e, player.pos.x, player.pos.z, 0.8);
       e.head.position.x = (Math.random() - 0.5) * 0.05;
       e.head.position.z = (Math.random() - 0.5) * 0.05;
 
@@ -6979,8 +7041,8 @@ function updateSpiders(dt) {
 
     const groundY = findGround(Math.floor(s.x), Math.floor(s.z));
 
-    if (!player.fly && s.angry && dist3 < 24) {
-      s.heading = Math.atan2(dxp, dzp);
+    if (!playerIsFlying() && s.angry && dist3 < 24) {
+      aimHeading(s, player.pos.x, player.pos.z, 0.8);
       const speed = 2.4;
       const nx = s.x + Math.sin(s.heading) * speed * dt;
       const nz = s.z + Math.cos(s.heading) * speed * dt;
@@ -9141,7 +9203,7 @@ function updateRavagers(dt) {
       const dg = Math.hypot(g.x - r.x, g.z - r.z);
       if (dg < minDist) { minDist = dg; target = { x: g.x, y: g.y, z: g.z, golem: g }; }
     }
-    if (!target && !player.fly) {
+    if (!target && !playerIsFlying()) {
       const dp = Math.hypot(player.pos.x - r.x, player.pos.z - r.z);
       if (dp < minDist) { minDist = dp; target = { x: player.pos.x, y: player.pos.y, z: player.pos.z, isPlayer: true }; }
     }
@@ -9306,7 +9368,7 @@ function updatePillagers(dt) {
 
     // 索敌：优先玩家、驻村铁傀儡、村民
     let target = null, minDist = 24;
-    if (!player.fly) {
+    if (!playerIsFlying()) {
       const dp = Math.hypot(player.pos.x - p.x, player.pos.z - p.z);
       if (dp < minDist) { minDist = dp; target = { x: player.pos.x, y: player.pos.y, z: player.pos.z, isPlayer: true }; }
     }
