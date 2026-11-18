@@ -2672,7 +2672,16 @@ function makeAtlas() {
 const atlas = makeAtlas();
 
 // 方块 → 面贴图
+/* tileOf 原先每次调用都 new 一个 {top,side,bottom} 对象——
+   网格构建时每张面都要查一次，等于每个面都产生一次垃圾。
+   这里把它们缓存成不可变单例：id → 对象，之后只是数组索引。 */
+const _tileCache = new Array(256);
 function tileOf(id) {
+  let t = _tileCache[id];
+  if (t === undefined) t = _tileCache[id] = _tileOfRaw(id);
+  return t;
+}
+function _tileOfRaw(id) {
   switch (id) {
     case B.GRASS: return { top: atlas.T.grassTop, side: atlas.T.grassSide, bottom: atlas.T.dirt };
     case B.DIRT: return { top: atlas.T.dirt, side: atlas.T.dirt, bottom: atlas.T.dirt };
@@ -2795,6 +2804,18 @@ function tileOf(id) {
     case B.CHERRY_SAPLING: return { top: atlas.T.cherrySapling, side: atlas.T.cherrySapling, bottom: atlas.T.cherrySapling };
     default: return { top: atlas.T.stone, side: atlas.T.stone, bottom: atlas.T.stone };
   }
+}
+
+/* 按面索引取贴图层：把 f.face 的字符串查表提前成数字索引，网格热循环里不再比对字符串。
+   索引约定与 FACES 一致：0/1 → side，2 → top，3 → bottom，4/5 → side。 */
+const _tileFaceCache = new Array(256);
+function tileFace(id, fi) {
+  let a = _tileFaceCache[id];
+  if (a === undefined) {
+    const t = tileOf(id);
+    a = _tileFaceCache[id] = [t.side, t.side, t.top, t.bottom, t.side, t.side];
+  }
+  return a[fi];
 }
 
 const opaqueMat = new THREE.MeshStandardMaterial({ map: atlas.tex, vertexColors: true, roughness: 0.88, metalness: 0.02 });
@@ -3331,7 +3352,7 @@ function updateEnvironment(t) {
 }
 
 /* ============================ 世界 ============================ */
-const key = (cx, cz) => cx + ',' + cz;
+const key = (cx, cz) => cx * 65536 + cz;
 /* 恶地地表：砂岩/红砖/沙交替成层（用现有方块做出"台地"条纹） */
 const badBand = (y) => (y % 8 < 2 ? B.BRICK : (y % 8 < 5 ? B.SANDSTONE : B.SAND));
 /* 群系名（HUD 与调试用） */
@@ -3742,17 +3763,18 @@ class World {
   getBlock(x, y, z) {
     if (y < 0) return B.BEDROCK;
     if (y >= HEIGHT) return B.AIR;
-    const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
-    const c = this.chunks.get(key(cx, cz));
+    // 位运算取代 Math.floor(x/16)：对负数同样成立，热路径上省掉除法与函数调用
+    const cx = x >> 4, cz = z >> 4;
+    const c = this.chunks.get(cx * 65536 + cz);   // 数值 key：不再每次都分配 "cx,cz" 字符串
     if (!c) return B.AIR;
-    return c.blocks[y * 256 + (z - cz * 16) * 16 + (x - cx * 16)];
+    return c.blocks[y * 256 + (z - (cz << 4)) * 16 + (x - (cx << 4))];
   }
   getWater(x, y, z) {
     if (y < 0 || y >= HEIGHT) return 0;
-    const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
-    const c = this.chunks.get(key(cx, cz));
+    const cx = x >> 4, cz = z >> 4;
+    const c = this.chunks.get(cx * 65536 + cz);
     if (!c) return 0;
-    return c.water[y * 256 + (z - cz * 16) * 16 + (x - cx * 16)];
+    return c.water[y * 256 + (z - (cz << 4)) * 16 + (x - (cx << 4))];
   }
   setBlock(x, y, z, id) {
     if (y < 0 || y >= HEIGHT) return;
@@ -3803,7 +3825,7 @@ function markChunk(cx, cz) { const c = world.chunks.get(key(cx, cz)); if (c) c.d
 function markDirtyBlock(x, y, z) {
   const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
   markChunk(cx, cz);
-  groundCache.delete(x + ',' + z);   // 立柱高度缓存失效
+  groundCache.delete(x * 65536 + z);   // 立柱高度缓存失效（与 findGround 的数值 key 保持一致）
   const lx = x - cx * 16, lz = z - cz * 16;
   if (lx === 0) markChunk(cx - 1, cz);
   if (lx === 15) markChunk(cx + 1, cz);
@@ -3819,7 +3841,7 @@ function markDirtyBlock(x, y, z) {
 /* ============================ 存档（localStorage） ============================ */
 /* 已编辑、但当前可能已被卸载的区块。卸载时把数组交给它保管，
    否则 30 秒自动存档会因为"人走远了、区块被卸载"而把改动整片丢掉。 */
-const editedChunks = new Map();   // "cx,cz" -> { cx, cz, blocks, water }
+const editedChunks = new Map();   // 数值 key(cx,cz) -> { cx, cz, blocks, water }
 
 function stashEditedChunk(c) {
   if (!c.edited) return;
@@ -4155,24 +4177,34 @@ for (const f of FACES) {
   f.vAxis = c3[0] !== c0[0] ? 0 : (c3[1] !== c0[1] ? 1 : 2);
   f.vSign = c3[f.vAxis] - c0[f.vAxis];
   f.vBase = c0[f.vAxis];
+  f.axA = AXIS[f.a];          // 预解析成数字，热循环里不再做字符串查表
+  f.axB = AXIS[f.b];
+  f.nAxis = 3 - f.uAxis - f.vAxis;
 }
 // 返回该角点的世界重复坐标（1×1 面 → 0..1；贪心合并面 → 0..W / 0..D）
-function faceRepeat(f, wx, wy, wz, bx, by, bz) {
+// 写入调用方提供的 2 元数组，避免每个角点都分配一次 {u,v}
+function faceRepeat(f, wx, wy, wz, bx, by, bz, out) {
   const lx = wx - bx, ly = wy - by, lz = wz - bz;
   const u = f.uSign * ((f.uAxis === 0 ? lx : f.uAxis === 1 ? ly : lz) - f.uBase);
   const v = f.vSign * ((f.vAxis === 0 ? lx : f.vAxis === 1 ? ly : lz) - f.vBase);
-  return [u, v];
+  out[0] = u; out[1] = v;
+  return out;
 }
 
 // 复用临时数组，避免网格构建时大量分配
 const _ao_n1 = [0, 0, 0], _ao_n2 = [0, 0, 0], _ao_n3 = [0, 0, 0];
-function aoAt(bx, by, bz, f, w, solid) {
-  const a = AXIS[f.a], b = AXIS[f.b];
-  const s1 = (w[a] === (a === 0 ? bx : a === 1 ? by : bz)) ? 1 : -1;
-  const s2 = (w[b] === (b === 0 ? bx : b === 1 ? by : bz)) ? 1 : -1;
-  _ao_n1[0] = w[0]; _ao_n1[1] = w[1]; _ao_n1[2] = w[2]; _ao_n1[a] += s1;
-  _ao_n2[0] = w[0]; _ao_n2[1] = w[1]; _ao_n2[2] = w[2]; _ao_n2[b] += s2;
-  _ao_n3[0] = w[0]; _ao_n3[1] = w[1]; _ao_n3[2] = w[2]; _ao_n3[a] += s1; _ao_n3[b] += s2;
+const _uvTmp = [0, 0];
+/* AO：接收标量角点坐标（原来传数组字面量，每个角点都 new 一次数组）。
+   f.axA / f.axB 已预解析；aw/bw 是角点在 a/b 轴上的整数坐标。 */
+function aoAt(bx, by, bz, f, wx, wy, wz, solid) {
+  const a = f.axA, b = f.axB;
+  const wa = a === 0 ? wx : a === 1 ? wy : wz;
+  const wb = b === 0 ? wx : b === 1 ? wy : wz;
+  const s1 = wa === (a === 0 ? bx : a === 1 ? by : bz) ? 1 : -1;
+  const s2 = wb === (b === 0 ? bx : b === 1 ? by : bz) ? 1 : -1;
+  _ao_n1[0] = wx; _ao_n1[1] = wy; _ao_n1[2] = wz; _ao_n1[a] += s1;
+  _ao_n2[0] = wx; _ao_n2[1] = wy; _ao_n2[2] = wz; _ao_n2[b] += s2;
+  _ao_n3[0] = wx; _ao_n3[1] = wy; _ao_n3[2] = wz; _ao_n3[a] += s1; _ao_n3[b] += s2;
   const a1 = solid(_ao_n1[0], _ao_n1[1], _ao_n1[2]) ? 1 : 0;
   const a2 = solid(_ao_n2[0], _ao_n2[1], _ao_n2[2]) ? 1 : 0;
   const a3 = solid(_ao_n3[0], _ao_n3[1], _ao_n3[2]) ? 1 : 0;
@@ -4194,10 +4226,10 @@ function pushFace(A, bx, by, bz, f, tile, under, solid) {
     const wx = bx + c[0], wy = by + c[1], wz = bz + c[2];
     A.pos.push(wx, wy, wz);
     A.nor.push(f.n[0], f.n[1], f.n[2]);
-    const [u, v] = faceRepeat(f, wx, wy, wz, bx, by, bz);
-    A.uv.push(u, v);
+    faceRepeat(f, wx, wy, wz, bx, by, bz, _uvTmp);
+    A.uv.push(_uvTmp[0], _uvTmp[1]);
     A.layer.push(tile);
-    const ao = aoAt(bx, by, bz, f, [wx, wy, wz], solid);
+    const ao = aoAt(bx, by, bz, f, wx, wy, wz, solid);
     const vv = Math.min(1, f.shade * ao * under);
     A.col.push(vv, vv, vv);
   }
@@ -4208,29 +4240,35 @@ function pushFace(A, bx, by, bz, f, tile, under, solid) {
 function aoAllOne(bx, by, bz, f, solid) {
   for (let k = 0; k < 4; k++) {
     const c = f.corners[k];
-    const w = [bx + c[0], by + c[1], bz + c[2]];
-    if (aoAt(bx, by, bz, f, w, solid) < 0.999) return false;
+    if (aoAt(bx, by, bz, f, bx + c[0], by + c[1], bz + c[2], solid) < 0.999) return false;
   }
   return true;
 }
 // 贪心合并后的方块面（W×D 矩形，重复贴图用 RepeatWrapping 自动循环）
+// 顶点位置全部用标量三元二选一算出，不再为每张面分配 O/P/uvs 临时数组
 function pushGreedyFace(A, f, ox, oy, oz, W, D, tile, under, baseX, baseZ) {
   const vi = A.pos.length / 3;
-  const nAxis = 3 - f.uAxis - f.vAxis;
-  const ua = f.uAxis, va = f.vAxis;
-  const O = [ox, oy, oz];
-  const uvs = [[0, 0], [W, 0], [W, D], [0, D]];
+  const ua = f.uAxis, va = f.vAxis, nAxis = f.nAxis;
+  // 把 ox/oy/oz 按轴拆成 (法线轴, u 轴, v 轴) 三个标量
+  const on = nAxis === 0 ? ox : nAxis === 1 ? oy : oz;
+  const ou = ua === 0 ? ox : ua === 1 ? oy : oz;
+  const ov = va === 0 ? ox : va === 1 ? oy : oz;
+  const nv = f.n[0], nv2 = f.n[1], nv3 = f.n[2];
+  const vv = Math.min(1, f.shade * under);
   for (let k = 0; k < 4; k++) {
     const c = f.corners[k];
-    const P = [0, 0, 0];
-    P[nAxis] = O[nAxis] + c[nAxis];
-    P[ua] = O[ua] + (c[ua] === 1 ? W : 0);
-    P[va] = O[va] + (c[va] === 1 ? D : 0);
-    A.pos.push(baseX + P[0], P[1], baseZ + P[2]);
-    A.nor.push(f.n[0], f.n[1], f.n[2]);
-    A.uv.push(uvs[k][0], uvs[k][1]);
+    const pn = on + c[nAxis];
+    const pu = ou + (c[ua] === 1 ? W : 0);
+    const pv = ov + (c[va] === 1 ? D : 0);
+    // 按轴号装回世界轴（nAxis/ua/va 是 0/1/2 的一个排列）
+    const px = nAxis === 0 ? pn : ua === 0 ? pu : pv;
+    const py = nAxis === 1 ? pn : ua === 1 ? pu : pv;
+    const pz = nAxis === 2 ? pn : ua === 2 ? pu : pv;
+    A.pos.push(baseX + px, py, baseZ + pz);
+    A.nor.push(nv, nv2, nv3);
+    // k=0 →(0,0)  k=1 →(W,0)  k=2 →(W,D)  k=3 →(0,D)
+    A.uv.push((k === 1 || k === 2) ? W : 0, (k === 2 || k === 3) ? D : 0);
     A.layer.push(tile);
-    const vv = Math.min(1, f.shade * under);
     A.col.push(vv, vv, vv);
   }
   A.idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
@@ -4240,10 +4278,12 @@ function buildOpaqueGreedy(c, A, baseX, baseZ, yMax, colTop, getB, solid) {
   const mask = new Uint8Array((yMax + 1) * 16);
   const keys = new Int32Array((yMax + 1) * 16);
   const blk = [0, 0, 0];
-  for (const f of FACES) {
-    const nAxis = 3 - f.uAxis - f.vAxis;
+  for (let fi = 0; fi < 6; fi++) {
+    const f = FACES[fi];
+    const nAxis = f.nAxis;
     const nMax = (nAxis === 1) ? yMax : 15;
     const vMax = (f.vAxis === 1) ? yMax : 15;   // 侧面含竖直 y 轴，范围须到 yMax
+    const fdx = f.dir[0], fdy = f.dir[1], fdz = f.dir[2];
     for (let n = 0; n <= nMax; n++) {
       mask.fill(0);
       for (let t2 = 0; t2 <= vMax; t2++) for (let t1 = 0; t1 < 16; t1++) {
@@ -4253,10 +4293,10 @@ function buildOpaqueGreedy(c, A, baseX, baseZ, yMax, colTop, getB, solid) {
         const id = c.blocks[ly * 256 + lz * 16 + lx];
         if (isSeeThrough(id)) continue;   // 空气/水/玻璃/植物/火把/睡莲
         const bx = baseX + lx, bz = baseZ + lz;
-        const nb = getB(bx + f.dir[0], ly + f.dir[1], bz + f.dir[2]);
+        const nb = getB(bx + fdx, ly + fdy, bz + fdz);
         if (!isSeeThrough(nb)) continue;
-        let tile = tileOf(id)[f.face];
-        if (id === B.CHEST && f.face === 'side' && f.dir[2] === 1) tile = atlas.T.chestFront;
+        let tile = tileFace(id, fi);
+        if (id === B.CHEST && f.face === 'side' && fdz === 1) tile = atlas.T.chestFront;
         const under = undergroundFactor(colTop, lx, lz, ly);
         if (aoAllOne(bx, ly, bz, f, solid)) {
           mask[t2 * 16 + t1] = 1;
@@ -4279,7 +4319,7 @@ function buildOpaqueGreedy(c, A, baseX, baseZ, yMax, colTop, getB, solid) {
         }
         blk[0] = 0; blk[1] = 0; blk[2] = 0;
         blk[nAxis] = n; blk[f.uAxis] = t1; blk[f.vAxis] = t2;
-        pushGreedyFace(A, f, blk[0], blk[1], blk[2], w, d, Math.floor(key / 2000), (key % 2000) / 1000, baseX, baseZ);
+        pushGreedyFace(A, f, blk[0], blk[1], blk[2], w, d, (key / 2000) | 0, (key % 2000) / 1000, baseX, baseZ);
         for (let dz = 0; dz < d; dz++) for (let dx = 0; dx < w; dx++) mask[(t2 + dz) * 16 + t1 + dx] = 0;
       }
     }
@@ -4471,7 +4511,11 @@ function pushDoor(A, bx, by, bz, tile, isOpen, getB) {
   }
 }
 
-function makeGeo(A) {
+/* 把构建期收集的普通数组打包成 BufferGeometry。
+   两处优化：
+   1) 包围盒/包围球直接按区块几何范围写入，省掉 computeBoundingBox/Sphere 两次全顶点遍历；
+   2) 顶点数 < 65536 时用 Uint16 索引（索引显存直接减半），超出才退回 Uint32。 */
+function makeGeo(A, cx, yMax, cz) {
   if (A.pos.length === 0) return null;
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(A.pos), 3));
@@ -4479,9 +4523,23 @@ function makeGeo(A) {
   if (A.uv && A.uv.length) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(A.uv), 2));
   if (A.layer && A.layer.length) g.setAttribute('aLayer', new THREE.BufferAttribute(new Float32Array(A.layer), 1));
   if (A.col && A.col.length) g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(A.col), 3));
-  g.setIndex(new THREE.BufferAttribute(new Uint32Array(A.idx), 1));
-  g.computeBoundingSphere();
-  g.computeBoundingBox();
+  const vCount = A.pos.length / 3;
+  g.setIndex(new THREE.BufferAttribute(vCount < 65536 ? new Uint16Array(A.idx) : new Uint32Array(A.idx), 1));
+  if (cx !== undefined) {
+    const bx = cx * 16, bz = cz * 16;
+    const top = (yMax || 0) + 1.2;
+    g.boundingBox = new THREE.Box3(
+      new THREE.Vector3(bx, -0.2, bz),
+      new THREE.Vector3(bx + 16, top, bz + 16)
+    );
+    g.boundingSphere = new THREE.Sphere(
+      new THREE.Vector3(bx + 8, top * 0.5, bz + 8),
+      Math.sqrt(8 * 8 + 8 * 8 + (top * 0.5) * (top * 0.5)) + 1.5
+    );
+  } else {
+    g.computeBoundingSphere();
+    g.computeBoundingBox();
+  }
   return g;
 }
 
@@ -4505,20 +4563,25 @@ function buildChunkGeometry(c) {
     nbBlocks[(dz + 1) * 3 + (dx + 1)] = nc ? nc.blocks : null;
     nbWaters[(dz + 1) * 3 + (dx + 1)] = nc ? nc.water : null;
   }
+  /* 中心区块数据直连：绝大多数采样都落在本区块内，
+     直接索引 c.blocks 比走 3x3 数组 + 两次位移更快。 */
+  const selfBlocks = c.blocks, selfWater = c.water, selfCx = c.cx, selfCz = c.cz;
   const getB = (x, y, z) => {
     if (y < 0) return B.BEDROCK;
     if (y >= HEIGHT) return B.AIR;
-    const ccx = Math.floor(x / 16), ccz = Math.floor(z / 16);
-    const arr = nbBlocks[(ccz - c.cz + 1) * 3 + (ccx - c.cx + 1)];
+    const ccx = x >> 4, ccz = z >> 4;          // 位运算取代 Math.floor(x/16)，负数同样正确
+    if (ccx === selfCx && ccz === selfCz) return selfBlocks[y * 256 + (z - (ccz << 4)) * 16 + (x - (ccx << 4))];
+    const arr = nbBlocks[(ccz - selfCz + 1) * 3 + (ccx - selfCx + 1)];
     if (!arr) return B.AIR;
-    return arr[y * 256 + (z - ccz * 16) * 16 + (x - ccx * 16)];
+    return arr[y * 256 + (z - (ccz << 4)) * 16 + (x - (ccx << 4))];
   };
   const getW = (x, y, z) => {
     if (y < 0 || y >= HEIGHT) return 0;
-    const ccx = Math.floor(x / 16), ccz = Math.floor(z / 16);
-    const arr = nbWaters[(ccz - c.cz + 1) * 3 + (ccx - c.cx + 1)];
+    const ccx = x >> 4, ccz = z >> 4;
+    if (ccx === selfCx && ccz === selfCz) return selfWater[y * 256 + (z - (ccz << 4)) * 16 + (x - (ccx << 4))];
+    const arr = nbWaters[(ccz - selfCz + 1) * 3 + (ccx - selfCx + 1)];
     if (!arr) return 0;
-    return arr[y * 256 + (z - ccz * 16) * 16 + (x - ccx * 16)];
+    return arr[y * 256 + (z - (ccz << 4)) * 16 + (x - (ccx << 4))];
   };
   const A = { pos: [], nor: [], uv: [], layer: [], col: [], idx: [] };
   const C = { pos: [], nor: [], uv: [], layer: [], col: [], idx: [] };
@@ -4539,8 +4602,9 @@ function buildChunkGeometry(c) {
         if (L > 0) {
           // 水的所有暴露在空气或透光非水方块的侧面（FACES 0, 1, 4, 5）及底面（FACES 3）均必须渲染！
           const hgt = L < 8 ? (L / 8) : 1.0;
-          for (const f of FACES) {
-            if (f.n[1] === 1) {
+          for (let fi = 0; fi < 6; fi++) {
+            const f = FACES[fi];
+            if (fi === 2) {
               // 顶面：流动水(L < 8)在此单独补顶面；满水(L === 8)交由下方贪心合并统一处理
               if (L < 8) {
                 const nbTop = getB(wx, y + 1, wz);
@@ -4550,7 +4614,7 @@ function buildChunkGeometry(c) {
               }
               continue;
             }
-            if (f.n[1] === -1) {
+            if (fi === 3) {
               // 底面
               const nbBottom = getB(wx, y - 1, wz);
               if (getW(wx, y - 1, wz) === 0 && isSeeThrough(nbBottom)) {
@@ -4559,8 +4623,9 @@ function buildChunkGeometry(c) {
               continue;
             }
             // 侧面（FACES 0, 1, 4, 5）：若邻居透光且水深低于本格水（例如空气或落差水流），渲染侧面！
-            const nb = getB(wx + f.dir[0], y + f.dir[1], wz + f.dir[2]);
-            const nbW = getW(wx + f.dir[0], y + f.dir[1], wz + f.dir[2]);
+            const dx = f.dir[0], dy = f.dir[1], dz = f.dir[2];
+            const nb = getB(wx + dx, y + dy, wz + dz);
+            const nbW = getW(wx + dx, y + dy, wz + dz);
             if (nbW < L && isSeeThrough(nb)) {
               const bHgt = nbW > 0 ? (nbW / 8) : 0;
               pushWaterFace(W, wx, y, wz, f, hgt, bHgt);
@@ -4582,12 +4647,12 @@ function buildChunkGeometry(c) {
           continue;
         }
         if (id === B.GLASS) {                     // 玻璃：cutout，逐面（不参与贪心）
-          const t = tileOf(id);
           const under = undergroundFactor(colTop, lx, lz, y);
-          for (const f of FACES) {
+          for (let fi = 0; fi < 6; fi++) {
+            const f = FACES[fi];
             const nb = getB(wx + f.dir[0], y + f.dir[1], wz + f.dir[2]);
             if (!(isSeeThrough(nb) && nb !== B.GLASS)) continue;
-            pushFace(C, wx, y, wz, f, t[f.face], under, solid);
+            pushFace(C, wx, y, wz, f, tileFace(id, fi), under, solid);
           }
           continue;
         }
@@ -4597,8 +4662,10 @@ function buildChunkGeometry(c) {
   }
   buildOpaqueGreedy(c, A, baseX, baseZ, yMax, colTop, getB, solid);
   // 满水面贪心合并：仅在「上方无水且无实体方块」的格渲染顶面，并合并成矩形
+  const waterMask = new Uint8Array(256);      // 提到循环外复用，避免每层 y 都新分配 256 字节
   for (let y = 0; y <= yMax; y++) {
-    const mask = new Uint8Array(256);
+    const mask = waterMask;
+    mask.fill(0);
     for (let lz = 0; lz < 16; lz++) for (let lx = 0; lx < 16; lx++) {
       const i = y * 256 + lz * 16 + lx;
       if (c.water[i] === 8 && getW(baseX + lx, y + 1, baseZ + lz) === 0 && isSeeThrough(getB(baseX + lx, y + 1, baseZ + lz))) {
@@ -4618,7 +4685,12 @@ function buildChunkGeometry(c) {
       for (let dz = 0; dz < d; dz++) for (let dx = 0; dx < w; dx++) mask[(lz + dz) * 16 + lx + dx] = 0;
     }
   }
-  return { opaque: makeGeo(A), cutout: makeGeo(C), water: makeGeo(W), torch: makeGeo(T) };
+  return {
+    opaque: makeGeo(A, c.cx, yMax, c.cz),
+    cutout: makeGeo(C, c.cx, yMax, c.cz),
+    water: makeGeo(W, c.cx, yMax, c.cz),
+    torch: makeGeo(T, c.cx, yMax, c.cz),
+  };
 }
 
 function buildChunkMeshes(c) {
@@ -4849,15 +4921,31 @@ function releaseParticleMat(mat) {
   if (particleMatPool.length < MAX_PARTICLES) particleMatPool.push(mat);
   else mat.dispose();
 }
+/* Mesh 也做对象池：原来每次粒子生成都 new THREE.Mesh，
+   挖一片方块就是上百次分配 + 随后 GC。复用后只改 transform。 */
+const particleMeshPool = [];
+function takeParticleMesh(mat) {
+  const m = particleMeshPool.pop();
+  if (m) { m.material = mat; m.visible = true; return m; }
+  return new THREE.Mesh(particleGeo, mat);
+}
+function releaseParticleMesh(m) {
+  if (particleMeshPool.length < MAX_PARTICLES) particleMeshPool.push(m);
+}
 function spawnParticles(x, y, z, color, count) {
   for (let n = 0; n < count; n++) {
+    // 上限回收：用交换删除（O(1)），避免 shift() 的 O(n) 搬移
     if (particles.length >= MAX_PARTICLES) {
-      const old = particles.shift();
-      scene.remove(old.m); releaseParticleMat(old.mat);
+      const last = particles.length - 1;
+      const old = particles[0];
+      particles[0] = particles[last];
+      particles.pop();
+      scene.remove(old.m); releaseParticleMat(old.mat); releaseParticleMesh(old.m);
     }
     const mat = takeParticleMat(color);
-    const m = new THREE.Mesh(particleGeo, mat);
+    const m = takeParticleMesh(mat);
     m.position.set(x + 0.5, y + 0.5, z + 0.5);
+    m.rotation.set(0, 0, 0);
     scene.add(m);
     particles.push({
       m, mat,
@@ -4873,8 +4961,11 @@ function updateParticles(dt) {
     const p = particles[i];
     p.life -= dt;
     if (p.life <= 0) {
-      scene.remove(p.m); releaseParticleMat(p.mat);
-      particles.splice(i, 1);
+      scene.remove(p.m); releaseParticleMat(p.mat); releaseParticleMesh(p.m);
+      // 交换删除：把队尾元素搬过来，避免 splice 的整体搬移
+      const last = particles.length - 1;
+      if (i !== last) particles[i] = particles[last];
+      particles.pop();
       continue;
     }
     p.vy -= 14 * dt;
@@ -5463,7 +5554,7 @@ const chickenLegGeo = new THREE.BoxGeometry(0.08, 0.22, 0.08);
 const chickenWingGeo = new THREE.BoxGeometry(0.05, 0.18, 0.28);
 
 function findGround(x, z) {
-  const k = x + ',' + z;
+  const k = x * 65536 + z;               // 数值 key：避免 "x,z" 字符串分配与哈希
   const hit = groundCache.get(k);
   if (hit !== undefined) return hit;
   let out = 1;
@@ -11619,14 +11710,8 @@ const mouse = { dx: 0, dy: 0, down: [false, false, false] };
 function playerAABB(pos) {
   return { minX: pos.x - player.halfW, maxX: pos.x + player.halfW, minY: pos.y, maxY: pos.y + player.height, minZ: pos.z - player.halfW, maxZ: pos.z + player.halfW };
 }
-function isCrossPlant(id) { return id === B.FLOWER_RED || id === B.FLOWER_YELLOW || id === B.GRASS_TALL || id === B.MUSHROOM_RED || id === B.MUSHROOM_BROWN || id === B.FERN || id === B.WHEAT_CROP || id === B.WHEAT_CROP_MATURE || id === B.BAMBOO || id === B.SUGARCANE || id === B.COBWEB || id === B.POINTED_DRIPSTONE || isSapling(id); }
-function isPetals(id) { return id === B.CHERRY_PETALS; }
-function isSapling(id) { return id === B.SAPLING || id === B.MAPLE_SAPLING || id === B.CHERRY_SAPLING; }
-function isLog(id) { return id === B.LOG || id === B.BIRCH_LOG || id === B.SPRUCE_LOG || id === B.JUNGLE_LOG || id === B.ACACIA_LOG || id === B.CHERRY_LOG || id === B.MAPLE_LOG; }
-function isLeaf(id) { return id === B.LEAVES || id === B.BIRCH_LEAVES || id === B.SPRUCE_LEAVES || id === B.JUNGLE_LEAVES || id === B.ACACIA_LEAVES || id === B.CHERRY_LEAVES || id === B.MAPLE_LEAVES; }
-function isTorch(id) { return id === B.TORCH; }
-function isLilyPad(id) { return id === B.LILY_PAD; }
-function isLadder(id) { return id === B.LADDER; }
+/* 热路径谓词（isLeaf/isTorch/isLilyPad/isLadder/isCrossPlant/isSapling/isLog/isBed）
+   统一在下方用查表实现，这里不再重复定义，避免函数重复声明。 */
 function isPickaxe(id) { return id === B.WOOD_PICKAXE || id === B.STONE_PICKAXE || id === B.IRON_PICKAXE || id === B.DIAMOND_PICKAXE || id === B.NETHERITE_PICKAXE; }
 function isAxe(id) { return id === B.WOOD_AXE || id === B.STONE_AXE || id === B.IRON_AXE || id === B.DIAMOND_AXE || id === B.NETHERITE_AXE; }
 function isShovel(id) { return id === B.WOOD_SHOVEL || id === B.STONE_SHOVEL || id === B.IRON_SHOVEL || id === B.DIAMOND_SHOVEL || id === B.NETHERITE_SHOVEL; }
@@ -11634,7 +11719,6 @@ function isSword(id) { return id === B.WOOD_SWORD || id === B.STONE_SWORD || id 
 function isBow(id) { return id === B.BOW; }
 function isShield(id) { return id === B.SHIELD; }
 function isFishingRod(id) { return id === B.FISHING_ROD; }
-function isBed(id) { return id === B.BED; }
 function isWool(id) { return id === B.WOOL; }
 function isTool(id) { return isPickaxe(id) || isAxe(id) || isShovel(id) || isSword(id) || id === B.BOW || isShield(id) || isFishingRod(id); }
 function isWoodTier(id) { return id === B.WOOD_PICKAXE || id === B.WOOD_AXE || id === B.WOOD_SHOVEL || id === B.WOOD_SWORD; }
@@ -11659,15 +11743,65 @@ function isPlaceable(id) {
   return true;
 }
 function isOre(id) { return id === B.COAL || id === B.IRON || id === B.GOLD || id === B.DIAMOND || id === B.EMERALD_ORE || id === B.LAPIS_ORE || id === B.REDSTONE_ORE || id === B.COPPER_ORE; }
-// 透明/可透视（用于面剔除与 AO）
-function isSeeThrough(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || id === B.DOOR || isCrossPlant(id) || isTorch(id) || isLilyPad(id) || isPetals(id) || isLadder(id) || isBed(id) || id === B.NETHER_PORTAL || id === B.LIGHTNING_ROD || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.LEVER || id === B.BUTTON || id === B.CHAIN || id === B.BELL || id === B.GRINDSTONE; }
+
+/* ---------- 热路径查表 ----------
+   网格构建时 isSeeThrough / isSolid 等谓词会被调用数百万次：
+   原先它们是一长串 === 比较（最坏 25 次比较/次调用），改成一次 Uint8Array 查表。
+   表按需惰性构建（第一次调用时一次性铺满 0..255），之后只有索引开销。
+   缓存挂在函数对象上，避免顶层 const 的 TDZ 问题（函数声明会整体提升）。 */
+function _fillTbl(fn) {
+  const t = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) if (fn(i)) t[i] = 1;
+  return t;
+}
+
+// —— 原始判定逻辑（供建表用，保持单一事实来源；均为函数声明，不产生每次调用的闭包） ——
+function _crossRaw(i) { return i === B.FLOWER_RED || i === B.FLOWER_YELLOW || i === B.GRASS_TALL || i === B.MUSHROOM_RED || i === B.MUSHROOM_BROWN || i === B.FERN || i === B.WHEAT_CROP || i === B.WHEAT_CROP_MATURE || i === B.BAMBOO || i === B.SUGARCANE || i === B.COBWEB || i === B.POINTED_DRIPSTONE || i === B.SAPLING || i === B.MAPLE_SAPLING || i === B.CHERRY_SAPLING; }
+function _seeRaw(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || id === B.DOOR || _crossRaw(id) || id === B.TORCH || id === B.LILY_PAD || id === B.CHERRY_PETALS || id === B.LADDER || id === B.BED || id === B.NETHER_PORTAL || id === B.LIGHTNING_ROD || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.LEVER || id === B.BUTTON || id === B.CHAIN || id === B.BELL || id === B.GRINDSTONE; }
+function _solidRaw(id) { return id !== B.AIR && id !== B.WATER && !_crossRaw(id) && id !== B.TORCH && id !== B.LILY_PAD && id !== B.CHERRY_PETALS && id !== B.LADDER && id !== B.NETHER_PORTAL && id !== B.LEVER && id !== B.BUTTON; }
+
+// 透明/可透视（用于面剔除与 AO）—— 查表版
+function isSeeThrough(id) {
+  let t = isSeeThrough.t;
+  if (!t) t = isSeeThrough.t = _fillTbl(_seeRaw);
+  return t[id] === 1;
+}
+function isSolid(id) {
+  let t = isSolid.t;
+  if (!t) t = isSolid.t = _fillTbl(_solidRaw);
+  return t[id] === 1;
+}
+function isCrossPlant(id) {
+  let t = isCrossPlant.t;
+  if (!t) t = isCrossPlant.t = _fillTbl(_crossRaw);
+  return t[id] === 1;
+}
+function isSapling(id) {
+  let t = isSapling.t;
+  if (!t) t = isSapling.t = _fillTbl((i) => i === B.SAPLING || i === B.MAPLE_SAPLING || i === B.CHERRY_SAPLING);
+  return t[id] === 1;
+}
+function isLog(id) {
+  let t = isLog.t;
+  if (!t) t = isLog.t = _fillTbl((i) => i === B.LOG || i === B.BIRCH_LOG || i === B.SPRUCE_LOG || i === B.JUNGLE_LOG || i === B.ACACIA_LOG || i === B.CHERRY_LOG || i === B.MAPLE_LOG);
+  return t[id] === 1;
+}
+function isLeaf(id) {
+  let t = isLeaf.t;
+  if (!t) t = isLeaf.t = _fillTbl((i) => i === B.LEAVES || i === B.BIRCH_LEAVES || i === B.SPRUCE_LEAVES || i === B.JUNGLE_LEAVES || i === B.ACACIA_LEAVES || i === B.CHERRY_LEAVES || i === B.MAPLE_LEAVES);
+  return t[id] === 1;
+}
+function isTorch(id) { return id === B.TORCH; }
+function isLilyPad(id) { return id === B.LILY_PAD; }
+function isLadder(id) { return id === B.LADDER; }
+function isPetals(id) { return id === B.CHERRY_PETALS; }
+function isBed(id) { return id === B.BED; }
 // 确定性的列哈希（用于花草摆放）
 function plantHash(x, z) {
   let h = (x * 374761393 + z * 668265263) ^ 0x9e3779b9;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
-function isSolid(id) { return id !== B.AIR && id !== B.WATER && !isCrossPlant(id) && !isTorch(id) && !isLilyPad(id) && !isPetals(id) && !isLadder(id) && id !== B.NETHER_PORTAL && id !== B.LEVER && id !== B.BUTTON; }
 
 function collideAxis(axis, vel) {
   if (axis === 0) player.pos.x += vel;
@@ -12069,6 +12203,8 @@ let bob = 0, bobT = 0;
 let stepDist = 0, stepFoot = false, wasInWater = false;
 
 /* ============================ 射线拾取 ============================ */
+/* 原实现每步都重建 face 数组字面量；这里改成 3 个标量，
+   只有真正命中时才构造返回对象（每帧只命中一次）。 */
 function raycast(origin, dir, maxDist) {
   let x = Math.floor(origin.x), y = Math.floor(origin.y), z = Math.floor(origin.z);
   const stepX = dir.x > 0 ? 1 : -1, stepY = dir.y > 0 ? 1 : -1, stepZ = dir.z > 0 ? 1 : -1;
@@ -12078,17 +12214,17 @@ function raycast(origin, dir, maxDist) {
   let tmx = tdx === Infinity ? Infinity : (stepX > 0 ? (x + 1 - origin.x) : (origin.x - x)) * tdx;
   let tmy = tdy === Infinity ? Infinity : (stepY > 0 ? (y + 1 - origin.y) : (origin.y - y)) * tdy;
   let tmz = tdz === Infinity ? Infinity : (stepZ > 0 ? (z + 1 - origin.z) : (origin.z - z)) * tdz;
-  let face = [0, 0, 0];
+  let fx = 0, fy = 0, fz = 0;
   let t = 0;
   while (t <= maxDist) {
     const id = world.getBlock(x, y, z);
     // 水视为透明：射线穿过水，命中水下的实体方块（水本身不可破坏）
     if (id !== B.AIR) {
-      return { x, y, z, id, n: [face[0], face[1], face[2]], normal: [face[0], face[1], face[2]] };
+      return { x, y, z, id, n: [fx, fy, fz], normal: [fx, fy, fz] };
     }
-    if (tmx < tmy && tmx < tmz) { x += stepX; t = tmx; tmx += tdx; face = [-stepX, 0, 0]; }
-    else if (tmy < tmz) { y += stepY; t = tmy; tmy += tdy; face = [0, -stepY, 0]; }
-    else { z += stepZ; t = tmz; tmz += tdz; face = [0, 0, -stepZ]; }
+    if (tmx < tmy && tmx < tmz) { x += stepX; t = tmx; tmx += tdx; fx = -stepX; fy = 0; fz = 0; }
+    else if (tmy < tmz) { y += stepY; t = tmy; tmy += tdy; fx = 0; fy = -stepY; fz = 0; }
+    else { z += stepZ; t = tmz; tmz += tdz; fx = 0; fy = 0; fz = -stepZ; }
   }
   return null;
 }
@@ -12103,14 +12239,14 @@ function raycastWater(origin, dir, maxDist) {
   let tmx = tdx === Infinity ? Infinity : (stepX > 0 ? (x + 1 - origin.x) : (origin.x - x)) * tdx;
   let tmy = tdy === Infinity ? Infinity : (stepY > 0 ? (y + 1 - origin.y) : (origin.y - y)) * tdy;
   let tmz = tdz === Infinity ? Infinity : (stepZ > 0 ? (z + 1 - origin.z) : (origin.z - z)) * tdz;
-  let face = [0, 0, 0];
+  let fx = 0, fy = 0, fz = 0;
   let t = 0;
   while (t <= maxDist) {
     if (world.getBlock(x, y, z) !== B.AIR) return null;   // 撞到实体方块则停止
-    if (world.getWater(x, y, z) > 0) return { x, y, z, n: [face[0], face[1], face[2]], normal: [face[0], face[1], face[2]] };
-    if (tmx < tmy && tmx < tmz) { x += stepX; t = tmx; tmx += tdx; face = [-stepX, 0, 0]; }
-    else if (tmy < tmz) { y += stepY; t = tmy; tmy += tdy; face = [0, -stepY, 0]; }
-    else { z += stepZ; t = tmz; tmz += tdz; face = [0, 0, -stepZ]; }
+    if (world.getWater(x, y, z) > 0) return { x, y, z, n: [fx, fy, fz], normal: [fx, fy, fz] };
+    if (tmx < tmy && tmx < tmz) { x += stepX; t = tmx; tmx += tdx; fx = -stepX; fy = 0; fz = 0; }
+    else if (tmy < tmz) { y += stepY; t = tmy; tmy += tdy; fx = 0; fy = -stepY; fz = 0; }
+    else { z += stepZ; t = tmz; tmz += tdz; fx = 0; fy = 0; fz = -stepZ; }
   }
   return null;
 }
@@ -13639,7 +13775,21 @@ function makeItemIcon(id) {
   }
   return cv;
 }
+/* 图标缓存：makeIcon 内部是几十上百次 fillRect，而物品栏每次刷新要为 9 个槽位各画一张，
+   拾取掉落物时还会连续触发。这里把"基础图标"按 id 缓存成一张 32×32 位图，
+   之后每个槽位只用 drawImage 拷一份（槽位需要独立画布叠加附魔光/耐久条）。 */
+const _iconBaseCache = new Map();
 function makeIcon(id) {
+  let base = _iconBaseCache.get(id);
+  if (base === undefined) { base = _makeIconRaw(id); _iconBaseCache.set(id, base); }
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 32;
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(base, 0, 0);
+  return cv;
+}
+function _makeIconRaw(id) {
   if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD && id !== B.CROSSBOW && id !== B.SHEARS && id !== B.FLINT_AND_STEEL)) return makeToolIcon(id);
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.GOLDEN_CARROT || id === B.COMPASS || id === B.CLOCK || id === B.ENCHANTED_GOLDEN_APPLE || id === B.COOKIE || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT || id === B.ELYTRA || id === B.NETHERITE_INGOT || id === B.HONEYCOMB || id === B.BONE_MEAL || id === B.GOAT_HORN) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
@@ -16219,29 +16369,43 @@ function onMousedown(btn) {
 
 /* ============================ 流式加载 ============================ */
 let genLastFrame = 0, genMaxFrame = 0;   // 调试用：统计单帧生成区块数，用来确认预算确实生效
+/* 单帧时间预算（毫秒）。原来的上限只看"个数"，但每个区块生成/网格化耗时并不一样：
+   快速飞行时 10 个区块可能花掉 120ms，直接卡成一帧。改成时间预算后，
+   无论区块多重，单帧最多只吃掉这么多主线程时间，帧率保持平稳。 */
+const GEN_BUDGET_MS = 5;
+const MESH_BUDGET_MS = 5;
 function updateStreaming() {
   const pcx = Math.floor(player.pos.x / 16), pcz = Math.floor(player.pos.z / 16);
   // 生成
   let gen = 0;
+  const genDeadline = performance.now() + GEN_BUDGET_MS;
   genRing:
   for (let r = 0; r <= GEN_R; r++) {
     for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
       if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
-      if (gen >= MAXGEN) break genRing;   // 预算用满就停：一圈最多 ~88 个区块，不能挤在同一帧
+      if (gen >= MAXGEN) break genRing;   // 个数上限
+      if (gen > 0 && performance.now() > genDeadline) break genRing;   // 时间预算：至少保证本帧推进 1 个
       const cx = pcx + dx, cz = pcz + dz;
       if (!world.chunkLoaded(cx, cz)) { world.ensureChunk(cx, cz); gen++; }
     }
   }
   genLastFrame = gen;
   if (gen > genMaxFrame) genMaxFrame = gen;
-  // 植树与自然村庄生成
+  /* 植树与自然村庄生成。
+     两个优化：村庄判定结果缓存到区块对象上（原来每帧对每个区块都要算 2 次 plantHash），
+     植树预算用尽后不再逐个区块调用 plantTrees。 */
   let trees = 0;
+  let treeBudgetDone = trees >= MAXTREE;
   for (const c of world.chunks.values()) {
-    if (isVillageChunk(c.cx, c.cz) && !c.villageBuilt) {
-      buildVillage(c);
+    if (c.villageChunk === undefined) c.villageChunk = isVillageChunk(c.cx, c.cz);
+    if (c.villageChunk && !c.villageBuilt) buildVillage(c);
+    if (!treeBudgetDone && !c.treesPlanted) {
+      plantTrees(c);
+      if (c.treesPlanted) {
+        trees++;
+        if (trees >= MAXTREE) treeBudgetDone = true;
+      }
     }
-    if (trees >= MAXTREE) continue;
-    if (!c.treesPlanted) { plantTrees(c); if (c.treesPlanted) trees++; }
   }
   // 网格（邻居齐全才构建，避免边缘接缝；优先构建距离玩家最近的 dirty 区块，避免挖掘破坏时延迟闪烁）
   let mesh = 0;
@@ -16258,8 +16422,10 @@ function updateStreaming() {
       return da - db;
     });
   }
+  const meshDeadline = performance.now() + MESH_BUDGET_MS;
   for (const c of dirtyChunks) {
     if (mesh >= MAXMESH) break;
+    if (mesh > 0 && performance.now() > meshDeadline) break;   // 时间预算：至少推进 1 个，避免永不重建
     let ok = true;
     for (let dz = -1; dz <= 1 && ok; dz++) for (let dx = -1; dx <= 1; dx++)
       if (!world.chunkLoaded(c.cx + dx, c.cz + dz)) { ok = false; break; }
@@ -16290,6 +16456,44 @@ let torchFlickerT = 0;
 const FOG_CAVE = new THREE.Color(0x0b0e12);   // 地下雾色：洞里更暗，火把/手持光才是唯一亮源
 let fpsAcc = 0, fpsFrames = 0;
 let loadedOnce = false;
+
+/* ---------- 自适应分辨率（动态像素比） ----------
+   DPR 2 意味着 4 倍像素填充，是体素游戏最大的 GPU 开销来源。
+   策略：默认保持 min(DPR, 2) 的高清画质；若连续两次 0.5 秒窗口平均帧率低于 45，
+   就逐级下调像素比（2 → 1.5 → 1.25 → 1），保证操作跟手。
+   只下调不回调，避免在阈值附近来回抖动导致画面反复重采样。 */
+const _resLevels = [
+  Math.min(window.devicePixelRatio || 1, 2),
+  1.5,
+  1.25,
+  1,
+];
+let _resLevel = 0;
+let _lowFpsStreak = 0;
+function adaptiveResolution(fps) {
+  if (_resLevel >= _resLevels.length - 1) return;   // 已经最低档
+  if (fps < 45) {
+    _lowFpsStreak++;
+    if (_lowFpsStreak >= 2) {
+      _lowFpsStreak = 0;
+      _resLevel++;
+      const target = Math.min(_resLevels[_resLevel], window.devicePixelRatio || 1);
+      if (Math.abs(renderer.getPixelRatio() - target) > 0.01) {
+        renderer.setPixelRatio(target);
+        renderer.setSize(innerWidth, innerHeight, false);
+      }
+      // 降到 1.25 档时连阴影贴图一起下调：2048² 深度 pass 是第二大 GPU 开销
+      if (_resLevel >= 2 && sun.shadow.mapSize.x > 1024) {
+        for (const l of [sun, moon]) {
+          l.shadow.mapSize.set(1024, 1024);
+          if (l.shadow.map) { l.shadow.map.dispose(); l.shadow.map = null; }
+        }
+      }
+    }
+  } else {
+    _lowFpsStreak = 0;
+  }
+}
 
 function animate() {
   requestAnimationFrame(animate);   // 跟随屏幕刷新率，不再空转烧 CPU/电量；游戏速度仍由 dt 保证
@@ -16475,6 +16679,7 @@ function animate() {
     const facingIdx = Math.floor((((player.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4) + 0.5) % 8;
     const facingStr = facingNames[facingIdx];
     hudMeta.textContent = `FPS ${fps} · 坐标 ${Math.round(player.pos.x)}, ${Math.round(player.pos.y)}, ${Math.round(player.pos.z)} · 朝向 ${facingStr} · ${biomeName} · 时间 ${clockStr} · ${player.fly ? '✨ 创造' : '🚶 生存'}${submerged ? ' · 🫧 水下' : ''}`;
+    adaptiveResolution(fps);
     fpsAcc = 0; fpsFrames = 0;
   }
 
