@@ -651,7 +651,10 @@ const B = {
   YELLOW_TERRACOTTA:217, TERRACOTTA:218, MYCELIUM:219, WHITE_SAND:220, PODZOL:221,
   DEEPSLATE:222, MUD:223, FARMLAND:224, DIRT_PATH:225,
   NETHERRACK:226, SOUL_SAND:227, NETHER_BRICKS:228, NETHER_QUARTZ_ORE:229,
-  NETHER_GOLD_ORE:230, BLACKSTONE:231, CRIMSON_NYLIUM:232, WARPED_NYLIUM:233
+  NETHER_GOLD_ORE:230, BLACKSTONE:231, CRIMSON_NYLIUM:232, WARPED_NYLIUM:233,
+  CRIMSON_STEM:234, NETHER_WART_BLOCK:235, WARPED_STEM:236, WARPED_WART_BLOCK:237, SHROOMLIGHT:238,
+  MUSHROOM_STEM:239, RED_MUSHROOM_BLOCK:240, BROWN_MUSHROOM_BLOCK:241,
+  VINE:242, WEEPING_VINES:243, TWISTING_VINES:244
 };
 
 function mulberry32(a) {
@@ -932,8 +935,8 @@ function netherBiomeAt(x, z) {
   const nWild = P.terrain.fbm2(wx * 0.0042 + 5700, wz * 0.0042 + 5700, 3);
   if (nTemp < -0.14 && nWild < 0.08) return 2;   // 灵魂沙峡谷
   if (nTemp < -0.10 && nWild >= 0.08) return 3;  // 玄武岩三角洲
-  if (nTemp > 0.14 && nWild >= 0.0) return 4;    // 绯红菌林
-  if (nTemp > 0.14 && nWild < 0.0) return 5;     // 诡异菌林
+  if (nTemp > 0.08 && nWild >= 0.0) return 4;    // 绯红菌林
+  if (nTemp > 0.08 && nWild < 0.0) return 5;     // 诡异菌林
   return 1;                                      // 下界荒地
 }
 
@@ -1123,6 +1126,12 @@ function makeAtlas() {
   T.crimsonNyliumTop = i++; T.crimsonNyliumSide = i++;
   T.warpedNyliumTop = i++; T.warpedNyliumSide = i++;
   T.lava = i++;
+  T.crimsonStemTop = i++; T.crimsonStemSide = i++; T.netherWartBlock = i++;
+  T.warpedStemTop = i++; T.warpedStemSide = i++; T.warpedWartBlock = i++;
+  T.shroomlight = i++;
+  T.mushroomStemTop = i++; T.mushroomStemSide = i++;
+  T.redMushroomBlock = i++; T.brownMushroomBlock = i++; T.mushroomPores = i++;
+  T.vine = i++; T.weepingVines = i++; T.twistingVines = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -3212,6 +3221,150 @@ function makeAtlas() {
   speck(T.lava, [255, 244, 154], 12, 298);
   speck(T.lava, [104, 20, 8], 12, 299);
 
+  // ===== 下界巨型菌木、大型蘑菇与可攀爬藤蔓贴图 =====
+  // 24. 绯红菌柄（深紫红树皮 + 纵向跃动绯红菌脉 + 年轮顶面）
+  fill(T.crimsonStemSide, [98, 30, 56], 10, 301);
+  for (let x = 0; x < TILE; x++) {
+    for (let y = 0; y < TILE; y++) {
+      const wave = Math.sin(x * 1.2 + Math.sin(y * 0.5) * 1.1);
+      if (wave > 0.62) put(T.crimsonStemSide, x, y, 166, 46, 82);
+      else if (wave < -0.58) put(T.crimsonStemSide, x, y, 56, 16, 34);
+    }
+  }
+  fill(T.crimsonStemTop, [122, 42, 70], 8, 302);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const dRing = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5));
+    if (dRing > 6.2) put(T.crimsonStemTop, x, y, 64, 20, 40);
+    else if (Math.abs(dRing - 4.0) < 0.7 || Math.abs(dRing - 2.0) < 0.7) put(T.crimsonStemTop, x, y, 162, 56, 90);
+  }
+
+  // 25. 下界疣块（浓郁深红菌冠肉块，颗粒饱满有立体起伏）
+  fill(T.netherWartBlock, [132, 20, 28], 12, 304);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const bump = Math.sin(x * 1.1 + y * 0.7) * Math.cos(y * 1.15 - x * 0.55);
+    if (bump > 0.42) put(T.netherWartBlock, x, y, 174, 34, 44);
+    else if (bump < -0.42) put(T.netherWartBlock, x, y, 86, 10, 18);
+  }
+  speck(T.netherWartBlock, [196, 48, 56], 16, 305);
+
+  // 26. 诡异菌柄（幽青靛蓝树皮 + 纵向莹青脉纹 + 年轮顶面）
+  fill(T.warpedStemSide, [34, 96, 104], 10, 307);
+  for (let x = 0; x < TILE; x++) {
+    for (let y = 0; y < TILE; y++) {
+      const wave = Math.sin(x * 1.2 + Math.cos(y * 0.5) * 1.1);
+      if (wave > 0.60) put(T.warpedStemSide, x, y, 56, 174, 164);
+      else if (wave < -0.58) put(T.warpedStemSide, x, y, 20, 56, 68);
+    }
+  }
+  fill(T.warpedStemTop, [46, 120, 122], 8, 308);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const dRing = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5));
+    if (dRing > 6.2) put(T.warpedStemTop, x, y, 22, 62, 74);
+    else if (Math.abs(dRing - 4.0) < 0.7 || Math.abs(dRing - 2.0) < 0.7) put(T.warpedStemTop, x, y, 66, 184, 172);
+  }
+
+  // 27. 诡异疣块（鲜亮孔雀蓝青菌冠）
+  fill(T.warpedWartBlock, [20, 126, 118], 12, 310);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const bump = Math.sin(x * 1.05 - y * 0.8) * Math.cos(y * 1.1 + x * 0.6);
+    if (bump > 0.42) put(T.warpedWartBlock, x, y, 36, 184, 166);
+    else if (bump < -0.42) put(T.warpedWartBlock, x, y, 12, 82, 84);
+  }
+  speck(T.warpedWartBlock, [60, 206, 188], 16, 311);
+
+  // 28. 菌光体（下界巨菌内部温暖金橙发光果肉）
+  fill(T.shroomlight, [238, 152, 42], 14, 313);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const glow = Math.sin(x * 0.9 + 0.5) * Math.sin(y * 0.9 + 0.5);
+    if (glow > 0.35) put(T.shroomlight, x, y, 255, 226, 118);
+    else if (glow < -0.45) put(T.shroomlight, x, y, 188, 92, 20);
+  }
+  speck(T.shroomlight, [255, 246, 176], 18, 314);
+
+  // 29. 蘑菇柄（米白纤维质感菌杆 + 淡褐菌孔截面）
+  fill(T.mushroomStemSide, [212, 204, 192], 10, 316);
+  for (let x = 0; x < TILE; x++) {
+    if (x % 3 === 0) for (let y = 0; y < TILE; y++) if (((x + y * 5) & 3) !== 0) put(T.mushroomStemSide, x, y, 192, 182, 168);
+    else if (x % 3 === 1) for (let y = 0; y < TILE; y++) if (((x * 3 + y) & 3) === 0) put(T.mushroomStemSide, x, y, 232, 226, 214);
+  }
+  fill(T.mushroomStemTop, [218, 204, 174], 12, 317);
+  speck(T.mushroomStemTop, [186, 168, 138], 22, 318);
+  // 菌褶底面（红/棕大蘑菇伞盖底面的米黄多孔菌褶）
+  fill(T.mushroomPores, [214, 198, 164], 12, 319);
+  speck(T.mushroomPores, [176, 158, 126], 28, 320);
+  speck(T.mushroomPores, [232, 218, 186], 18, 321);
+
+  // 30. 红色蘑菇方块（鲜红伞盖 + 经典白色圆斑）
+  fill(T.redMushroomBlock, [196, 44, 40], 11, 323);
+  speck(T.redMushroomBlock, [164, 30, 28], 20, 324);
+  const redSpots = [
+    [2,2],[3,2],[2,3],[3,3],
+    [10,1],[11,1],[10,2],[11,2],[12,2],
+    [5,7],[6,7],[7,7],[5,8],[6,8],[7,8],[6,9],
+    [12,8],[13,8],[12,9],[13,9],
+    [2,12],[3,12],[2,13],[3,13],
+    [9,13],[10,13],[9,14],[10,14]
+  ];
+  for (const [sx, sy] of redSpots) put(T.redMushroomBlock, sx, sy, 242, 238, 228);
+
+  // 31. 棕色蘑菇方块（温润栗棕伞盖 + 细腻深浅褐斑）
+  fill(T.brownMushroomBlock, [148, 106, 70], 12, 326);
+  speck(T.brownMushroomBlock, [120, 82, 52], 28, 327);
+  speck(T.brownMushroomBlock, [174, 132, 92], 22, 328);
+
+  // 32. 沼泽藤蔓（透明镂空垂挂翠绿藤叶，贴墙/悬垂均可攀爬）
+  {
+    const vr = rng(T.vine, 330);
+    const stems = [2, 6, 10, 14];
+    for (const sx of stems) {
+      let cx = sx;
+      for (let y = 0; y < TILE; y++) {
+        if (vr() < 0.28) cx = Math.max(1, Math.min(14, cx + (vr() < 0.5 ? -1 : 1)));
+        put(T.vine, cx, y, 54, 128, 42);
+        if (vr() < 0.72 && cx + 1 < TILE) put(T.vine, cx + 1, y, 76, 158, 52);
+        if (vr() < 0.55 && cx - 1 >= 0) put(T.vine, cx - 1, y, 38, 98, 32);
+      }
+    }
+    // 横向缠绕嫩枝与小叶簇
+    for (let k = 0; k < 22; k++) {
+      const lx = (vr() * 14) | 0, ly = (vr() * 14) | 0;
+      put(T.vine, lx, ly, 68, 148, 48);
+      put(T.vine, lx + 1, ly, 92, 174, 62);
+      put(T.vine, lx, ly + 1, 46, 114, 36);
+    }
+  }
+
+  // 33. 垂泪藤（下界绯红菌林悬垂鲜红藤条）
+  {
+    const wr = rng(T.weepingVines, 334);
+    for (const sx of [4, 8, 11]) {
+      let cx = sx;
+      for (let y = 0; y < TILE; y++) {
+        if (wr() < 0.30) cx = Math.max(2, Math.min(13, cx + (wr() < 0.5 ? -1 : 1)));
+        put(T.weepingVines, cx, y, 168, 26, 44);
+        if (cx + 1 < TILE && wr() < 0.65) put(T.weepingVines, cx + 1, y, 214, 52, 68);
+        if (cx - 1 >= 0 && wr() < 0.45) put(T.weepingVines, cx - 1, y, 114, 16, 28);
+      }
+    }
+    for (let k = 0; k < 14; k++) {
+      const lx = 2 + ((wr() * 12) | 0), ly = (wr() * 14) | 0;
+      put(T.weepingVines, lx, ly, 232, 72, 82);
+    }
+  }
+
+  // 34. 缠怨藤（下界诡异菌林螺旋向上生长的青绿藤蔓）
+  {
+    const tr = rng(T.twistingVines, 338);
+    for (let y = 0; y < TILE; y++) {
+      const twist = Math.round(7.5 + Math.sin(y * 0.65) * 2.8);
+      const twist2 = Math.round(7.5 - Math.sin(y * 0.65 + 0.8) * 2.4);
+      put(T.twistingVines, twist, y, 30, 164, 152);
+      if (twist + 1 < TILE) put(T.twistingVines, twist + 1, y, 64, 216, 194);
+      put(T.twistingVines, twist2, y, 18, 116, 114);
+      if (tr() < 0.45 && twist - 1 >= 0) put(T.twistingVines, twist - 1, y, 22, 134, 128);
+    }
+  }
+
   ctx.putImageData(img, 0, 0);
   // 3D 渲染改用 2D 纹理数组（每 tile 独立一层，配合 RepeatWrapping 可让单个 tile 跨大四边形循环）
   const layers = ATLAS_TILES;
@@ -3380,6 +3533,17 @@ function _tileOfRaw(id) {
     case B.BLACKSTONE: return { top: atlas.T.blackstoneTop, side: atlas.T.blackstoneSide, bottom: atlas.T.blackstoneTop };
     case B.CRIMSON_NYLIUM: return { top: atlas.T.crimsonNyliumTop, side: atlas.T.crimsonNyliumSide, bottom: atlas.T.netherrack };
     case B.WARPED_NYLIUM: return { top: atlas.T.warpedNyliumTop, side: atlas.T.warpedNyliumSide, bottom: atlas.T.netherrack };
+    case B.CRIMSON_STEM: return { top: atlas.T.crimsonStemTop, side: atlas.T.crimsonStemSide, bottom: atlas.T.crimsonStemTop };
+    case B.NETHER_WART_BLOCK: return { top: atlas.T.netherWartBlock, side: atlas.T.netherWartBlock, bottom: atlas.T.netherWartBlock };
+    case B.WARPED_STEM: return { top: atlas.T.warpedStemTop, side: atlas.T.warpedStemSide, bottom: atlas.T.warpedStemTop };
+    case B.WARPED_WART_BLOCK: return { top: atlas.T.warpedWartBlock, side: atlas.T.warpedWartBlock, bottom: atlas.T.warpedWartBlock };
+    case B.SHROOMLIGHT: return { top: atlas.T.shroomlight, side: atlas.T.shroomlight, bottom: atlas.T.shroomlight };
+    case B.MUSHROOM_STEM: return { top: atlas.T.mushroomStemTop, side: atlas.T.mushroomStemSide, bottom: atlas.T.mushroomStemTop };
+    case B.RED_MUSHROOM_BLOCK: return { top: atlas.T.redMushroomBlock, side: atlas.T.redMushroomBlock, bottom: atlas.T.mushroomPores };
+    case B.BROWN_MUSHROOM_BLOCK: return { top: atlas.T.brownMushroomBlock, side: atlas.T.brownMushroomBlock, bottom: atlas.T.mushroomPores };
+    case B.VINE: return { top: atlas.T.vine, side: atlas.T.vine, bottom: atlas.T.vine };
+    case B.WEEPING_VINES: return { top: atlas.T.weepingVines, side: atlas.T.weepingVines, bottom: atlas.T.weepingVines };
+    case B.TWISTING_VINES: return { top: atlas.T.twistingVines, side: atlas.T.twistingVines, bottom: atlas.T.twistingVines };
     case B.CAMPFIRE: return { top: atlas.T.campfireTop, side: atlas.T.campfireSide, bottom: atlas.T.campfireSide };
     case B.DOOR: return { top: atlas.T.doorTop, side: atlas.T.doorBottom, bottom: atlas.T.doorBottom };
     case B.COBWEB: return { top: atlas.T.cobweb, side: atlas.T.cobweb, bottom: atlas.T.cobweb };
@@ -4484,6 +4648,151 @@ class World {
       }
     }
 
+    // 第三遍：下界植被结构（绯红巨型菌树、诡异巨型菌树、下界大型红/棕蘑菇、垂泪藤与缠怨藤）
+    // 树干/菌杆限制在 [3, 13) 内圈且最大冠幅半径 <= 2，确保 100% 落在本区块内绝不跨块裁切
+    const setLocal = (lx, y, lz, id) => {
+      if (lx < 0 || lx >= 16 || lz < 0 || lz >= 16 || y <= 2 || y >= HEIGHT - 3) return;
+      const ii = y * 256 + lz * 16 + lx;
+      if (c.blocks[ii] === B.AIR && c.water[ii] === 0) c.blocks[ii] = id;
+    };
+    const floraRnd = mulberry32((c.cx * 48271 + c.cz * 65537) ^ 0x517cc1b7);
+    const placedCenters = [];
+    const farEnough = (lx, lz) => placedCenters.every(([px, pz]) => (px - lx) * (px - lx) + (pz - lz) * (pz - lz) >= 20);
+
+    for (let lz = 3; lz < 13; lz++) {
+      for (let lx = 3; lx < 13; lx++) {
+        const { bm, ceilH } = colMeta[lz * 16 + lx];
+        // 寻找熔岩海之上最高一处开阔干燥的地面
+        let fy = -1;
+        for (let y = Math.min(HEIGHT - 12, ceilH - 8); y > NETHER_SEA; y--) {
+          const id = c.blocks[y * 256 + lz * 16 + lx];
+          if (id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM || id === B.NETHERRACK) {
+            if (c.blocks[(y + 1) * 256 + lz * 16 + lx] === B.AIR && c.water[(y + 1) * 256 + lz * 16 + lx] === 0) {
+              fy = y;
+              break;
+            }
+          }
+        }
+        if (fy < 0) continue;
+        const groundId = c.blocks[fy * 256 + lz * 16 + lx];
+
+        // 诡异菌林地面向上生长的缠怨藤（可攀爬至高处岩台）
+        if (bm === 5 && groundId === B.WARPED_NYLIUM && floraRnd() < 0.036) {
+          const vh = 2 + ((floraRnd() * 6) | 0);
+          for (let k = 1; k <= vh && fy + k < ceilH - 2; k++) {
+            const vi = (fy + k) * 256 + lz * 16 + lx;
+            if (c.blocks[vi] === B.AIR && c.water[vi] === 0) c.blocks[vi] = B.TWISTING_VINES;
+            else break;
+          }
+          continue;
+        }
+
+        if (!farEnough(lx, lz)) continue;
+
+        // 检查垂直净空（至少 8 格空气才长巨型菌木或大蘑菇）
+        let headroom = 0;
+        for (let k = 1; k <= 10 && fy + k < HEIGHT - 4; k++) {
+          const ki = (fy + k) * 256 + lz * 16 + lx;
+          if (c.blocks[ki] === B.AIR && c.water[ki] === 0) headroom++;
+          else break;
+        }
+        if (headroom < 7) continue;
+
+        // 1) 绯红巨型菌（下界红树）与 2) 诡异巨型菌（下界青树）
+        if ((bm === 4 && groundId === B.CRIMSON_NYLIUM && floraRnd() < 0.055) ||
+            (bm === 5 && groundId === B.WARPED_NYLIUM && floraRnd() < 0.055)) {
+          const isCrimson = (bm === 4);
+          const stemB = isCrimson ? B.CRIMSON_STEM : B.WARPED_STEM;
+          const wartB = isCrimson ? B.NETHER_WART_BLOCK : B.WARPED_WART_BLOCK;
+          const h = Math.min(headroom - 2, 5 + ((floraRnd() * 4) | 0));
+          for (let k = 1; k <= h; k++) setLocal(lx, fy + k, lz, stemB);
+          const top = fy + h;
+          for (let dy = -2; dy <= 1; dy++) {
+            const r = (dy === 1) ? 1 : 2;
+            for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
+              if (dy === 1 && Math.abs(dx) === 1 && Math.abs(dz) === 1 && floraRnd() < 0.45) continue;
+              if (dy <= 0 && Math.abs(dx) === 2 && Math.abs(dz) === 2 && floraRnd() < 0.65) continue;
+              if (dx === 0 && dz === 0 && dy <= 0) continue;
+              // 菌冠底层偶藏发光菌光体，温暖点亮下界森林
+              const isLamp = (dy === -1 && Math.abs(dx) + Math.abs(dz) === 1 && floraRnd() < 0.42);
+              setLocal(lx + dx, top + dy, lz + dz, isLamp ? B.SHROOMLIGHT : wartB);
+            }
+          }
+          setLocal(lx, top + 1, lz, wartB);
+          // 绯红巨型菌冠边缘垂落可攀爬的垂泪藤
+          if (isCrimson) {
+            for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+              if (Math.max(Math.abs(dx), Math.abs(dz)) !== 2) continue;
+              if (floraRnd() < 0.28) {
+                const vl = 2 + ((floraRnd() * 4) | 0);
+                for (let k = 1; k <= vl; k++) {
+                  const vy = top - 2 - k;
+                  if (vy <= NETHER_SEA + 1) break;
+                  const vi = vy * 256 + (lz + dz) * 16 + (lx + dx);
+                  if (c.blocks[vi] === B.AIR && c.water[vi] === 0) c.blocks[vi] = B.WEEPING_VINES;
+                  else break;
+                }
+              }
+            }
+          }
+          placedCenters.push([lx, lz]);
+          continue;
+        }
+
+        // 3) 下界大型蘑菇（蘑菇柄 + 红/棕蘑菇方块，荒地与菌林均有机会自然生长）
+        const giantMushProb = (bm === 1) ? 0.011 : ((bm === 4 || bm === 5) ? 0.012 : 0);
+        if (giantMushProb > 0 && floraRnd() < giantMushProb) {
+          const isRed = floraRnd() < 0.52;
+          const capB = isRed ? B.RED_MUSHROOM_BLOCK : B.BROWN_MUSHROOM_BLOCK;
+          const h = Math.min(headroom - 2, 4 + ((floraRnd() * 3) | 0));
+          for (let k = 1; k <= h; k++) setLocal(lx, fy + k, lz, B.MUSHROOM_STEM);
+          const top = fy + h;
+          if (isRed) {
+            // 经典大红蘑菇：3x3 圆顶 + 5x5 空心伞檐
+            for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) setLocal(lx + dx, top + 1, lz + dz, capB);
+            for (let dy = -1; dy <= 0; dy++) {
+              for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+                if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
+                if (Math.abs(dx) <= 1 && Math.abs(dz) <= 1) continue;
+                setLocal(lx + dx, top + dy, lz + dz, capB);
+              }
+            }
+          } else {
+            // 经典大棕蘑菇：平展 5x5 蘑菇伞盖
+            for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+              if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
+              setLocal(lx + dx, top + 1, lz + dz, capB);
+            }
+          }
+          placedCenters.push([lx, lz]);
+        }
+      }
+    }
+
+    // 穹顶悬垂垂泪藤（绯红菌林高密垂挂，荒地偶有垂挂，可供向上攀爬）
+    for (let lz = 1; lz < 15; lz++) {
+      for (let lx = 1; lx < 15; lx++) {
+        const { bm, ceilH } = colMeta[lz * 16 + lx];
+        const vineProb = bm === 4 ? 0.032 : (bm === 1 ? 0.004 : 0);
+        if (vineProb === 0 || floraRnd() >= vineProb) continue;
+        let roofY = -1;
+        for (let y = Math.min(HEIGHT - 5, ceilH + 1); y >= Math.max(NETHER_SEA + 12, ceilH - 6); y--) {
+          if (c.blocks[y * 256 + lz * 16 + lx] === B.NETHERRACK && c.blocks[(y - 1) * 256 + lz * 16 + lx] === B.AIR) {
+            roofY = y;
+            break;
+          }
+        }
+        if (roofY > NETHER_SEA + 12) {
+          const vLen = 3 + ((floraRnd() * 6) | 0);
+          for (let k = 1; k <= vLen && roofY - k > NETHER_SEA + 2; k++) {
+            const vi = (roofY - k) * 256 + lz * 16 + lx;
+            if (c.blocks[vi] === B.AIR && c.water[vi] === 0) c.blocks[vi] = B.WEEPING_VINES;
+            else break;
+          }
+        }
+      }
+    }
+
     c.topY = HEIGHT - 1;
   }
   _fill(c) {
@@ -5104,6 +5413,36 @@ function giveStarter() {
 setInterval(saveWorld, 30000);                 // 每 30 秒自动存档
 addEventListener('beforeunload', () => saveWorld());
 
+// 主世界大型红/棕蘑菇生成（用于沼泽、蘑菇岛、黑森林，冠幅半径 <= 2 绝不越界）
+function placeGiantMushroomWorld(wx, surf, wz, isRed, rnd) {
+  const capB = isRed ? B.RED_MUSHROOM_BLOCK : B.BROWN_MUSHROOM_BLOCK;
+  const h = isRed ? (4 + ((rnd() * 3) | 0)) : (5 + ((rnd() * 3) | 0));
+  const putIfAir = (x, y, z, id) => {
+    if (y <= 2 || y >= HEIGHT - 2) return;
+    const here = world.getBlock(x, y, z);
+    if (here === B.AIR || isCrossPlant(here) || isPetals(here)) world.setRaw(x, y, z, id);
+  };
+  for (let y = surf + 1; y <= surf + h; y++) putIfAir(wx, y, wz, B.MUSHROOM_STEM);
+  const top = surf + h;
+  if (isRed) {
+    // 经典大红蘑菇：3x3 圆顶 + 5x5 空心伞檐
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) putIfAir(wx + dx, top + 1, wz + dz, capB);
+    for (let dy = -1; dy <= 0; dy++) {
+      for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+        if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
+        if (Math.abs(dx) <= 1 && Math.abs(dz) <= 1) continue;
+        putIfAir(wx + dx, top + dy, wz + dz, capB);
+      }
+    }
+  } else {
+    // 经典大棕蘑菇：宽大 5x5 平展菌伞
+    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+      if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
+      putIfAir(wx + dx, top + 1, wz + dz, capB);
+    }
+  }
+}
+
 /* ============================ 植树 ============================ */
 function plantTrees(c) {
   if (c.treesPlanted) return;
@@ -5122,8 +5461,24 @@ function plantTrees(c) {
       const surf = Math.floor(surfaceHeight(wx, wz));
       if (surf <= SEA) continue;
       const ground = world.getBlock(wx, surf, wz);
-      if (ground !== B.GRASS && ground !== B.SNOW && ground !== B.MOSSY && ground !== B.PODZOL) continue;
+      if (ground !== B.GRASS && ground !== B.SNOW && ground !== B.MOSSY && ground !== B.PODZOL && ground !== B.MYCELIUM && ground !== B.MUD) continue;
       const bm = biomeOf(wx, wz);
+
+      // 蘑菇岛 / 沼泽湿地 / 黑森林：自然生成大型红/棕蘑菇
+      if (bm === 10 && ground === B.MYCELIUM) {
+        if (rnd() < 0.018) placeGiantMushroomWorld(wx, surf, wz, rnd() < 0.52, rnd);
+        continue;
+      }
+      if (bm === 5 && rnd() < 0.0085) {
+        placeGiantMushroomWorld(wx, surf, wz, rnd() < 0.45, rnd);
+        continue;
+      }
+      if (bm === 17 && ground === B.GRASS && rnd() < 0.0065) {
+        placeGiantMushroomWorld(wx, surf, wz, rnd() < 0.55, rnd);
+        continue;
+      }
+      if (ground === B.MYCELIUM || ground === B.MUD) continue;
+
       if (bm === 3 || bm === 9 || bm === 10 || bm === 12 || bm === 13 || bm === 14 || bm === 20 || bm === 22) continue;   // 沙漠/恶地/蘑菇岛/砾石平原/白沙丘/冰刺平原/火山/极地冰川不种普通树
       // 雪地：多层厚雪块的地方不长树；再叠一层 24x24 分区的林线遮罩，让雪原出现大片纯粹的空旷雪野
       if (bm === 4) {
@@ -5201,6 +5556,23 @@ function plantTrees(c) {
             if (dx * dx + dz * dz > r * r + 1) continue;
             const here = world.getBlock(wx + dx, ly, wz + dz);
             if (here === B.AIR || isCrossPlant(here) || isPetals(here)) world.setRaw(wx + dx, ly, wz + dz, leaf);
+          }
+        }
+        // 沼泽湿地与热带丛林树冠边缘垂挂可攀爬藤蔓（外圈保留 1 格防越界）
+        if (bm === 5 || bm === 8) {
+          const vineChance = (bm === 5) ? 0.42 : 0.24;
+          for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+            if (Math.max(Math.abs(dx), Math.abs(dz)) !== 2) continue;
+            if (dx * dx + dz * dz > 5) continue;
+            if (rnd() >= vineChance) continue;
+            const vLen = 2 + ((rnd() * 4) | 0);
+            for (let k = 1; k <= vLen; k++) {
+              const vy = top - 2 - k;
+              if (vy <= SEA) break;
+              if (world.getBlock(wx + dx, vy, wz + dz) === B.AIR && world.getWater(wx + dx, vy, wz + dz) === 0) {
+                world.setRaw(wx + dx, vy, wz + dz, B.VINE);
+              } else break;
+            }
           }
         }
       }
@@ -5417,7 +5789,7 @@ function buildOpaqueGreedy(c, A, baseX, baseZ, yMax, colTop, getB, solid) {
         if (!isSeeThrough(nb)) continue;
         let tile = tileFace(id, fi);
         if (id === B.CHEST && f.face === 'side' && fdz === 1) tile = atlas.T.chestFront;
-        const under = (id === B.GLOWSTONE || id === B.MAGMA || id === B.SEA_LANTERN || id === B.REDSTONE_LAMP_ON)
+        const under = (id === B.GLOWSTONE || id === B.SHROOMLIGHT || id === B.MAGMA || id === B.SEA_LANTERN || id === B.REDSTONE_LAMP_ON)
           ? 1.0
           : undergroundFactor(colTop, lx, lz, ly, isNetherChunk);
         if (aoAllOne(bx, ly, bz, f, solid)) {
@@ -5531,6 +5903,32 @@ function pushLadder(A, bx, by, bz, tile, getB) {
     A.col.push(1, 1, 1);
   }
   A.idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+}
+
+// 沼泽藤蔓：紧贴所有相邻实心墙面渲染；若悬空垂挂（树冠下摆）则以立体交叉藤片渲染
+function pushVine(A, bx, by, bz, tile, getB) {
+  const off = 0.04;
+  let attached = 0;
+  const quads = [];
+  if (isSolid(getB(bx, by, bz - 1))) { quads.push([[0, 0, off], [1, 0, off], [1, 1, off], [0, 1, off]]); attached++; }
+  if (isSolid(getB(bx + 1, by, bz))) { quads.push([[1 - off, 0, 0], [1 - off, 0, 1], [1 - off, 1, 1], [1 - off, 1, 0]]); attached++; }
+  if (isSolid(getB(bx, by, bz + 1))) { quads.push([[1, 0, 1 - off], [0, 0, 1 - off], [0, 1, 1 - off], [1, 1, 1 - off]]); attached++; }
+  if (isSolid(getB(bx - 1, by, bz))) { quads.push([[off, 0, 1], [off, 0, 0], [off, 1, 0], [off, 1, 1]]); attached++; }
+  if (attached === 0) {
+    pushCrossPlant(A, bx, by, bz, tile);
+    return;
+  }
+  for (const q of quads) {
+    const vi = A.pos.length / 3;
+    for (let k = 0; k < 4; k++) {
+      A.pos.push(bx + q[k][0], by + q[k][1], bz + q[k][2]);
+      A.nor.push(0, 1, 0);
+      A.uv.push(UV_CORNER[k][0], UV_CORNER[k][1]);
+      A.layer.push(tile);
+      A.col.push(0.95, 0.95, 0.95);
+    }
+    A.idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+  }
 }
 
 // 床：半格高的立体家具（高 0.56 格，含红被褥、纯白枕头、橡木床架与 4 只床脚）
@@ -5810,6 +6208,7 @@ function buildChunkGeometry(c) {
         if (isPetals(id)) { pushPetals(C, wx, y, wz, tileOf(id).top); continue; }
         if (isCrossPlant(id)) { pushCrossPlant(C, wx, y, wz, tileOf(id).top); continue; }
         if (isLadder(id)) { pushLadder(C, wx, y, wz, tileOf(id).side, getB); continue; }
+        if (id === B.VINE) { pushVine(C, wx, y, wz, tileOf(id).side, getB); continue; }
         if (isBed(id)) { pushBed(C, wx, y, wz, atlas.T.bedTop, atlas.T.bedSide, atlas.T.bedHead, atlas.T.bedFoot); continue; }
         if (id === B.DOOR) {
           const isTop = (getB(wx, y - 1, wz) === B.DOOR);
@@ -6123,6 +6522,10 @@ const BLOCK_COLORS = {
   [B.NETHERRACK]: 0x722c2a, [B.SOUL_SAND]: 0x544034, [B.NETHER_BRICKS]: 0x30181e,
   [B.NETHER_QUARTZ_ORE]: 0xb87670, [B.NETHER_GOLD_ORE]: 0xd8a032, [B.BLACKSTONE]: 0x2c2832,
   [B.CRIMSON_NYLIUM]: 0x94202c, [B.WARPED_NYLIUM]: 0x187e7a,
+  [B.CRIMSON_STEM]: 0x6a2240, [B.NETHER_WART_BLOCK]: 0x84141c,
+  [B.WARPED_STEM]: 0x24646c, [B.WARPED_WART_BLOCK]: 0x147e76, [B.SHROOMLIGHT]: 0xf4a836,
+  [B.MUSHROOM_STEM]: 0xd4ccc0, [B.RED_MUSHROOM_BLOCK]: 0xc42c28, [B.BROWN_MUSHROOM_BLOCK]: 0x946a46,
+  [B.VINE]: 0x429834, [B.WEEPING_VINES]: 0xa81a2c, [B.TWISTING_VINES]: 0x1ea498,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -13624,9 +14027,10 @@ function _fillTbl(fn) {
 }
 
 // —— 原始判定逻辑（供建表用，保持单一事实来源；均为函数声明，不产生每次调用的闭包） ——
-function _crossRaw(i) { return i === B.FLOWER_RED || i === B.FLOWER_YELLOW || i === B.GRASS_TALL || i === B.MUSHROOM_RED || i === B.MUSHROOM_BROWN || i === B.FERN || i === B.WHEAT_CROP || i === B.WHEAT_CROP_MATURE || i === B.BAMBOO || i === B.SUGARCANE || i === B.COBWEB || i === B.POINTED_DRIPSTONE || i === B.SAPLING || i === B.MAPLE_SAPLING || i === B.CHERRY_SAPLING; }
-function _seeRaw(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || id === B.DOOR || _crossRaw(id) || id === B.TORCH || id === B.LILY_PAD || id === B.CHERRY_PETALS || id === B.LADDER || id === B.BED || id === B.NETHER_PORTAL || id === B.LIGHTNING_ROD || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.LEVER || id === B.BUTTON || id === B.CHAIN || id === B.BELL || id === B.GRINDSTONE; }
-function _solidRaw(id) { return id !== B.AIR && id !== B.WATER && !_crossRaw(id) && id !== B.TORCH && id !== B.LILY_PAD && id !== B.CHERRY_PETALS && id !== B.LADDER && id !== B.NETHER_PORTAL && id !== B.LEVER && id !== B.BUTTON; }
+function _crossRaw(i) { return i === B.FLOWER_RED || i === B.FLOWER_YELLOW || i === B.GRASS_TALL || i === B.MUSHROOM_RED || i === B.MUSHROOM_BROWN || i === B.FERN || i === B.WHEAT_CROP || i === B.WHEAT_CROP_MATURE || i === B.BAMBOO || i === B.SUGARCANE || i === B.COBWEB || i === B.POINTED_DRIPSTONE || i === B.SAPLING || i === B.MAPLE_SAPLING || i === B.CHERRY_SAPLING || i === B.WEEPING_VINES || i === B.TWISTING_VINES; }
+function _seeRaw(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || id === B.DOOR || _crossRaw(id) || id === B.TORCH || id === B.LILY_PAD || id === B.CHERRY_PETALS || id === B.LADDER || id === B.VINE || id === B.BED || id === B.NETHER_PORTAL || id === B.LIGHTNING_ROD || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.LEVER || id === B.BUTTON || id === B.CHAIN || id === B.BELL || id === B.GRINDSTONE; }
+function _solidRaw(id) { return id !== B.AIR && id !== B.WATER && !_crossRaw(id) && id !== B.TORCH && id !== B.LILY_PAD && id !== B.CHERRY_PETALS && id !== B.LADDER && id !== B.VINE && id !== B.NETHER_PORTAL && id !== B.LEVER && id !== B.BUTTON; }
+function isClimbable(id) { return id === B.LADDER || id === B.VINE || id === B.WEEPING_VINES || id === B.TWISTING_VINES; }
 
 // 透明/可透视（用于面剔除与 AO）—— 查表版
 function isSeeThrough(id) {
@@ -13651,7 +14055,7 @@ function isSapling(id) {
 }
 function isLog(id) {
   let t = isLog.t;
-  if (!t) t = isLog.t = _fillTbl((i) => i === B.LOG || i === B.BIRCH_LOG || i === B.SPRUCE_LOG || i === B.JUNGLE_LOG || i === B.ACACIA_LOG || i === B.CHERRY_LOG || i === B.MAPLE_LOG);
+  if (!t) t = isLog.t = _fillTbl((i) => i === B.LOG || i === B.BIRCH_LOG || i === B.SPRUCE_LOG || i === B.JUNGLE_LOG || i === B.ACACIA_LOG || i === B.CHERRY_LOG || i === B.MAPLE_LOG || i === B.CRIMSON_STEM || i === B.WARPED_STEM);
   return t[id] === 1;
 }
 function isLeaf(id) {
@@ -13729,7 +14133,7 @@ function onLadder() {
   for (let y = y0; y <= y1; y++) {
     for (let z = z0; z <= z1; z++) {
       for (let x = x0; x <= x1; x++) {
-        if (world.getBlock(x, y, z) === B.LADDER) return true;
+        if (isClimbable(world.getBlock(x, y, z))) return true;
       }
     }
   }
@@ -14314,10 +14718,12 @@ function isStoneMat(id) {
          id === B.NETHERRACK || id === B.NETHER_BRICKS || id === B.BLACKSTONE || id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM;
 }
 function isWoodMat(id) {
-  return isLog(id) || id === B.PLANKS || id === B.BOOKSHELF || id === B.CHEST || id === B.DOOR || id === B.LADDER;
+  return isLog(id) || id === B.PLANKS || id === B.BOOKSHELF || id === B.CHEST || id === B.DOOR || id === B.LADDER ||
+         id === B.MUSHROOM_STEM || id === B.RED_MUSHROOM_BLOCK || id === B.BROWN_MUSHROOM_BLOCK;
 }
 function isPlantMat(id) {
-  return isLeaf(id) || isCrossPlant(id) || id === B.HAY_BALE;
+  return isLeaf(id) || isCrossPlant(id) || id === B.HAY_BALE ||
+         id === B.NETHER_WART_BLOCK || id === B.WARPED_WART_BLOCK || id === B.VINE || id === B.WEEPING_VINES || id === B.TWISTING_VINES;
 }
 function isEarthMat(id) {
   return id === B.DIRT || id === B.GRASS || id === B.SAND || id === B.GRAVEL || id === B.SNOW ||
@@ -14330,9 +14736,9 @@ function isMetalMat(id) {
          id === B.BELL || id === B.CHAIN || id === B.ANVIL || id === B.LIGHTNING_ROD ||
          id === B.BEACON || id === B.TARGET || id === B.RESPAWN_ANCHOR || id === B.CRYING_OBSIDIAN;
 }
-// 晶体/灯具：玻璃质的高频叮咛（紫水晶/海晶灯/荧石/点亮的红石灯/末影箱）
+// 晶体/灯具：玻璃质的高频叮咛（紫水晶/海晶灯/荧石/菌光体/点亮的红石灯/末影箱）
 function isCrystalMat(id) {
-  return id === B.AMETHYST_BLOCK || id === B.SEA_LANTERN || id === B.GLOWSTONE ||
+  return id === B.AMETHYST_BLOCK || id === B.SEA_LANTERN || id === B.GLOWSTONE || id === B.SHROOMLIGHT ||
          id === B.REDSTONE_LAMP_ON || id === B.ENDER_CHEST || id === B.SCULK_SENSOR ||
          id === B.PACKED_ICE || id === B.BLUE_ICE;
 }
@@ -14922,6 +15328,10 @@ const NAMES = {
   [B.NETHERRACK]: '地狱岩', [B.SOUL_SAND]: '灵魂沙', [B.NETHER_BRICKS]: '下界砖',
   [B.NETHER_QUARTZ_ORE]: '下界石英矿', [B.NETHER_GOLD_ORE]: '下界金矿', [B.BLACKSTONE]: '黑石',
   [B.CRIMSON_NYLIUM]: '绯红菌岩', [B.WARPED_NYLIUM]: '诡异菌岩',
+  [B.CRIMSON_STEM]: '绯红菌柄', [B.NETHER_WART_BLOCK]: '下界疣块',
+  [B.WARPED_STEM]: '诡异菌柄', [B.WARPED_WART_BLOCK]: '诡异疣块', [B.SHROOMLIGHT]: '菌光体',
+  [B.MUSHROOM_STEM]: '蘑菇柄', [B.RED_MUSHROOM_BLOCK]: '红色蘑菇方块', [B.BROWN_MUSHROOM_BLOCK]: '棕色蘑菇方块',
+  [B.VINE]: '藤蔓', [B.WEEPING_VINES]: '垂泪藤', [B.TWISTING_VINES]: '缠怨藤',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 function isHelmet(id) { return id === B.IRON_HELMET || id === B.DIAMOND_HELMET || id === B.NETHERITE_HELMET || id === B.TURTLE_HELMET; }
@@ -15177,6 +15587,8 @@ const RECIPES = [
   { out: B.QUARTZ, n: 2, need: [[B.WHITE_SAND, 4], [B.STONE, 1]] },
   { out: B.BLUE_ICE, n: 1, need: [[B.PACKED_ICE, 4]] },
   { out: B.NETHER_BRICKS, n: 4, need: [[B.NETHERRACK, 4]] },
+  { out: B.PLANKS, n: 4, need: [[B.CRIMSON_STEM, 1]] },
+  { out: B.PLANKS, n: 4, need: [[B.WARPED_STEM, 1]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -16858,6 +17270,10 @@ const HARDNESS = {
   [B.NETHERRACK]: 0.45, [B.SOUL_SAND]: 0.5, [B.NETHER_BRICKS]: 2.0,
   [B.NETHER_QUARTZ_ORE]: 1.6, [B.NETHER_GOLD_ORE]: 1.6, [B.BLACKSTONE]: 1.8,
   [B.CRIMSON_NYLIUM]: 0.55, [B.WARPED_NYLIUM]: 0.55,
+  [B.CRIMSON_STEM]: 1.4, [B.NETHER_WART_BLOCK]: 0.65,
+  [B.WARPED_STEM]: 1.4, [B.WARPED_WART_BLOCK]: 0.65, [B.SHROOMLIGHT]: 0.5,
+  [B.MUSHROOM_STEM]: 0.4, [B.RED_MUSHROOM_BLOCK]: 0.4, [B.BROWN_MUSHROOM_BLOCK]: 0.4,
+  [B.VINE]: 0.2, [B.WEEPING_VINES]: 0.15, [B.TWISTING_VINES]: 0.15,
 };
 function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
 // 破坏掉落物
@@ -16940,7 +17356,7 @@ function effSpeed(id) {
     return 1.15;
   }
   if (isAxe(t)) {
-    if (isLog(id) || id === B.PLANKS || id === B.CHEST || id === B.CAMPFIRE || id === B.CAMPFIRE_OFF || id === B.SOUL_CAMPFIRE || id === B.DOOR || id === B.BAMBOO || id === B.BOOKSHELF || id === B.PUMPKIN || id === B.JACK_O_LANTERN || id === B.MELON || id === B.DAYLIGHT_DETECTOR || id === B.NIGHT_DETECTOR || id === B.NOTE_BLOCK || id === B.BEEHIVE || id === B.COMPOSTER) return tierOf(t);
+    if (isLog(id) || id === B.PLANKS || id === B.CHEST || id === B.CAMPFIRE || id === B.CAMPFIRE_OFF || id === B.SOUL_CAMPFIRE || id === B.DOOR || id === B.BAMBOO || id === B.BOOKSHELF || id === B.PUMPKIN || id === B.JACK_O_LANTERN || id === B.MELON || id === B.DAYLIGHT_DETECTOR || id === B.NIGHT_DETECTOR || id === B.NOTE_BLOCK || id === B.BEEHIVE || id === B.COMPOSTER || id === B.MUSHROOM_STEM || id === B.RED_MUSHROOM_BLOCK || id === B.BROWN_MUSHROOM_BLOCK) return tierOf(t);
     return 1.15;
   }
   if (isShovel(t)) {
@@ -16948,7 +17364,7 @@ function effSpeed(id) {
     return 1.15;
   }
   if (isSword(t)) {
-    if (isLeaf(id) || isCrossPlant(id) || isLilyPad(id) || isPetals(id) || id === B.SUGARCANE || id === B.BAMBOO || id === B.MELON) return tierOf(t);   // 剑可快速清理树叶/花草/竹子/西瓜
+    if (isLeaf(id) || isCrossPlant(id) || isLilyPad(id) || isPetals(id) || id === B.SUGARCANE || id === B.BAMBOO || id === B.MELON || id === B.NETHER_WART_BLOCK || id === B.WARPED_WART_BLOCK || id === B.SHROOMLIGHT || id === B.VINE || id === B.WEEPING_VINES || id === B.TWISTING_VINES) return tierOf(t);   // 剑可快速清理树叶/花草/藤蔓/疣块/竹子/西瓜
     return 1.15;
   }
   return 1;
