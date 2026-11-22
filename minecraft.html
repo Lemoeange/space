@@ -41,6 +41,20 @@
     backdrop-filter: saturate(1.15);
     transition: opacity 0.35s ease;
   }
+  #portalOverlay {
+    position: fixed; inset: -12%; pointer-events: none; z-index: 7; opacity: 0;
+    background:
+      radial-gradient(circle at 50% 50%, rgba(168, 60, 255, 0.12) 15%, rgba(122, 26, 210, 0.52) 56%, rgba(44, 6, 86, 0.88) 100%),
+      repeating-conic-gradient(from 0deg at 50% 50%, rgba(212, 110, 255, 0.22) 0deg 18deg, rgba(84, 16, 152, 0.10) 18deg 36deg);
+    mix-blend-mode: screen;
+    transform-origin: center center;
+    will-change: opacity, transform;
+  }
+  #portalFlash {
+    position: fixed; inset: 0; pointer-events: none; z-index: 9997; opacity: 0;
+    background: radial-gradient(circle at center, rgba(240, 200, 255, 0.95) 0%, rgba(155, 50, 235, 0.82) 52%, rgba(48, 8, 92, 0.95) 100%);
+    transition: opacity 0.65s cubic-bezier(0.2, 0.85, 0.25, 1);
+  }
 
   /* 反色准星：雪地/晴空/暗洞都始终清晰锐利 */
   #crosshair {
@@ -376,6 +390,8 @@
 
 <div id="vignette"></div>
 <div id="underwater"></div>
+<div id="portalOverlay"></div>
+<div id="portalFlash"></div>
 <div id="sleepFade" style="position:fixed;inset:0;background:#060814;opacity:0;pointer-events:none;transition:opacity 0.65s cubic-bezier(0.4, 0, 0.2, 1);z-index:9999;"></div>
 <div id="totemFlash" style="position:fixed;inset:0;background:radial-gradient(circle, rgba(255,215,0,0.85) 0%, rgba(23,221,98,0.55) 60%, transparent 100%);opacity:0;pointer-events:none;transition:opacity 0.7s cubic-bezier(0.1, 0.9, 0.2, 1);z-index:9998;"></div>
 <div id="crosshair"></div>
@@ -3231,6 +3247,67 @@ const cutoutDepthMat = new THREE.MeshDepthMaterial({
 useArrayTexture(cutoutDepthMat);
 cutoutMat.customDepthMaterial = cutoutDepthMat;
 
+/* ============================ 🌀 下界传送门动态旋涡 Shader (Nether Portal Vortex) ============================ */
+const portalMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+  },
+  vertexShader: /* glsl */`
+    varying vec2 vUv;
+    varying vec3 vWorld;
+    void main() {
+      vUv = uv;
+      vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */`
+    uniform float uTime;
+    varying vec2 vUv;
+    varying vec3 vWorld;
+    float hash21(vec2 p) {
+      p = fract(p * vec2(123.34, 456.21));
+      p += dot(p, p + 45.32);
+      return fract(p.x * p.y);
+    }
+    void main() {
+      float t = uTime;
+      // 坐标映射到门内旋涡场（每格无缝连贯，带双层反旋紫晶等离子纹理）
+      vec2 p = vUv * 2.0 - 1.0;
+      float r = length(p);
+      float ang = atan(p.y, p.x);
+
+      float swirl1 = sin(ang * 3.0 + r * 7.5 - t * 3.4);
+      float swirl2 = cos(ang * 2.0 - r * 6.0 + t * 2.3 + sin(vWorld.y * 2.2 - t * 1.9));
+      float wave = sin(vWorld.x * 3.5 + vWorld.z * 3.5 + t * 2.6) * cos(vWorld.y * 3.2 - t * 2.2);
+      float energy = clamp(0.5 + 0.28 * swirl1 + 0.22 * swirl2 + 0.16 * wave, 0.0, 1.0);
+
+      // 经典像素颗粒感 + 柔和紫罗兰/洋红发光等离子渐变
+      vec2 pix = floor((vUv + vec2(sin(t * 0.6) * 0.08, t * 0.22)) * 16.0);
+      float grain = hash21(pix);
+
+      vec3 deepViolet = vec3(0.24, 0.04, 0.48);
+      vec3 midPurple  = vec3(0.64, 0.18, 0.94);
+      vec3 brightPink = vec3(0.95, 0.56, 1.00);
+      vec3 col = mix(deepViolet, midPurple, smoothstep(0.15, 0.72, energy));
+      col = mix(col, brightPink, smoothstep(0.66, 0.96, energy) * 0.85);
+
+      // 闪烁的异次元紫白星尘微光
+      float spark = step(0.94, hash21(floor(vUv * 16.0 + vec2(0.0, floor(t * 6.0))))) * (0.65 + 0.35 * sin(t * 9.0 + grain * 20.0));
+      col += vec3(0.96, 0.86, 1.0) * spark * 0.9;
+
+      // 微微呼吸发光感
+      float pulse = 0.92 + 0.12 * sin(t * 2.8 + vWorld.y * 1.5);
+      col *= pulse;
+      float alpha = clamp(0.74 + energy * 0.20 + spark * 0.10, 0.0, 0.96);
+      gl_FragColor = vec4(col, alpha);
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+});
+
 /* ============================ 水面 Shader (高拟真多波列焦散与菲涅尔水体) ============================ */
 const waterVertex = /* glsl */`
 varying vec3 vWorld;
@@ -5090,6 +5167,53 @@ function pushDoor(A, bx, by, bz, tile, isOpen, getB) {
   }
 }
 
+// 下界传送门：自动识别黑曜石门框朝向（X 轴或 Z 轴），在格中央生成双面薄紫晶旋涡光膜
+function pushPortalSlab(P, bx, by, bz, getB) {
+  const nL = getB(bx - 1, by, bz), nR = getB(bx + 1, by, bz);
+  const alongX = (nL === B.OBSIDIAN || nL === B.NETHER_PORTAL || nR === B.OBSIDIAN || nR === B.NETHER_PORTAL);
+  const a = 0.39, b = 0.61;
+  const quads = alongX ? [
+    { n: [0, 0, 1],  q: [[0, 0, b], [1, 0, b], [1, 1, b], [0, 1, b]] },
+    { n: [0, 0, -1], q: [[1, 0, a], [0, 0, a], [0, 1, a], [1, 1, a]] },
+  ] : [
+    { n: [1, 0, 0],  q: [[b, 0, 1], [b, 0, 0], [b, 1, 0], [b, 1, 1]] },
+    { n: [-1, 0, 0], q: [[a, 0, 0], [a, 0, 1], [a, 1, 1], [a, 1, 0]] },
+  ];
+  for (const s of quads) {
+    const vi = P.pos.length / 3;
+    for (let k = 0; k < 4; k++) {
+      P.pos.push(bx + s.q[k][0], by + s.q[k][1], bz + s.q[k][2]);
+      P.nor.push(s.n[0], s.n[1], s.n[2]);
+      P.uv.push(UV_CORNER[k][0], UV_CORNER[k][1]);
+    }
+    P.idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+  }
+}
+
+// 紧凑子方块网格（提灯 / 村庄大钟 / 砂轮 / 锁链 / 避雷针 / 拉杆 / 按钮，修复原先进入 isSeeThrough 后隐形的问题）
+function pushSubBox(A, bx, by, bz, x0, y0, z0, x1, y1, z1, tTop, tSide, tBot, shade = 1.0) {
+  const faces = [
+    { n: [1, 0, 0],  q: [[x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1]], t: tSide, s: 0.88 },
+    { n: [-1, 0, 0], q: [[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]], t: tSide, s: 0.88 },
+    { n: [0, 1, 0],  q: [[x0,y1,z1],[x1,y1,z1],[x1,y1,z0],[x0,y1,z0]], t: tTop,  s: 1.00 },
+    { n: [0, -1, 0], q: [[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]], t: tBot,  s: 0.76 },
+    { n: [0, 0, 1],  q: [[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]], t: tSide, s: 0.94 },
+    { n: [0, 0, -1], q: [[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]], t: tSide, s: 0.94 },
+  ];
+  for (const f of faces) {
+    const vi = A.pos.length / 3;
+    const c = Math.min(1, f.s * shade);
+    for (let k = 0; k < 4; k++) {
+      A.pos.push(bx + f.q[k][0], by + f.q[k][1], bz + f.q[k][2]);
+      A.nor.push(f.n[0], f.n[1], f.n[2]);
+      A.uv.push(UV_CORNER[k][0], UV_CORNER[k][1]);
+      A.layer.push(f.t);
+      A.col.push(c, c, c);
+    }
+    A.idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+  }
+}
+
 /* 把构建期收集的普通数组打包成 BufferGeometry。
    两处优化：
    1) 包围盒/包围球直接按区块几何范围写入，省掉 computeBoundingBox/Sphere 两次全顶点遍历；
@@ -5165,7 +5289,8 @@ function buildChunkGeometry(c) {
   const A = { pos: [], nor: [], uv: [], layer: [], col: [], idx: [] };
   const C = { pos: [], nor: [], uv: [], layer: [], col: [], idx: [] };
   const W = { pos: [], nor: [], idx: [] };
-  const T = { pos: [], nor: [], uv: [], layer: [], col: [], idx: [] };   // 火把（自发光）
+  const T = { pos: [], nor: [], uv: [], layer: [], col: [], idx: [] };   // 火把与提灯（自发光）
+  const P = { pos: [], nor: [], uv: [], idx: [] };                        // 下界传送门（动态紫晶旋涡）
   const solid = (x, y, z) => !isSeeThrough(getB(x, y, z));
 
   for (let y = 0; y <= yMax; y++) {
@@ -5225,6 +5350,35 @@ function buildChunkGeometry(c) {
           pushDoor(C, wx, y, wz, tile, isOpen, getB);
           continue;
         }
+        if (id === B.NETHER_PORTAL) {
+          pushPortalSlab(P, wx, y, wz, getB);
+          continue;
+        }
+        if (id === B.LANTERN || id === B.SOUL_LANTERN) {
+          const lt = tileOf(id);
+          pushSubBox(T, wx, y, wz, 0.28, 0.02, 0.28, 0.72, 0.68, 0.72, lt.top, lt.side, lt.bottom, 1.0);
+          continue;
+        }
+        if (id === B.BELL) {
+          const bt = tileOf(id);
+          pushSubBox(C, wx, y, wz, 0.16, 0.16, 0.16, 0.84, 0.96, 0.84, bt.top, bt.side, bt.bottom, undergroundFactor(colTop, lx, lz, y));
+          continue;
+        }
+        if (id === B.GRINDSTONE) {
+          const gt = tileOf(id);
+          pushSubBox(C, wx, y, wz, 0.14, 0.0, 0.14, 0.86, 0.82, 0.86, gt.top, gt.side, gt.bottom, undergroundFactor(colTop, lx, lz, y));
+          continue;
+        }
+        if (id === B.CHAIN || id === B.LIGHTNING_ROD) {
+          const ct = tileOf(id);
+          pushSubBox(C, wx, y, wz, 0.40, 0.0, 0.40, 0.60, 1.0, 0.60, ct.top, ct.side, ct.bottom, undergroundFactor(colTop, lx, lz, y));
+          continue;
+        }
+        if (id === B.LEVER || id === B.BUTTON) {
+          const st = tileOf(id);
+          pushSubBox(C, wx, y, wz, 0.30, 0.0, 0.30, 0.70, id === B.LEVER ? 0.55 : 0.22, 0.70, st.top, st.side, st.bottom, undergroundFactor(colTop, lx, lz, y));
+          continue;
+        }
         if (id === B.GLASS) {                     // 玻璃：cutout，逐面（不参与贪心）
           const under = undergroundFactor(colTop, lx, lz, y);
           for (let fi = 0; fi < 6; fi++) {
@@ -5269,6 +5423,7 @@ function buildChunkGeometry(c) {
     cutout: makeGeo(C, c.cx, yMax, c.cz),
     water: makeGeo(W, c.cx, yMax, c.cz),
     torch: makeGeo(T, c.cx, yMax, c.cz),
+    portal: makeGeo(P, c.cx, yMax, c.cz),
   };
 }
 
@@ -5280,6 +5435,7 @@ function buildChunkMeshes(c) {
   if (geo.cutout) { const m = new THREE.Mesh(geo.cutout, cutoutMat); m.castShadow = true; m.receiveShadow = true; g.add(m); }
   if (geo.water) { const m = new THREE.Mesh(geo.water, waterMat); m.castShadow = false; m.receiveShadow = false; g.add(m); }
   if (geo.torch) { const m = new THREE.Mesh(geo.torch, torchMat); g.add(m); }
+  if (geo.portal) { const m = new THREE.Mesh(geo.portal, portalMat); m.renderOrder = 2; g.add(m); }
   c.group = g;
   scene.add(g);
   g.updateMatrixWorld(true); // 挂载后立即更新全局世界矩阵，杜绝单帧阴影丢失
@@ -10389,11 +10545,22 @@ const tntEntityMats = [tntMatSide, tntMatSide, tntMatTop, tntMatSide, tntMatSide
 const tntWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
 function playExplosionSound() {
-  burst(0.42, 0.48, 220, 'lowpass');
-  tone(65, 20, 0.45, 'triangle', 0.35);
+  if (!ensureAudio()) return;
+  const t = audioCtx.currentTime;
+  // 1. 震耳次声波冲击波重击
+  tone(92, 22, 0.62, 'sine', 0.42);
+  tone(135, 34, 0.44, 'triangle', 0.24, 0.015);
+  // 2. 低频滚雷爆轰 + 高中频碎石飞溅 + 远方余震
+  burst(0.55, 0.48, 200, 'lowpass');
+  burst(0.24, 0.28, 950, 'bandpass', 0.02);
+  burst(0.16, 0.16, 2200, 'highpass', 0.04);
+  burst(0.68, 0.18, 160, 'lowpass', 0.14);
 }
 function playFuseSound() {
-  burst(0.14, 0.08, 3400, 'bandpass');
+  // 火药引信滋滋燃烧（高频滤波噪点 + 随机火星微爆）
+  burst(0.22, 0.09, 3600, 'bandpass');
+  burst(0.12, 0.06, 5400, 'highpass', 0.06);
+  tone(1600 + Math.random() * 500, 900, 0.04, 'sine', 0.025, 0.03);
 }
 
 function primeTnt(bx, by, bz, fuseTimer = 2.4, vx = 0, vy = 0.16, vz = 0) {
@@ -11406,8 +11573,99 @@ let lodestoneTarget = null;              // 磁石共振坐标 {x, y, z}
 
 /* ============================ 🌀 下界传送门与异次元穿梭系统 (Nether Portal & Dimension) ============================ */
 let playerInPortalTimer = 0;
+let portalCooldown = 0;
+let portalSoundAcc = 0;
+let portalAmbientAcc = 0;
 let inNether = false;
 let overworldPortalPos = null;
+
+// —— 下界传送门专属三段音效（点燃裂隙 / 门内蓄力旋涡 / 维度穿梭）——
+function playPortalIgnite() {
+  if (!ensureAudio()) return;
+  const t = audioCtx.currentTime;
+  // 1. 黑曜石深沉共鸣低轰 + 燧石擦火脆响
+  tone(92, 44, 0.55, 'triangle', 0.28);
+  burst(0.08, 0.14, 3200, 'highpass');
+  burst(0.28, 0.12, 900, 'bandpass', 0.04);
+  // 2. 失谐异次元紫晶裂隙开启音（双振荡器微失谐产生幽深合唱感）
+  const notes = [146.83, 220.0, 293.66, 440.0, 587.33];
+  notes.forEach((f, idx) => {
+    const dt = idx * 0.065;
+    tone(f * 0.992, f * 1.03, 0.42, 'sine', 0.10, dt);
+    tone(f * 1.008, f * 1.05, 0.36, 'triangle', 0.07, dt + 0.015);
+  });
+}
+
+function playPortalWarpPulse(progress) {
+  if (!ensureAudio()) return;
+  const p = Math.max(0, Math.min(1, progress));
+  const t = audioCtx.currentTime;
+  // 随传送进度平滑升调的幽异合唱嗡鸣（类似原版下界传送门扭曲风琴声）
+  const base = 118 + p * 145 + (Math.random() - 0.5) * 8;
+  const vol = 0.065 + p * 0.085;
+  const ratios = [1.0, 1.014, 1.498, 2.012];
+  ratios.forEach((r, idx) => {
+    const o = audioCtx.createOscillator();
+    const flt = audioCtx.createBiquadFilter();
+    const g = audioCtx.createGain();
+    o.type = idx < 2 ? 'sawtooth' : 'triangle';
+    o.frequency.setValueAtTime(base * r, t);
+    o.frequency.exponentialRampToValueAtTime(base * r * (1.08 + p * 0.12), t + 0.44);
+    flt.type = 'bandpass';
+    flt.frequency.setValueAtTime(340 + p * 1200 + idx * 180, t);
+    flt.frequency.exponentialRampToValueAtTime(700 + p * 1900, t + 0.42);
+    flt.Q.value = 3.2;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol * (idx < 2 ? 0.55 : 0.35) * sfxGain, t + 0.10);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.46);
+    o.connect(flt); flt.connect(g); g.connect(masterGain);
+    o.start(t); o.stop(t + 0.48);
+  });
+  // 空间旋涡气流呼啸层
+  if (ensureNoise()) {
+    const src = audioCtx.createBufferSource();
+    src.buffer = noiseBuf;
+    const bpf = audioCtx.createBiquadFilter();
+    bpf.type = 'bandpass';
+    bpf.frequency.setValueAtTime(420 + p * 900, t);
+    bpf.frequency.exponentialRampToValueAtTime(1100 + p * 1500, t + 0.42);
+    bpf.Q.value = 2.6;
+    const ng = audioCtx.createGain();
+    ng.gain.setValueAtTime(0.0001, t);
+    ng.gain.linearRampToValueAtTime((0.05 + p * 0.09) * sfxGain, t + 0.12);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.44);
+    src.connect(bpf); bpf.connect(ng); ng.connect(masterGain);
+    src.start(t, Math.random() * 0.2, 0.45);
+  }
+}
+
+function playPortalTravel() {
+  if (!ensureAudio()) return;
+  const t = audioCtx.currentTime;
+  // 1. 次声波空间撕裂重坠
+  tone(165, 36, 0.72, 'sine', 0.32);
+  tone(220, 58, 0.58, 'triangle', 0.18, 0.03);
+  // 2. 扫频异次元风暴呼啸
+  if (ensureNoise()) {
+    const src = audioCtx.createBufferSource();
+    src.buffer = noiseBuf;
+    const flt = audioCtx.createBiquadFilter();
+    flt.type = 'bandpass';
+    flt.frequency.setValueAtTime(2600, t);
+    flt.frequency.exponentialRampToValueAtTime(220, t + 0.75);
+    flt.Q.value = 1.8;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.26 * sfxGain, t + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.78);
+    src.connect(flt); flt.connect(g); g.connect(masterGain);
+    src.start(t, 0, 0.8);
+  }
+  // 3. 抵达后的晶莹空间回响琶音
+  [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, idx) => {
+    tone(f, f * 1.015, 0.38, 'sine', 0.10, 0.10 + idx * 0.055);
+  });
+}
 
 function tryLightNetherPortal(hit) {
   const [nx, ny, nz] = hit.normal;
@@ -11467,8 +11725,7 @@ function tryLightNetherPortal(hit) {
             spawnParticles(ix + 0.5, y0 + y + 0.5, iz + 0.5, 0x9b59b6, 12);
           }
         }
-        playArp([220, 330, 440, 660, 880], 0.08, 'sawtooth', 0.28);
-        playSizzle();
+        playPortalIgnite();
         toast('🌀 成功激活下界传送门！幽紫维度裂隙已然开启！');
         return true;
       }
@@ -11517,9 +11774,14 @@ function buildNetherStructure(nx, ny, nz) {
 }
 
 function teleportDimension() {
-  playTeleport();
-  tone(120, 480, 0.5, 'sawtooth', 0.4);
-  screenShake = 0.5;
+  playPortalTravel();
+  screenShake = 0.55;
+  portalCooldown = 3.0;
+  const flashEl = document.getElementById('portalFlash');
+  if (flashEl) {
+    flashEl.style.opacity = '1';
+    setTimeout(() => { flashEl.style.opacity = '0'; }, 180);
+  }
 
   if (!inNether) {
     // 主世界 → 下界
@@ -11532,7 +11794,7 @@ function teleportDimension() {
     buildNetherStructure(nx, ny, nz);
     player.pos.set(nx - 0.5, ny + 1.05, nz + 0.5);
     player.vel.set(0, 0, 0);
-    spawnParticles(player.pos.x, player.pos.y + 1, player.pos.z, 0x8e44ad, 35);
+    spawnParticles(player.pos.x, player.pos.y + 1, player.pos.z, 0xa855f7, 42);
     toast('🌋 穿越维度裂隙，抵达炽烈神秘的【下界】！');
   } else {
     // 下界 → 主世界
@@ -11540,7 +11802,7 @@ function teleportDimension() {
     const target = overworldPortalPos || { x: 0, y: 70, z: 0 };
     player.pos.set(target.x, target.y + 0.05, target.z);
     player.vel.set(0, 0, 0);
-    spawnParticles(player.pos.x, player.pos.y + 1, player.pos.z, 0x2ecc71, 35);
+    spawnParticles(player.pos.x, player.pos.y + 1, player.pos.z, 0x5fd184, 42);
     toast('🌿 跨越时空回归，返回了主世界！');
   }
 }
@@ -11551,21 +11813,64 @@ function updateNetherPortal(dt) {
   const by = Math.floor(player.pos.y);
   const bz = Math.floor(player.pos.z);
   const inPortal = (world.getBlock(bx, by, bz) === B.NETHER_PORTAL || world.getBlock(bx, by + 1, bz) === B.NETHER_PORTAL);
+  const ovEl = document.getElementById('portalOverlay');
 
-  if (inPortal) {
+  if (!inPortal && portalCooldown > 0) {
+    portalCooldown = Math.max(0, portalCooldown - dt * 2.5);
+  } else if (portalCooldown > 0) {
+    portalCooldown = Math.max(0, portalCooldown - dt);
+  }
+
+  if (inPortal && portalCooldown <= 0) {
     playerInPortalTimer += dt;
-    if (Math.random() < 0.45) {
-      spawnParticles(player.pos.x + (Math.random() - 0.5) * 0.8, player.pos.y + Math.random() * 1.8, player.pos.z + (Math.random() - 0.5) * 0.8, 0x9b59b6, 3);
+    const prog = Math.min(1, playerInPortalTimer / 2.4);
+    if (Math.random() < 0.55) {
+      spawnParticles(player.pos.x + (Math.random() - 0.5) * 0.9, player.pos.y + Math.random() * 1.8, player.pos.z + (Math.random() - 0.5) * 0.9, Math.random() < 0.5 ? 0xa855f7 : 0xe879f9, 3);
     }
-    if (Math.random() < 0.08) {
-      tone(180, 260, 0.25, 'sawtooth', 0.15);
+    portalSoundAcc -= dt;
+    if (portalSoundAcc <= 0) {
+      playPortalWarpPulse(prog);
+      portalSoundAcc = 0.34 - prog * 0.12;
     }
-    if (playerInPortalTimer >= 2.0) {
+    if (ovEl) {
+      ovEl.style.opacity = (prog * 0.88).toFixed(3);
+      const rot = (clock.elapsedTime * (28 + prog * 70)) % 360;
+      const sc = 1.0 + prog * 0.16 + Math.sin(clock.elapsedTime * 7.5) * 0.03 * prog;
+      ovEl.style.transform = `scale(${sc.toFixed(3)}) rotate(${rot.toFixed(1)}deg)`;
+    }
+    if (playerInPortalTimer >= 2.4) {
       playerInPortalTimer = 0;
+      portalSoundAcc = 0;
+      if (ovEl) { ovEl.style.opacity = '0'; ovEl.style.transform = 'scale(1)'; }
       teleportDimension();
     }
   } else {
-    playerInPortalTimer = Math.max(0, playerInPortalTimer - dt * 2.5);
+    playerInPortalTimer = Math.max(0, playerInPortalTimer - dt * 2.8);
+    portalSoundAcc = 0;
+    if (ovEl) {
+      const prog = Math.min(1, playerInPortalTimer / 2.4);
+      ovEl.style.opacity = (prog * 0.88).toFixed(3);
+      if (prog < 0.01) ovEl.style.transform = 'scale(1)';
+    }
+    // 靠近已激活传送门时飘散紫色微粒与轻柔幽异余韵
+    portalAmbientAcc -= dt;
+    if (portalAmbientAcc <= 0) {
+      portalAmbientAcc = 0.75;
+      let foundX = 0, foundY = 0, foundZ = 0, near = false;
+      for (let dz = -4; dz <= 4 && !near; dz += 2) {
+        for (let dx = -4; dx <= 4 && !near; dx += 2) {
+          for (let dy = -1; dy <= 2; dy++) {
+            if (world.getBlock(bx + dx, by + dy, bz + dz) === B.NETHER_PORTAL) {
+              foundX = bx + dx; foundY = by + dy; foundZ = bz + dz; near = true; break;
+            }
+          }
+        }
+      }
+      if (near) {
+        spawnParticles(foundX + 0.5 + (Math.random() - 0.5) * 0.7, foundY + Math.random(), foundZ + 0.5 + (Math.random() - 0.5) * 0.7, 0xc084fc, 2);
+        if (Math.random() < 0.25) playPortalWarpPulse(0.08);
+      }
+    }
   }
 }
 
@@ -11744,16 +12049,25 @@ arrowGeo.rotateX(Math.PI / 2);
 const arrowMat = new THREE.MeshLambertMaterial({ color: 0x9c7a4e });
 
 function playBowDraw() {
-  burst(0.08, 0.035, 1200, 'bandpass');
-  tone(160, 260, 0.16, 'sine', 0.04);
+  // 拉弓木质弓臂绷紧吱呀声 + 弓弦张力上升
+  burst(0.11, 0.045, 950, 'bandpass');
+  tone(145, 260, 0.18, 'triangle', 0.05);
+  tone(290, 420, 0.14, 'sine', 0.025, 0.03);
 }
 function playBowShoot() {
-  tone(440, 180, 0.09, 'triangle', 0.22);
-  burst(0.03, 0.14, 1600, 'bandpass');
+  // 弓弦清脆弹振 + 箭矢破空呼啸
+  const jit = 0.94 + Math.random() * 0.12;
+  tone(480 * jit, 175 * jit, 0.11, 'triangle', 0.20);
+  tone(920 * jit, 380 * jit, 0.06, 'sine', 0.08, 0.01);
+  burst(0.08, 0.14, 2400, 'bandpass');
+  burst(0.05, 0.08, 4200, 'highpass', 0.02);
 }
 function playArrowHitBlock() {
-  burst(0.03, 0.14, 1100, 'bandpass');
-  tone(240, 110, 0.04, 'triangle', 0.12);
+  // 箭矢笃实钉入木/石的闷响 + 短促箭杆微震
+  const jit = 0.92 + Math.random() * 0.16;
+  burst(0.035, 0.15, 1150, 'bandpass');
+  tone(260 * jit, 105 * jit, 0.055, 'triangle', 0.14);
+  tone(520 * jit, 420 * jit, 0.045, 'sine', 0.05, 0.018);
 }
 
 function shootArrow(power) {
@@ -13535,91 +13849,162 @@ function playStep(matId, inWater, isRightFoot) {
 }
 function playJump() {
   if (player.fly) return;
-  tone(160, 240, 0.06, 'triangle', 0.06);
+  // 轻盈起跳气流 + 柔和蹬地弹性音
+  const jit = 0.95 + Math.random() * 0.10;
+  burst(0.04, 0.035, 720, 'bandpass');
+  tone(145 * jit, 235 * jit, 0.075, 'sine', 0.055);
 }
 function playLand(matId) {
   if (player.fly) return;
-  burst(0.045, 0.08, 360, 'lowpass');
-  tone(120, 60, 0.05, 'triangle', 0.08);
+  const jit = 0.92 + Math.random() * 0.16;
+  if (isStoneMat(matId) || isMetalMat(matId)) {
+    burst(0.045, 0.10, 1250, 'bandpass');
+    tone(140 * jit, 70 * jit, 0.05, 'triangle', 0.09);
+  } else if (isWoodMat(matId)) {
+    burst(0.05, 0.09, 680, 'lowpass');
+    tone(165 * jit, 85 * jit, 0.06, 'triangle', 0.10);
+  } else {
+    burst(0.055, 0.085, 380, 'lowpass');
+    tone(110 * jit, 54 * jit, 0.055, 'sine', 0.08);
+  }
 }
 function playSplash() {
-  burst(0.18, 0.12, 1100);
-  tone(380, 160, 0.10, 'sine', 0.08);
+  // 入水扑通闷响 + 飞溅水花 + 3 颗清脆水泡翻涌
+  tone(220, 88, 0.12, 'sine', 0.12);
+  burst(0.24, 0.15, 1150, 'bandpass');
+  burst(0.16, 0.10, 2400, 'highpass', 0.03);
+  for (let i = 0; i < 3; i++) {
+    const f = 460 + Math.random() * 420;
+    tone(f, f * 1.45, 0.055, 'sine', 0.05, 0.04 + i * 0.055);
+  }
 }
 function playEat() {
-  burst(0.035, 0.12, 1400, 'bandpass');
-  tone(240, 180, 0.03, 'triangle', 0.06);
+  // 经典三连咔嚓咀嚼音（带随机音高起伏）
+  for (let i = 0; i < 3; i++) {
+    const d = i * 0.095;
+    const f = 1150 + Math.random() * 650;
+    burst(0.04, 0.12, f, 'bandpass', d);
+    tone(210 + Math.random() * 70, 130, 0.035, 'triangle', 0.05, d);
+  }
 }
 function playGoldenApple() {
-  playArp([523, 659, 784, 1046, 1318], 0.055, 'sine', 0.14);
+  // 金苹果清脆咬下 + 圣洁空灵和弦回响
+  playEat();
+  [523.25, 659.25, 783.99, 1046.5, 1318.5, 1567.98].forEach((f, idx) => {
+    tone(f, f * 1.008, 0.34, 'sine', 0.10, 0.08 + idx * 0.05);
+    tone(f * 2, f * 2, 0.16, 'triangle', 0.03, 0.10 + idx * 0.05);
+  });
 }
 function playDrink() {
-  tone(240, 360, 0.05, 'sine', 0.10);
-  tone(300, 440, 0.06, 'sine', 0.10, 0.10);
+  // 咕嘟三连饮水声（共振液泡滑音）
+  [230, 265, 305].forEach((f, idx) => {
+    const d = idx * 0.11;
+    tone(f, f * 1.58, 0.075, 'sine', 0.10, d);
+    burst(0.03, 0.04, 1400, 'bandpass', d + 0.015);
+  });
 }
 function playShieldBlock() {
-  tone(540, 270, 0.12, 'triangle', 0.22);
-  burst(0.05, 0.18, 1600, 'bandpass');
+  // 铁木盾重格挡：厚实木撞 + 金属边框锵鸣
+  const jit = 0.95 + Math.random() * 0.10;
+  tone(155 * jit, 74 * jit, 0.11, 'triangle', 0.22);
+  tone(820 * jit, 640 * jit, 0.16, 'triangle', 0.13);
+  tone(1680 * jit, 1280 * jit, 0.12, 'sine', 0.08, 0.008);
+  burst(0.06, 0.18, 1900, 'bandpass');
 }
 function playHurt() {
   if (!ensureAudio()) return;
   const t = audioCtx.currentTime;
-  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-  o.type = 'triangle';
-  o.frequency.setValueAtTime(140, t);
-  o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
-  g.gain.setValueAtTime(0.24, t);
-  g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
-  o.connect(g); g.connect(masterGain);
-  o.start(t); o.stop(t + 0.15);
-  burst(0.06, 0.16, 280, 'lowpass');
+  const jit = 0.92 + Math.random() * 0.14;
+  // 扎实的钝击受创声 + 短促骨擦质感
+  tone(155 * jit, 46 * jit, 0.14, 'triangle', 0.26);
+  tone(95 * jit, 38 * jit, 0.12, 'sine', 0.20, 0.01);
+  burst(0.055, 0.18, 420, 'lowpass');
+  burst(0.03, 0.10, 1800, 'bandpass', 0.015);
 }
 function playZombieHit() {
-  burst(0.06, 0.08, 620);
-  tone(140, 70, 0.09, 'triangle', 0.08);
+  const jit = 0.90 + Math.random() * 0.18;
+  burst(0.055, 0.11, 760, 'bandpass');
+  tone(150 * jit, 78 * jit, 0.12, 'sawtooth', 0.07);
+  tone(110 * jit, 62 * jit, 0.10, 'triangle', 0.09);
 }
 function playZombieDeath() {
-  tone(140, 40, 0.25, 'triangle', 0.14);
-  burst(0.16, 0.08, 480);
+  // 丧尸临终低沉沙哑嘶吼衰减
+  const jit = 0.92 + Math.random() * 0.14;
+  tone(155 * jit, 48 * jit, 0.38, 'sawtooth', 0.10);
+  tone(118 * jit, 36 * jit, 0.42, 'triangle', 0.12, 0.03);
+  burst(0.24, 0.09, 520, 'bandpass', 0.02);
 }
 function playGrow() {
-  playArp([440, 660, 880], 0.04, 'sine', 0.09);
+  // 骨粉/草木催熟：嫩叶沙沙伸展 + 翡翠风铃上扬
+  burst(0.09, 0.06, 1300, 'bandpass');
+  [440, 554.37, 659.25, 880].forEach((f, idx) => {
+    tone(f, f * 1.02, 0.16, 'sine', 0.075, idx * 0.038);
+  });
 }
 function playClick() {
-  tone(880, 1320, 0.025, 'triangle', 0.06);
+  // 清脆木石 UI 轻触音
+  tone(960, 720, 0.022, 'triangle', 0.055);
+  burst(0.012, 0.035, 2800, 'highpass');
 }
 function playChestOpen() {
-  tone(180, 340, 0.18, 'sine', 0.11);
+  // 经典木箱合页吱呀开启 + 铁扣轻响
+  burst(0.025, 0.06, 2200, 'bandpass');
+  tone(165, 295, 0.16, 'triangle', 0.09, 0.02);
+  tone(330, 460, 0.12, 'sine', 0.05, 0.06);
+  burst(0.14, 0.05, 620, 'bandpass', 0.03);
 }
 function playChestClose() {
-  tone(280, 140, 0.12, 'sine', 0.12);
-  burst(0.03, 0.10, 400, 'lowpass');
+  // 木盖合拢 + 沉稳木扣落锁
+  tone(265, 135, 0.11, 'triangle', 0.09);
+  burst(0.05, 0.13, 380, 'lowpass', 0.06);
+  tone(120, 68, 0.06, 'triangle', 0.11, 0.06);
 }
 function playDoorOpen() {
-  tone(220, 380, 0.12, 'triangle', 0.12);
+  // 木门插销弹开 + 轻巧木轴转动
+  burst(0.02, 0.07, 2400, 'bandpass');
+  tone(190, 320, 0.11, 'triangle', 0.10, 0.015);
+  burst(0.08, 0.05, 580, 'lowpass', 0.02);
 }
 function playDoorClose() {
-  tone(340, 160, 0.10, 'triangle', 0.12);
-  burst(0.04, 0.15, 380, 'lowpass');
+  // 木门合页回摆 + 厚实闭门锁扣声
+  tone(280, 140, 0.09, 'triangle', 0.10);
+  burst(0.045, 0.16, 420, 'lowpass', 0.045);
+  tone(135, 72, 0.065, 'triangle', 0.12, 0.045);
 }
 function playSizzle() {
-  burst(0.14, 0.08, 2200, 'bandpass');
-  tone(280, 180, 0.10, 'sine', 0.06);
+  // 真实水汽沸腾滋滋声（高频滤波白噪渐变 + 细碎爆裂）
+  burst(0.26, 0.10, 2900, 'bandpass');
+  burst(0.18, 0.07, 4800, 'highpass', 0.03);
+  tone(310, 160, 0.11, 'sine', 0.045);
 }
 function playTeleport() {
-  playArp([220, 440, 880, 1760], 0.035, 'sine', 0.10);
-  burst(0.06, 0.04, 1600, 'bandpass');
+  // 经典末影“嗡咻”瞬移音（先沉后扬共振脉冲 + 紫晶星辉）
+  tone(320, 165, 0.09, 'sine', 0.12);
+  tone(180, 740, 0.18, 'triangle', 0.11, 0.06);
+  tone(740, 1480, 0.14, 'sine', 0.07, 0.11);
+  burst(0.12, 0.07, 2200, 'bandpass', 0.04);
 }
 function playEndermanStare() {
-  tone(420, 220, 0.35, 'triangle', 0.18);
-  burst(0.12, 0.07, 480, 'lowpass');
+  // 末影人凝视：诡异失谐金属低鸣 + 颤音空间扭曲
+  tone(380, 195, 0.48, 'sawtooth', 0.12);
+  tone(392, 184, 0.48, 'triangle', 0.12, 0.015);
+  tone(110, 72, 0.45, 'sine', 0.14);
+  burst(0.24, 0.09, 640, 'bandpass', 0.04);
 }
 function playSpiderHiss() {
-  burst(0.18, 0.10, 1400, 'bandpass');
-  tone(220, 110, 0.12, 'sawtooth', 0.08);
+  // 蜘蛛嘶嘶吐丝 + 甲壳摩擦脆响
+  burst(0.22, 0.11, 2400, 'bandpass');
+  burst(0.14, 0.08, 4200, 'highpass', 0.05);
+  tone(260, 130, 0.12, 'sawtooth', 0.065);
+  tone(820, 620, 0.03, 'triangle', 0.04, 0.08);
 }
 function playFishCatch() {
-  playArp([440, 554, 659, 880], 0.045, 'sine', 0.12);
+  // 拉竿水花声 + 愉悦收获三和弦
+  burst(0.16, 0.12, 1500, 'bandpass');
+  tone(360, 620, 0.08, 'sine', 0.09);
+  [523.25, 659.25, 783.99, 1046.5].forEach((f, idx) => {
+    tone(f, f * 1.01, 0.18, 'sine', 0.09, 0.05 + idx * 0.048);
+  });
 }
 
 /* ============================ 环境音景 (Ambience) ============================
@@ -17874,6 +18259,7 @@ function animate() {
   scene.fog.near += (targetFogNear - scene.fog.near) * Math.min(1, 4 * dt);
   scene.fog.far += (targetFogFar - scene.fog.far) * Math.min(1, 4 * dt);
   waterMat.uniforms.uTime.value = clock.elapsedTime;
+  portalMat.uniforms.uTime.value = clock.elapsedTime;
   waterMat.uniforms.uSunDir.value.copy(sunDir);
   waterMat.uniforms.uMoonDir.value.copy(moonDir);
   waterMat.uniforms.uCameraPos.value.copy(camera.position);
