@@ -8,245 +8,337 @@
 <script src="./three.global.js"></script>
 <title>Minecraft Web 复刻 · 电影感光影</title>
 <style>
-  :root { --accent: #5fb27a; }
+  :root {
+    --accent: #5fd184;
+    --accent-dim: #369e5a;
+    --gold: #ffd479;
+    --panel-bg: rgba(13, 19, 28, 0.86);
+    --panel-border: rgba(255, 255, 255, 0.13);
+    --slot-bg: rgba(255, 255, 255, 0.055);
+  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0d12; }
-  body { font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; }
+  body { font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; color: #ebf3fa; }
+
+  /* 统一细滚动条 */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-thumb { background: rgba(130, 170, 200, 0.32); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(95, 209, 132, 0.55); }
+  ::-webkit-scrollbar-track { background: transparent; }
 
   canvas#game { display: block; width: 100%; height: 100%; }
 
   /* ---- overlays ---- */
   #vignette {
     position: fixed; inset: 0; pointer-events: none; z-index: 5;
-    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.38) 100%);
+    background: radial-gradient(ellipse at center, transparent 58%, rgba(4, 8, 16, 0.34) 100%);
     mix-blend-mode: multiply;
   }
   #underwater {
     position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0;
-    background: linear-gradient(180deg, rgba(32,130,210,0.18), rgba(16,80,150,0.30));
+    background:
+      radial-gradient(ellipse at 50% 25%, rgba(80, 205, 255, 0.14), rgba(12, 72, 136, 0.38) 100%);
+    backdrop-filter: saturate(1.15);
     transition: opacity 0.35s ease;
   }
 
+  /* 反色准星：雪地/晴空/暗洞都始终清晰锐利 */
   #crosshair {
     position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%);
-    width: 22px; height: 22px; z-index: 8; pointer-events: none; opacity: 0.9;
+    width: 20px; height: 20px; z-index: 8; pointer-events: none;
+    mix-blend-mode: difference; opacity: 0.92;
   }
   #crosshair::before, #crosshair::after {
-    content: ""; position: absolute; background: rgba(255,255,255,0.92);
-    box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+    content: ""; position: absolute; background: #ffffff; border-radius: 1px;
   }
   #crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
   #crosshair::after  { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%); }
 
+  /* ---- 底部快捷栏 ---- */
   #hotbar {
-    display: flex; flex-wrap: wrap; justify-content: center; max-width: 94vw;
-    gap: 5px; padding: 6px;
-    background: rgba(14, 18, 24, 0.75); border-radius: 12px; backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    display: flex; flex-wrap: nowrap; justify-content: center; max-width: 96vw;
+    gap: 5px; padding: 6px 7px;
+    background: linear-gradient(180deg, rgba(18, 24, 34, 0.84), rgba(10, 14, 22, 0.90));
+    border-radius: 14px;
+    -webkit-backdrop-filter: blur(14px) saturate(1.3);
+    backdrop-filter: blur(14px) saturate(1.3);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.14);
   }
   .slot {
-    width: 46px; height: 46px; border-radius: 8px; position: relative;
-    background: rgba(255, 255, 255, 0.05); border: 2px solid transparent;
+    width: 48px; height: 48px; border-radius: 9px; position: relative;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.22));
+    border: 1.5px solid rgba(255, 255, 255, 0.09);
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.35);
     display: flex; align-items: center; justify-content: center;
-    transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+    transition: transform 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.3), border-color 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
   }
-  .slot:hover { background: rgba(255, 255, 255, 0.1); }
+  .slot:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.24); }
   .slot.active {
-    border-color: #5fb27a; background: rgba(95, 178, 122, 0.22);
-    box-shadow: 0 0 16px rgba(95, 178, 122, 0.6);
-    transform: translateY(-2px);
+    border-color: var(--accent);
+    background: linear-gradient(180deg, rgba(95, 209, 132, 0.26), rgba(54, 158, 90, 0.16));
+    box-shadow: 0 0 18px rgba(95, 209, 132, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    transform: translateY(-3px) scale(1.04);
   }
-  .slot canvas { image-rendering: pixelated; width: 38px; height: 38px; }
+  .slot canvas { image-rendering: pixelated; width: 38px; height: 38px; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.45)); }
   .slot .num {
-    position: absolute; left: 4px; top: 2px; font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.75);
-    text-shadow: 0 1px 2px #000; pointer-events: none;
+    position: absolute; left: 4px; top: 2px; font-size: 10px; font-weight: 800; color: rgba(255,255,255,0.68);
+    text-shadow: 0 1px 2px #000; pointer-events: none; font-variant-numeric: tabular-nums;
   }
+  .slot.active .num { color: #c8ffd8; }
   .slot .cnt {
-    position: absolute; right: 3px; bottom: 1px; font-size: 11px; font-weight: 800;
-    color: #fff; text-shadow: 0 1px 2px #000; pointer-events: none;
+    position: absolute; right: 4px; bottom: 2px; font-size: 11px; font-weight: 800;
+    color: #fff; text-shadow: 0 1px 3px #000, 0 0 2px #000; pointer-events: none;
+    font-variant-numeric: tabular-nums;
   }
 
+  /* ---- 像素心形与饱食度容器 ---- */
+  .stat-icons {
+    display: inline-flex; align-items: center; gap: 2px;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.85));
+  }
+  .stat-icons svg { width: 15px; height: 15px; display: block; shape-rendering: crispEdges; }
+  .stat-icons.low-hp { animation: hpShake 0.45s ease-in-out infinite; }
+  @keyframes hpShake {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-1.5px); }
+  }
+
+  /* ---- 左上角环境 HUD ---- */
   #hud {
-    position: fixed; left: 16px; top: 16px; z-index: 9; color: #eaf2f8;
-    pointer-events: none; line-height: 1.5; font-family: "Segoe UI", system-ui, sans-serif;
+    position: fixed; left: 14px; top: 14px; z-index: 9; color: #eaf2f8;
+    pointer-events: none; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
   }
   #hud .title-badge {
     display: inline-flex; align-items: center; gap: 8px;
-    background: rgba(16, 22, 32, 0.75); border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 10px; padding: 6px 14px; backdrop-filter: blur(8px);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+    background: linear-gradient(180deg, rgba(18, 26, 38, 0.82), rgba(11, 16, 24, 0.86));
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 11px; padding: 5px 12px;
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.12);
   }
-  #hud .title-badge h1 { font-size: 14px; font-weight: 700; color: #5fb27a; letter-spacing: 0.5px; }
-  #hud .title-badge .tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(95,178,122,0.22); color: #a3f7bf; font-weight: 700; }
+  #hud .title-badge h1 { font-size: 13.5px; font-weight: 800; color: var(--accent); letter-spacing: 0.8px; }
+  #hud .title-badge .tag {
+    font-size: 10px; padding: 2px 7px; border-radius: 999px;
+    background: rgba(95, 209, 132, 0.20); border: 1px solid rgba(95, 209, 132, 0.35);
+    color: #b4ffcb; font-weight: 800; letter-spacing: 0.6px;
+  }
   #hud .meta {
-    margin-top: 6px; font-size: 12px; color: #c8d6e5;
-    background: rgba(12, 16, 24, 0.65); border-radius: 8px; padding: 4px 12px;
-    backdrop-filter: blur(6px); display: inline-block; border: 1px solid rgba(255,255,255,0.08);
-    text-shadow: 0 1px 2px #000;
+    display: inline-flex; flex-wrap: wrap; align-items: center; gap: 5px;
+    max-width: min(92vw, 660px);
+    font-size: 11.5px; color: #d5e3f0;
   }
+  .hud-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 9px; border-radius: 8px;
+    background: rgba(12, 18, 26, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.28);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.75);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .hud-chip.biome { border-color: rgba(95, 209, 132, 0.30); color: #d7ffe4; }
+  .hud-chip.mode { border-color: rgba(255, 212, 121, 0.30); color: #ffe7a8; }
 
-  /* 物品名提示（切物品栏时浮现） */
+  /* 物品名与事件浮窗提示 */
   #itemName {
-    position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%) translateY(6px);
-    z-index: 10; padding: 6px 16px; border-radius: 8px;
-    background: rgba(14, 18, 26, 0.85); color: #fff; font-size: 14px; font-weight: 600; letter-spacing: 0.8px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.15);
-    border: 1px solid rgba(255,255,255,0.1); pointer-events: none; opacity: 0;
-    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-    transition: opacity .18s cubic-bezier(0.16, 1, 0.3, 1), transform .18s cubic-bezier(0.16, 1, 0.3, 1);
+    position: fixed; left: 50%; bottom: 126px; transform: translateX(-50%) translateY(8px);
+    z-index: 12; padding: 7px 18px; border-radius: 999px;
+    background: linear-gradient(180deg, rgba(18, 25, 36, 0.90), rgba(10, 14, 22, 0.92));
+    color: #fff; font-size: 13.5px; font-weight: 700; letter-spacing: 0.6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.52), inset 0 1px 0 rgba(255,255,255,0.16);
+    border: 1px solid rgba(255,255,255,0.14); pointer-events: none; opacity: 0;
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    transition: opacity .2s cubic-bezier(0.16, 1, 0.3, 1), transform .2s cubic-bezier(0.16, 1, 0.3, 1);
+    max-width: 90vw; text-align: center;
   }
   #itemName.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+  /* ---- 统一弹窗容器质感 ---- */
+  @keyframes modalIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  #menu .box, #pause .box, #inventory .box, #furnaceUI .box, #chestUI .box, #tradeUI .box {
+    background: linear-gradient(180deg, rgba(20, 29, 42, 0.90), rgba(11, 16, 25, 0.94));
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 18px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.68), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    animation: modalIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* ---- 主开屏菜单 ---- */
   #menu {
     position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
-    background: radial-gradient(ellipse at center, rgba(16, 24, 38, 0.88), rgba(6, 10, 16, 0.96));
+    background:
+      radial-gradient(ellipse at 50% 30%, rgba(28, 48, 42, 0.55), rgba(6, 10, 16, 0.92) 78%),
+      url("assets/card-mc.webp") center / cover no-repeat;
     color: #e8f0f6; text-align: center; cursor: pointer;
-    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   }
   #menu .box {
-    max-width: 520px; width: 92vw; max-height: 88vh; padding: 22px 26px; box-sizing: border-box; overflow-y: auto;
-    background: rgba(18, 26, 38, 0.85); border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 16px; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), 0 0 40px rgba(95, 178, 122, 0.1);
+    max-width: 560px; width: 92vw; max-height: 90vh; padding: 26px 28px; box-sizing: border-box; overflow-y: auto;
+    box-shadow: 0 24px 68px rgba(0, 0, 0, 0.72), 0 0 50px rgba(95, 209, 132, 0.14), inset 0 1px 0 rgba(255,255,255,0.16);
   }
-  #menu h1 { font-size: 28px; letter-spacing: 1px; margin-bottom: 12px; font-weight: 800; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
+  #menu .menu-kicker {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 12px; border-radius: 999px; margin-bottom: 10px;
+    background: rgba(95, 209, 132, 0.16); border: 1px solid rgba(95, 209, 132, 0.35);
+    color: #a9ffca; font-size: 11px; font-weight: 800; letter-spacing: 1.2px;
+  }
+  #menu h1 { font-size: 30px; letter-spacing: 1.5px; margin-bottom: 14px; font-weight: 900; text-shadow: 0 3px 12px rgba(0,0,0,0.65); }
   #menu .tag { color: var(--accent); }
   #menu .keys {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; text-align: left;
-    font-size: 13px; margin: 0 auto 18px; width: 100%; max-width: 460px; box-sizing: border-box;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 7px 12px; text-align: left;
+    font-size: 12.5px; margin: 0 auto 20px; width: 100%; max-width: 490px; box-sizing: border-box;
   }
   #menu .keys span {
-    display: flex; align-items: center; gap: 6px;
-    background: rgba(255, 255, 255, 0.05); padding: 5px 10px; border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.07); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(255, 255, 255, 0.045); padding: 6px 10px; border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: #d6e4f0;
   }
-  #menu .keys b { color: #ffd479; font-weight: 700; min-width: 48px; }
+  #menu .keys b {
+    color: var(--gold); font-weight: 800; min-width: 52px; font-size: 11.5px;
+    background: rgba(255, 212, 121, 0.12); border: 1px solid rgba(255, 212, 121, 0.26);
+    border-radius: 5px; padding: 1px 6px; text-align: center;
+  }
   #menu .play {
-    display: inline-block; padding: 12px 32px; border-radius: 10px;
-    background: linear-gradient(135deg, #5fb27a, #388e3c); color: #fff;
-    font-weight: 800; font-size: 16px; letter-spacing: 1px;
-    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 13px 38px; border-radius: 12px; user-select: none; -webkit-user-select: none;
+    background: linear-gradient(135deg, #65d68a, #2f9b53); color: #052010;
+    font-weight: 900; font-size: 16px; letter-spacing: 1.2px;
+    border: 1px solid rgba(185, 255, 206, 0.45);
+    box-shadow: 0 8px 26px rgba(64, 192, 108, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
   }
-  #menu .play:hover { transform: translateY(-2px); box-shadow: 0 8px 26px rgba(76, 175, 80, 0.6); }
-  #menu .loading { margin-top: 14px; font-size: 13px; color: #a4c2d6; }
-  #menu .pbar { width: 320px; height: 8px; margin: 12px auto 0; background: rgba(0, 0, 0, 0.45);
-    border-radius: 4px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.1); }
-  #menu .pfill { height: 100%; width: 0%; background: linear-gradient(90deg, #5fb27a, #a8e063);
-    box-shadow: 0 0 10px rgba(95, 178, 122, 0.8); transition: width 0.15s ease; }
+  #menu .play:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(64, 192, 108, 0.60); filter: brightness(1.06); }
+  #menu .loading { margin-top: 14px; font-size: 12.5px; color: #a7c5da; }
+  #menu .pbar { width: min(340px, 80vw); height: 8px; margin: 10px auto 0; background: rgba(0, 0, 0, 0.5);
+    border-radius: 999px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.12); }
+  #menu .pfill { height: 100%; width: 0%; background: linear-gradient(90deg, #43b56c, #8ef576);
+    box-shadow: 0 0 12px rgba(95, 209, 132, 0.85); transition: width 0.18s ease; border-radius: 999px; }
 
   /* ---- 暂停菜单 ---- */
   #pause {
     position: fixed; inset: 0; z-index: 21; display: none; align-items: center; justify-content: center;
-    background: rgba(8, 12, 18, 0.72); color: #e8f0f6; text-align: center;
-    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    background: rgba(6, 10, 16, 0.72); color: #e8f0f6; text-align: center;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   }
-  #pause .box { padding: 26px 30px; }
-  #pause h1 { font-size: 28px; letter-spacing: 1px; margin-bottom: 8px; }
-  #pause .sub { color: #9fc3d8; font-size: 13px; margin-bottom: 22px; }
+  #pause .box { padding: 28px 32px; max-width: 500px; width: 92vw; }
+  #pause h1 { font-size: 26px; letter-spacing: 1px; margin-bottom: 6px; font-weight: 800; }
+  #pause .sub { color: #9fc3d8; font-size: 13px; margin-bottom: 20px; }
   #pause .pbtn {
-    display: inline-block; padding: 11px 26px; margin: 0 8px; border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.12);
-    color: #e8f0f6; font-size: 15px; font-weight: 700; cursor: pointer;
-    letter-spacing: 1px; font-family: inherit;
-    -webkit-transition: transform .12s ease, background .12s ease;
-    transition: transform .12s ease, background .12s ease;
+    display: inline-block; padding: 10px 24px; margin: 4px 6px; border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.16); background: rgba(255,255,255,0.09);
+    color: #e8f0f6; font-size: 14px; font-weight: 700; cursor: pointer;
+    letter-spacing: 0.8px; font-family: inherit;
+    transition: transform .14s ease, background .14s ease, box-shadow .14s ease;
   }
-  #pause .pbtn:hover { background: rgba(255,255,255,0.2); }
-  #pause .pbtn:active { -webkit-transform: scale(.96); transform: scale(.96); }
-  #pause .pbtn.primary { background: var(--accent); border-color: var(--accent); color: #06220f; }
-  #pause .pbtn.primary:hover { background: #79c98f; }
-  #pause .pbtn.danger { border-color: rgba(255,140,120,0.45); background: rgba(200,70,50,0.22); }
+  #pause .pbtn:hover { background: rgba(255,255,255,0.18); transform: translateY(-1px); }
+  #pause .pbtn:active { transform: scale(.96); }
+  #pause .pbtn.primary {
+    background: linear-gradient(135deg, #65d68a, #35a05a); border-color: rgba(185,255,206,0.45);
+    color: #06220f; box-shadow: 0 6px 20px rgba(64,192,108,0.35);
+  }
+  #pause .pbtn.primary:hover { filter: brightness(1.06); }
+  #pause .pbtn.danger { border-color: rgba(255,140,120,0.42); background: rgba(200,70,50,0.22); }
   #pause .pbtn.danger:hover { background: rgba(200,70,50,0.38); }
   #pause .pbtn.armed { background: #d8563c; border-color: #ff9d82; color: #fff; animation: armPulse 0.9s ease-in-out infinite; }
   @keyframes armPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
-  #pause .world-seed { margin: 20px 0 10px; color: #9fc3d8; font-size: 12.5px; }
-  #pause .world-seed b { color: #e8f0f6; font-family: ui-monospace, Consolas, monospace; }
-  #pause .world-hint { margin-top: 12px; color: #8aa6b8; font-size: 11.5px; line-height: 1.7; max-width: 430px; }
+  #pause .world-seed {
+    display: inline-block; margin: 18px 0 12px; padding: 4px 12px; border-radius: 999px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    color: #9fc3d8; font-size: 12px;
+  }
+  #pause .world-seed b { color: var(--gold); font-family: ui-monospace, Consolas, monospace; }
+  #pause .world-hint { margin-top: 14px; color: #8aa6b8; font-size: 11.5px; line-height: 1.75; max-width: 440px; }
 
   /* ---- 背包 ---- */
   #inventory {
     position: fixed; inset: 0; z-index: 22; display: none; align-items: center; justify-content: center;
-    background: rgba(8, 12, 18, 0.74); color: #e8f0f6; text-align: center;
-    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    background: rgba(6, 10, 16, 0.76); color: #e8f0f6; text-align: center;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   }
   #inventory .box {
-    padding: 16px 22px; max-width: 680px; width: 92vw; max-height: 88vh;
+    padding: 18px 24px; max-width: 700px; width: 93vw; max-height: 90vh;
     display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box;
   }
-  #inventory h1 { font-size: 20px; letter-spacing: 1px; margin-bottom: 2px; }
+  #inventory h1 { font-size: 20px; letter-spacing: 1px; margin-bottom: 3px; font-weight: 800; }
   #inventory .sub { color: #9fc3d8; font-size: 12px; margin-bottom: 12px; flex-shrink: 0; }
   #invGrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; justify-items: center; flex-shrink: 0; }
   .inv-slot {
-    width: 48px; height: 48px; border-radius: 8px; position: relative;
-    background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.14);
+    width: 48px; height: 48px; border-radius: 9px; position: relative;
+    background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(0,0,0,0.20));
+    border: 1.5px solid rgba(255,255,255,0.13);
     display: flex; align-items: center; justify-content: center; cursor: pointer;
-    -webkit-transition: transform .1s ease, border-color .1s ease;
-    transition: transform .1s ease, border-color .1s ease;
+    transition: transform .12s ease, border-color .12s ease, background .12s ease;
   }
-  .inv-slot:hover { border-color: var(--accent); -webkit-transform: scale(1.06); transform: scale(1.06); }
+  .inv-slot:hover { border-color: var(--accent); background: rgba(95,209,132,0.14); transform: scale(1.06); }
   .inv-slot canvas { image-rendering: pixelated; width: 40px; height: 40px; }
   .inv-slot.in-hotbar::after {
     content: "✓"; position: absolute; right: 3px; bottom: 2px; font-size: 12px; color: var(--accent);
     text-shadow: 0 1px 2px #000;
   }
   .inv-slot .inv-count {
-    position: absolute; right: 3px; bottom: 2px; font-size: 12px; font-weight: 700;
+    position: absolute; right: 3px; bottom: 2px; font-size: 11.5px; font-weight: 800;
     color: #fff; text-shadow: 0 1px 2px #000; pointer-events: none;
   }
-  .craft-title { margin-top: 14px; margin-bottom: 6px; font-size: 13px; color: #ffd479; letter-spacing: 2px; flex-shrink: 0; }
+  .craft-title { margin-top: 14px; margin-bottom: 6px; font-size: 12.5px; font-weight: 800; color: var(--gold); letter-spacing: 1.8px; flex-shrink: 0; }
   #craftPanel {
     display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
-    max-height: 165px; overflow-y: auto; padding: 6px; border-radius: 8px;
-    background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.08);
+    max-height: 170px; overflow-y: auto; padding: 8px; border-radius: 10px;
+    background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.09);
   }
   .recipe {
-    display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 8px;
-    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); cursor: pointer;
-    -webkit-transition: transform .1s ease, border-color .1s ease;
-    transition: transform .1s ease, border-color .1s ease;
+    display: flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 9px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.13); cursor: pointer;
+    transition: transform .12s ease, border-color .12s ease, background .12s ease;
   }
-  .recipe:hover { border-color: var(--accent); -webkit-transform: scale(1.04); transform: scale(1.04); }
-  .recipe.cant { opacity: 0.4; }
+  .recipe:hover { border-color: var(--accent); background: rgba(95,209,132,0.14); transform: translateY(-1px); }
+  .recipe.cant { opacity: 0.36; }
   .recipe canvas { image-rendering: pixelated; width: 30px; height: 30px; }
-  .recipe .out { font-weight: 700; color: #ffd479; }
+  .recipe .out { font-weight: 800; color: var(--gold); font-size: 12.5px; }
   .recipe .arrow { color: #9fc3d8; }
-  .recipe .need { font-size: 11px; color: #9fc3d8; }
+  .recipe .need { font-size: 11px; color: #a7c5da; }
   #invHotbar { display: flex; gap: 6px; justify-content: center; margin-top: 12px; flex-wrap: wrap; flex-shrink: 0; }
 
   /* ---- 熔炉 ---- */
   #furnaceUI {
     position: fixed; inset: 0; z-index: 23; display: none; align-items: center; justify-content: center;
-    background: rgba(8, 12, 18, 0.74); color: #e8f0f6; text-align: center;
-    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    background: rgba(6, 10, 16, 0.76); color: #e8f0f6; text-align: center;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   }
-  #furnaceUI .box { padding: 20px 24px; max-width: 660px; }
+  #furnaceUI .box { padding: 22px 26px; max-width: 660px; width: 92vw; }
   #furnaceUI h1 { font-size: 22px; letter-spacing: 1px; margin-bottom: 4px; }
-  #furnaceUI .sub { color: #9fc3d8; font-size: 12px; margin-bottom: 14px; }
+  #furnaceUI .sub { color: #9fc3d8; font-size: 12px; margin-bottom: 16px; }
   #furnaceSlots { display: flex; gap: 16px; justify-content: center; align-items: flex-start; margin-bottom: 6px; }
   .furn-slot {
-    width: 56px; height: 56px; border-radius: 8px; position: relative;
+    width: 56px; height: 56px; border-radius: 10px; position: relative;
     background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.14);
     display: flex; align-items: center; justify-content: center; cursor: pointer;
+    transition: border-color 0.14s ease, box-shadow 0.14s ease;
   }
-  .furn-slot.sel { border-color: var(--accent); box-shadow: 0 0 12px rgba(95,178,122,0.5); }
+  .furn-slot.sel { border-color: var(--accent); box-shadow: 0 0 14px rgba(95,209,132,0.55); }
   .furn-slot canvas { image-rendering: pixelated; width: 44px; height: 44px; }
   .furn-slot .fnum { position: absolute; right: 3px; bottom: 2px; font-size: 12px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px #000; pointer-events: none; }
   .furn-slot .flabel { position: absolute; left: 0; right: 0; top: -18px; font-size: 11px; color: #9fc3d8; }
   .furn-col { display: flex; flex-direction: column; align-items: center; }
-  .furn-arrow { color: #ffd479; font-size: 20px; align-self: center; }
-  #furnaceBarWrap { width: 150px; height: 8px; margin: 10px auto 4px; background: rgba(255,255,255,0.12); border-radius: 4px; overflow: hidden; }
-  #furnaceBar { height: 100%; width: 0%; background: linear-gradient(90deg, #ff9d3c, #ffd479); transition: width .1s linear; }
+  .furn-arrow { color: var(--gold); font-size: 20px; align-self: center; }
+  #furnaceBarWrap { width: 170px; height: 8px; margin: 12px auto 4px; background: rgba(255,255,255,0.12); border-radius: 999px; overflow: hidden; }
+  #furnaceBar { height: 100%; width: 0%; background: linear-gradient(90deg, #ff8c32, #ffd479); transition: width .1s linear; }
   #furnaceGrid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; justify-items: center; margin-top: 12px; }
   #furnaceHotbar { display: flex; gap: 6px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
 
   /* ---- 储物箱 ---- */
   #chestUI {
     position: fixed; inset: 0; z-index: 23; display: none; align-items: center; justify-content: center;
-    background: rgba(8, 12, 18, 0.74); color: #e8f0f6; text-align: center;
-    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    background: rgba(6, 10, 16, 0.76); color: #e8f0f6; text-align: center;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   }
-  #chestUI .box { padding: 18px 24px; max-width: 660px; max-height: 90vh; overflow-y: auto; }
+  #chestUI .box { padding: 20px 24px; max-width: 660px; width: 92vw; max-height: 90vh; overflow-y: auto; }
   #chestUI h1 { font-size: 22px; letter-spacing: 1px; margin-bottom: 4px; }
   #chestUI .sub { color: #9fc3d8; font-size: 12px; margin-bottom: 12px; }
   #chestSlotsGrid { display: grid; grid-template-columns: repeat(9, 48px); gap: 6px; justify-content: center; margin-bottom: 6px; }
@@ -256,25 +348,27 @@
   /* ---- 村民交易 ---- */
   #tradeUI {
     position: fixed; inset: 0; z-index: 24; display: none; align-items: center; justify-content: center;
-    background: rgba(8, 12, 18, 0.76); color: #e8f0f6; text-align: center;
-    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    background: rgba(6, 10, 16, 0.78); color: #e8f0f6; text-align: center;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   }
-  #tradeUI .box { padding: 18px 24px; max-width: 580px; max-height: 90vh; }
+  #tradeUI .box { padding: 20px 26px; max-width: 580px; width: 92vw; max-height: 90vh; }
   .trade-row {
     display: flex; align-items: center; justify-content: space-between;
-    background: rgba(22, 32, 44, 0.85); border: 1px solid rgba(85, 120, 155, 0.35);
-    border-radius: 6px; padding: 8px 12px; gap: 10px;
+    background: rgba(22, 32, 46, 0.85); border: 1px solid rgba(110, 155, 195, 0.25);
+    border-radius: 10px; padding: 9px 14px; gap: 10px;
+    transition: border-color 0.14s ease, background 0.14s ease;
   }
+  .trade-row:hover { border-color: rgba(95, 209, 132, 0.45); background: rgba(28, 42, 58, 0.9); }
   .trade-item-box { display: flex; align-items: center; gap: 8px; font-size: 13px; }
   .trade-btn {
-    background: #1cb55c; border: 1px solid #32e078; color: #fff;
-    font-weight: bold; border-radius: 4px; padding: 5px 14px; cursor: pointer;
-    font-size: 12px; transition: background 0.15s;
+    background: linear-gradient(135deg, #27cf6f, #18a354); border: 1px solid rgba(130, 255, 180, 0.4); color: #fff;
+    font-weight: 800; border-radius: 7px; padding: 6px 15px; cursor: pointer;
+    font-size: 12px; transition: transform 0.12s ease, filter 0.15s ease;
   }
   .trade-btn:disabled {
-    background: #34424c; border-color: #4a5c68; color: #7f92a0; cursor: not-allowed;
+    background: #2c3842; border-color: #415260; color: #788c9a; cursor: not-allowed;
   }
-  .trade-btn:not(:disabled):hover { background: #24d16c; }
+  .trade-btn:not(:disabled):hover { filter: brightness(1.08); transform: translateY(-1px); }
 </style>
 </head>
 <body>
@@ -293,20 +387,20 @@
 </div>
 
 <!-- 顶端村庄袭击 BOSS 血条 (Raid HUD) -->
-<div id="raidHUD" style="display:none; position:fixed; top:20px; left:50%; transform:translateX(-50%); width:340px; z-index:900; text-align:center; pointer-events:none; font-family:'Segoe UI',sans-serif;">
-  <div id="raidTitle" style="color:#ff3b4e; font-weight:bold; font-size:15px; text-shadow:0 2px 4px rgba(0,0,0,0.85); margin-bottom:5px; letter-spacing:1px;">⚔️ 村庄袭击 第 1 波</div>
-  <div style="width:100%; height:12px; background:rgba(20,10,10,0.8); border:2px solid #5a1018; border-radius:6px; overflow:hidden; box-shadow:0 0 12px rgba(255,50,50,0.4);">
-    <div id="raidBar" style="width:100%; height:100%; background:linear-gradient(90deg, #d32f2f, #ff5252); transition:width 0.3s ease;"></div>
+<div id="raidHUD" style="display:none; position:fixed; top:18px; left:50%; transform:translateX(-50%); width:360px; max-width:90vw; z-index:900; text-align:center; pointer-events:none; background:rgba(20,10,14,0.78); backdrop-filter:blur(10px); border:1px solid rgba(255,82,82,0.35); border-radius:12px; padding:8px 14px; box-shadow:0 8px 26px rgba(0,0,0,0.45);">
+  <div id="raidTitle" style="color:#ff5a6b; font-weight:800; font-size:14px; text-shadow:0 2px 4px rgba(0,0,0,0.85); margin-bottom:6px; letter-spacing:1px;">⚔️ 村庄袭击 第 1 波</div>
+  <div style="width:100%; height:10px; background:rgba(20,10,10,0.85); border:1.5px solid #6b141e; border-radius:999px; overflow:hidden; box-shadow:inset 0 1px 4px rgba(0,0,0,0.7);">
+    <div id="raidBar" style="width:100%; height:100%; background:linear-gradient(90deg, #d32f2f, #ff6b6b); transition:width 0.3s ease;"></div>
   </div>
-  <div id="raidSub" style="color:#ffd8d8; font-size:12px; text-shadow:0 1px 3px rgba(0,0,0,0.8); margin-top:3px;">剩余灾厄暴徒: 4</div>
+  <div id="raidSub" style="color:#ffd8d8; font-size:11.5px; text-shadow:0 1px 3px rgba(0,0,0,0.8); margin-top:4px;">剩余灾厄暴徒: 4</div>
 </div>
 
 <!-- 右上角状态效果 (Status Effects: 不祥之兆 / 村庄英雄) -->
-<div id="statusEffects" style="position:fixed; top:18px; right:18px; z-index:900; display:flex; flex-direction:column; gap:8px; pointer-events:none; font-family:'Segoe UI',sans-serif;">
-  <div id="badOmenBadge" style="display:none; background:rgba(25,15,30,0.85); border:1px solid #9c27b0; border-radius:8px; padding:6px 14px; color:#f0d0ff; font-size:13px; font-weight:bold; text-shadow:0 1px 3px rgba(0,0,0,0.8); box-shadow:0 4px 12px rgba(0,0,0,0.4);">
+<div id="statusEffects" style="position:fixed; top:16px; right:16px; z-index:900; display:flex; flex-direction:column; gap:8px; pointer-events:none;">
+  <div id="badOmenBadge" style="display:none; background:rgba(26,14,36,0.86); backdrop-filter:blur(10px); border:1px solid rgba(186,85,211,0.55); border-radius:10px; padding:6px 14px; color:#f0d0ff; font-size:12.5px; font-weight:700; text-shadow:0 1px 3px rgba(0,0,0,0.8); box-shadow:0 6px 18px rgba(0,0,0,0.4);">
     ☠️ 不祥之兆 <span id="badOmenTime" style="font-weight:normal; opacity:0.85; font-size:11px;">03:00</span>
   </div>
-  <div id="heroBadge" style="display:none; background:rgba(15,35,20,0.85); border:1px solid #2ecc71; border-radius:8px; padding:6px 14px; color:#a3f7bf; font-size:13px; font-weight:bold; text-shadow:0 1px 3px rgba(0,0,0,0.8); box-shadow:0 4px 12px rgba(46,204,113,0.35);">
+  <div id="heroBadge" style="display:none; background:rgba(12,34,22,0.86); backdrop-filter:blur(10px); border:1px solid rgba(95,209,132,0.55); border-radius:10px; padding:6px 14px; color:#b4ffcb; font-size:12.5px; font-weight:700; text-shadow:0 1px 3px rgba(0,0,0,0.8); box-shadow:0 6px 18px rgba(46,204,113,0.32);">
     🏆 村庄英雄 <span id="heroTime" style="font-weight:normal; opacity:0.85; font-size:11px;">05:00</span>
   </div>
 </div>
@@ -314,31 +408,31 @@
 <div id="hud">
   <div class="title-badge">
     <h1>⛏️ MINECRAFT</h1>
-    <span class="tag">WEB</span>
+    <span class="tag">WEB 光影版</span>
   </div>
-  <div class="meta" id="hudMeta">载入中…</div>
+  <div class="meta" id="hudMeta"><span class="hud-chip">载入中…</span></div>
 </div>
 
 <div id="itemName"></div>
 
-<!-- 底部生存 HUD 复合控制台（心之容器 + 护甲栏 + 饥饿度 + 经验等级 + 经验槽 + 快捷栏） -->
+<!-- 底部生存 HUD 复合控制台（像素心之容器 + 护甲栏 + 像素饥饿度 + 经验等级 + 经验槽 + 快捷栏） -->
 <div id="bottomDashboard" style="position:fixed; left:50%; bottom:14px; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; z-index:9; pointer-events:none;">
   <!-- 护甲状态栏与水下氧气气泡栏（左侧护甲，右侧氧气） -->
-  <div id="armorRow" style="width:380px; max-width:92vw; display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; font-size:13px; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.85));">
+  <div id="armorRow" style="width:440px; max-width:94vw; display:flex; justify-content:space-between; align-items:center; margin-bottom:3px; font-size:13px; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.85));">
     <div id="armorBar" style="display:none; color:#dcdde1; text-shadow:0 0 6px rgba(220,221,225,0.7); letter-spacing:1px;"></div>
-    <div id="airBar" style="display:none; color:#00cec9; text-shadow:0 0 6px rgba(0,206,201,0.8); letter-spacing:1px; font-size:14px;"></div>
+    <div id="airBar" style="display:none; color:#48dbfb; text-shadow:0 0 6px rgba(72,219,251,0.8); letter-spacing:1px; font-size:13.5px;"></div>
   </div>
-  <!-- 上层：生命值与饱食度分列左右 -->
-  <div style="width:380px; max-width:92vw; display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; font-size:15px; letter-spacing:1px; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.85));">
-    <div id="hearts" style="color:#ff4757; text-shadow:0 0 6px rgba(255,71,87,0.5);">❤❤❤❤❤❤❤❤❤❤</div>
-    <div id="hunger" style="color:#ffa502; text-shadow:0 0 6px rgba(255,165,2,0.5);">🍗🍗🍗🍗🍗🍗🍗🍗🍗🍗</div>
+  <!-- 上层：像素生命值与像素饱食度分列左右 -->
+  <div style="width:440px; max-width:94vw; display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+    <div id="hearts" class="stat-icons"></div>
+    <div id="hunger" class="stat-icons"></div>
   </div>
-  
+
   <!-- 中层：经验等级与翡翠经验条 -->
-  <div id="xpContainer" style="width:380px; max-width:92vw; display:flex; flex-direction:column; align-items:center; margin-bottom:6px;">
-    <div id="xpLevel" style="color:#80ff20; font-size:13px; font-weight:900; text-shadow:0 1px 3px #000, 0 0 6px #3a9e08; line-height:1; margin-bottom:2px;">0</div>
-    <div style="width:100%; height:6px; background:rgba(12,16,22,0.85); border:1px solid rgba(255,255,255,0.15); border-radius:3px; overflow:hidden; box-shadow:inset 0 1px 3px rgba(0,0,0,0.8);">
-      <div id="xpBar" style="width:0%; height:100%; background:linear-gradient(90deg, #44bd32, #80ff20); box-shadow:0 0 8px rgba(128,255,32,0.7); transition:width 0.15s ease-out;"></div>
+  <div id="xpContainer" style="width:440px; max-width:94vw; display:flex; flex-direction:column; align-items:center; margin-bottom:7px;">
+    <div id="xpLevel" style="color:#8dff33; font-size:13px; font-weight:900; text-shadow:0 1px 3px #000, 0 0 8px rgba(90, 220, 20, 0.85); line-height:1; margin-bottom:3px;">0</div>
+    <div style="width:100%; height:6px; background:rgba(10,14,20,0.88); border:1px solid rgba(255,255,255,0.16); border-radius:999px; overflow:hidden; box-shadow:inset 0 1px 3px rgba(0,0,0,0.85);">
+      <div id="xpBar" style="width:0%; height:100%; background:linear-gradient(90deg, #3ac74a, #8dff33); box-shadow:0 0 10px rgba(141,255,51,0.75); transition:width 0.18s ease-out; border-radius:999px;"></div>
     </div>
   </div>
 
@@ -348,24 +442,25 @@
 
 <div id="menu">
   <div class="box">
+    <div class="menu-kicker">✨ 电影级光影 · 23 生态群系 · 完整村庄与突袭</div>
     <h1>⛏️ 我的世界 <span class="tag">Web 复刻</span></h1>
     <div class="keys">
       <span><b>W A S D</b> 移动 / 骑马</span>
       <span><b>鼠标</b> 旋转视角</span>
       <span><b>空格</b> 跳跃 / 腾跃</span>
       <span><b>Shift</b> 潜行 / 下马</span>
-      <span><b>E</b> 打开背包与合成</span>
-      <span><b>F</b> 切换创造模式</span>
-      <span><b>1-9</b> 快捷选择物品</span>
-      <span><b>Ctrl</b> 疾跑冲刺</span>
-      <span><b>左键</b> 破坏方块 / 攻击</span>
-      <span><b>右键</b> 放置方块 / 交互使用</span>
-      <span><b>V</b> 望远镜长焦放大</span>
-      <span><b>中键</b> 快捷选取方块</span>
-      <span><b>0</b> 切换昼夜时间</span>
-      <span><b>Esc</b> 暂停 / 关闭界面</span>
+      <span><b>E</b> 背包与合成</span>
+      <span><b>F</b> 创造飞行模式</span>
+      <span><b>F5</b> 切换人称视角</span>
+      <span><b>1-9</b> 快捷栏切换</span>
+      <span><b>左键</b> 挖掘 / 攻击</span>
+      <span><b>右键</b> 放置 / 交互</span>
+      <span><b>V</b> 望远镜长焦</span>
+      <span><b>中键</b> 选取目标方块</span>
+      <span><b>0</b> 一键切换昼夜</span>
+      <span><b>Esc</b> 暂停 / 关闭</span>
     </div>
-    <div class="play">点击进入世界</div>
+    <div class="play">▶ 点击进入世界</div>
     <div class="loading" id="loading">正在加载引擎…</div>
     <div class="pbar"><div class="pfill" id="pfill"></div></div>
   </div>
@@ -374,13 +469,17 @@
 <div id="pause">
   <div class="box">
     <h1>⏸ 已暂停</h1>
-    <div class="sub">按 Esc 或点击下方按钮继续</div>
-    <button class="pbtn primary" id="resumeBtn">▶ 回到游戏</button>
-    <button class="pbtn" id="homeBtn">🏠 回到主页</button>
+    <div class="sub">按 Esc 或点击下方按钮继续冒险</div>
+    <div>
+      <button class="pbtn primary" id="resumeBtn">▶ 回到游戏</button>
+      <button class="pbtn" id="homeBtn">🏠 回到主页</button>
+    </div>
     <div class="world-seed">世界种子 <b id="seedNum">0</b></div>
-    <button class="pbtn danger" id="resetWorldBtn">🔄 重置世界</button>
-    <button class="pbtn danger" id="newWorldBtn">🎲 生成新世界</button>
-    <div class="world-hint" id="worldHint">快捷键：<b>F</b> 创造飞行 · <b>F5</b> 切换第一 / 第三人称视角 · <b>E</b> 背包 · <b>V</b> 望远镜 · <b>Q</b> 丢弃 · <b>0</b> 昼夜切换<br>重置世界会清空存档（地形改动 + 背包 + 熔炉）后从同一片地形重新开始；生成新世界会换一片全新的地形。两个操作都需要点两次确认。</div>
+    <div>
+      <button class="pbtn danger" id="resetWorldBtn">🔄 重置世界</button>
+      <button class="pbtn danger" id="newWorldBtn">🎲 生成新世界</button>
+    </div>
+    <div class="world-hint" id="worldHint">快捷键：<b>F</b> 创造飞行 · <b>F5</b> 第一 / 第三人称视角 · <b>E</b> 背包 · <b>V</b> 望远镜 · <b>Q</b> 丢弃 · <b>0</b> 昼夜切换<br>重置世界会清空存档（地形改动 + 背包 + 熔炉）后从同一片地形重新开始；生成新世界会换一片全新的地形。两个操作都需要点两次确认。</div>
   </div>
 </div>
 
@@ -388,10 +487,9 @@
   <div class="box">
     <h1>🎒 背包与装备</h1>
     <div class="sub">点击背包物品与快捷栏交换 · 点击防具槽穿脱盔甲 · 按 E 或 Esc 关闭</div>
-    <!-- 装备栏与主背包并排布局 -->
     <div style="display:flex; gap:16px; align-items:flex-start; margin-bottom:10px; width:100%;">
-      <div style="display:flex; flex-direction:column; gap:8px; background:rgba(0,0,0,0.35); padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.12); flex-shrink:0;">
-        <div style="font-size:12px; color:#aaa; font-weight:bold; margin-bottom:2px;">🛡️ 装备栏</div>
+      <div style="display:flex; flex-direction:column; gap:8px; background:rgba(0,0,0,0.32); padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,0.11); flex-shrink:0;">
+        <div style="font-size:12px; color:#a7c5da; font-weight:800; margin-bottom:2px;">🛡️ 装备栏</div>
         <div style="display:flex; align-items:center; gap:8px;">
           <div id="slotHelmet" class="slot" style="width:40px; height:40px; cursor:pointer;" title="头部防具（点击穿脱）"></div>
           <span style="font-size:12px; color:#ddd;">头盔</span>
@@ -457,7 +555,7 @@
     <h1 id="tradeTitle">👨‍🌾 农夫村民 · 贸易集市</h1>
     <div class="sub">以物易物，公平交易 · 点击按钮兑换绿宝石与稀有物资 · 按 Esc 或 E 离开</div>
     <div id="tradeList" style="display:flex; flex-direction:column; gap:8px; margin: 16px 0; max-height: 55vh; overflow-y:auto; padding-right:4px;"></div>
-    <button id="closeTradeBtn" style="background:#2b3a4a; border:1px solid #4a627a; color:#fff; padding:6px 20px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:13px;">关闭贸易</button>
+    <button id="closeTradeBtn" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:7px 24px; border-radius:8px; cursor:pointer; font-weight:700; font-size:13px;">关闭贸易</button>
   </div>
 </div>
 
@@ -523,7 +621,10 @@ const B = {
   DAYLIGHT_DETECTOR:195, NIGHT_DETECTOR:196, NOTE_BLOCK:197, SCULK_SENSOR:198, SCULK_BLOCK:199,
   BEEHIVE:200, HONEYCOMB:201, DRIPSTONE_BLOCK:202, POINTED_DRIPSTONE:203,
   COMPOSTER:204, BONE_MEAL:205, BLAST_FURNACE:206, SMOKER:207, LODESTONE:208,
-  BELL:209, GRINDSTONE:210, GOAT_HORN:211
+  BELL:209, GRINDSTONE:210, GOAT_HORN:211,
+  PACKED_ICE:212, BLUE_ICE:213, RED_SAND:214, RED_TERRACOTTA:215, ORANGE_TERRACOTTA:216,
+  YELLOW_TERRACOTTA:217, TERRACOTTA:218, MYCELIUM:219, WHITE_SAND:220, PODZOL:221,
+  DEEPSLATE:222, MUD:223, FARMLAND:224, DIRT_PATH:225
 };
 
 function mulberry32(a) {
@@ -933,6 +1034,11 @@ function makeAtlas() {
   T.lodestoneTop = i++; T.lodestoneSide = i++;
   T.bellTop = i++; T.bellSide = i++;
   T.grindstoneSide = i++; T.grindstoneRound = i++;
+  T.packedIce = i++; T.blueIce = i++; T.redSand = i++;
+  T.redTerracotta = i++; T.orangeTerracotta = i++; T.yellowTerracotta = i++; T.terracotta = i++;
+  T.myceliumTop = i++; T.myceliumSide = i++; T.whiteSand = i++;
+  T.podzolTop = i++; T.podzolSide = i++; T.deepslateTop = i++; T.deepslateSide = i++;
+  T.mud = i++; T.farmlandTop = i++; T.farmlandSide = i++; T.dirtPathTop = i++; T.dirtPathSide = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -1198,9 +1304,16 @@ function makeAtlas() {
   put(T.glass, 2, 3, 245, 250, 255, 200); put(T.glass, 3, 3, 235, 245, 252, 170);
   put(T.glass, 4, 4, 240, 248, 255, 180); put(T.glass, 5, 5, 240, 248, 255, 180);
   put(T.glass, 12, 12, 245, 250, 255, 190); put(T.glass, 13, 12, 240, 245, 252, 150);
-  // —— 水（热键图标用）——
-  fill(T.water, [38, 118, 158], 16, 1);
-  for (let y = 0; y < TILE; y += 3) for (let x = 0; x < TILE; x++) put(T.water, (x + y) % TILE, y, 120, 200, 232);
+  // —— 水（碧蓝多层波光贴图：热键图标与瀑布侧面使用，柔和波纹取代生硬斜杠）——
+  fill(T.water, [34, 138, 186], 8, 1);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const w1 = Math.sin(x * 0.55 + Math.sin(y * 0.42) * 1.4);
+    const w2 = Math.cos(y * 0.72 + x * 0.28);
+    const v = w1 * 0.55 + w2 * 0.45;
+    if (v > 0.52) put(T.water, x, y, 134, 218, 246);
+    else if (v > 0.16) put(T.water, x, y, 66, 170, 214);
+    else if (v < -0.45) put(T.water, x, y, 22, 102, 148);
+  }
 
   // —— 石砖 ——
   fill(T.stoneBrick, [128, 128, 128], 12, 1);
@@ -2794,6 +2907,116 @@ function makeAtlas() {
     else if (d < 2.0) put(T.grindstoneRound, x, y, 64, 66, 72);
   }
 
+  // —— 14 种地形与结构专用方块贴图（浮冰/蓝冰/红沙/四色陶瓦/菌丝/白沙/灰化土/深板岩/泥巴/耕地/草径）——
+  // 1. 浮冰（冰刺平原主体：致密冰蓝 + 折光斜纹 + 霜白晶体高光）
+  fill(T.packedIce, [138, 186, 234], 10, 201);
+  speck(T.packedIce, [110, 162, 218], 18, 202);
+  speck(T.packedIce, [196, 230, 252], 16, 203);
+  for (let s = 2; s < 13; s++) {
+    put(T.packedIce, s, (s + 2) % TILE, 218, 242, 255);
+    if (s < 11) put(T.packedIce, (s + 5) % TILE, s, 166, 212, 246);
+  }
+  for (let s = 3; s < 9; s++) put(T.packedIce, 15 - s, s, 230, 248, 255);
+
+  // 2. 蓝冰（大型冰刺核心与冰川深冰：深邃宝蓝 + 锐利亮青晶体折射）
+  fill(T.blueIce, [94, 150, 230], 10, 204);
+  speck(T.blueIce, [66, 118, 206], 20, 205);
+  speck(T.blueIce, [146, 206, 255], 16, 206);
+  for (let s = 1; s < 14; s++) {
+    put(T.blueIce, s, (s * 2) % TILE, 162, 220, 255);
+    if (s % 2 === 0) put(T.blueIce, (15 - s), s, 210, 244, 255);
+  }
+
+  // 3. 红沙（恶地红沙：赤橙沙丘波纹 + 深浅颗粒）
+  fill(T.redSand, [196, 106, 52], 12, 207);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const wave = Math.sin(x * 0.55 + y * 0.25) + Math.cos(y * 0.85 - x * 0.15) * 0.5;
+    if (wave > 0.72) put(T.redSand, x, y, 216, 128, 70);
+    else if (wave < -0.72) put(T.redSand, x, y, 170, 84, 38);
+  }
+  speck(T.redSand, [224, 146, 88], 14, 208);
+
+  // 4~7. 四色自然陶瓦（恶地丹霞台地色带，带自然水平沉积肌理）
+  const paintTerracotta = (tile, base, hi, lo, seed) => {
+    fill(tile, base, 8, seed);
+    for (let y = 0; y < TILE; y++) {
+      const band = (y % 5 === 0) ? hi : (y % 5 === 3 ? lo : null);
+      if (band) for (let x = 0; x < TILE; x++) if (((x * 7 + y * 13) & 3) !== 0) put(tile, x, y, band[0], band[1], band[2]);
+    }
+    speck(tile, lo, 12, seed + 1);
+    speck(tile, hi, 10, seed + 2);
+  };
+  paintTerracotta(T.redTerracotta, [146, 62, 48], [164, 76, 58], [124, 48, 38], 210);
+  paintTerracotta(T.orangeTerracotta, [174, 92, 44], [194, 110, 56], [148, 74, 34], 214);
+  paintTerracotta(T.yellowTerracotta, [190, 140, 56], [208, 160, 72], [164, 116, 44], 218);
+  paintTerracotta(T.terracotta, [154, 102, 76], [172, 118, 90], [132, 84, 62], 222);
+
+  // 8. 菌丝（蘑菇岛地表：紫灰天鹅绒菌丝顶 + 侧面垂边接泥土）
+  fill(T.myceliumTop, [114, 102, 114], 10, 226);
+  speck(T.myceliumTop, [142, 126, 142], 22, 227);
+  speck(T.myceliumTop, [90, 82, 92], 18, 228);
+  fill(T.myceliumSide, [134, 96, 66], 12, 229);
+  speck(T.myceliumSide, [108, 76, 50], 16, 230);
+  for (let x = 0; x < TILE; x++) {
+    const drop = 3 + ((x * 5 + 3) % 3);
+    for (let y = 0; y < drop; y++) put(T.myceliumSide, x, y, y === drop - 1 ? 94 : 118, y === drop - 1 ? 82 : 104, y === drop - 1 ? 96 : 118);
+  }
+
+  // 9. 白沙（白沙丘地表：细腻珍珠暖白沙纹，与人工石英块明显区分）
+  fill(T.whiteSand, [234, 230, 218], 8, 231);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const wave = Math.sin(x * 0.5 + y * 0.3) + Math.cos(y * 0.8 - x * 0.2) * 0.45;
+    if (wave > 0.65) put(T.whiteSand, x, y, 246, 244, 236);
+    else if (wave < -0.65) put(T.whiteSand, x, y, 214, 208, 194);
+  }
+  speck(T.whiteSand, [202, 196, 182], 14, 232);
+
+  // 10. 灰化土（针叶林落叶地表：红棕松针顶 + 泥土侧面）
+  fill(T.podzolTop, [108, 72, 36], 12, 233);
+  speck(T.podzolTop, [136, 94, 46], 24, 234);
+  speck(T.podzolTop, [78, 50, 24], 20, 235);
+  fill(T.podzolSide, [134, 96, 66], 12, 236);
+  speck(T.podzolSide, [104, 72, 48], 14, 237);
+  for (let x = 0; x < TILE; x++) {
+    const drop = 3 + ((x * 7 + 1) % 3);
+    for (let y = 0; y < drop; y++) put(T.podzolSide, x, y, y === drop - 1 ? 86 : 114, y === drop - 1 ? 56 : 76, y === drop - 1 ? 26 : 38);
+  }
+
+  // 11. 深板岩（地下深层岩：深炭灰层理叠纹）
+  fill(T.deepslateTop, [68, 70, 76], 10, 238);
+  speck(T.deepslateTop, [50, 52, 58], 20, 239);
+  speck(T.deepslateTop, [90, 94, 102], 14, 240);
+  fill(T.deepslateSide, [64, 66, 72], 9, 241);
+  for (let y = 0; y < TILE; y++) {
+    const strata = (y % 4 === 0) ? [46, 48, 54] : (y % 4 === 2 ? [84, 88, 96] : null);
+    if (strata) for (let x = 0; x < TILE; x++) if (((x * 3 + y * 5) & 3) !== 0) put(T.deepslateSide, x, y, strata[0], strata[1], strata[2]);
+  }
+
+  // 12. 泥巴（沼泽泥滩：深灰褐湿泥 + 柔和光泽斑）
+  fill(T.mud, [64, 58, 64], 9, 242);
+  speck(T.mud, [48, 42, 48], 22, 243);
+  speck(T.mud, [84, 78, 86], 14, 244);
+
+  // 13. 耕地（村庄农田：深褐湿润犁沟顶 + 泥土侧面）
+  fill(T.farmlandTop, [92, 58, 32], 10, 245);
+  for (let y = 0; y < TILE; y++) {
+    if (y % 4 === 1) for (let x = 0; x < TILE; x++) put(T.farmlandTop, x, y, 64, 38, 20);
+    else if (y % 4 === 2) for (let x = 0; x < TILE; x++) put(T.farmlandTop, x, y, 112, 74, 42);
+  }
+  fill(T.farmlandSide, [126, 88, 58], 12, 246);
+  for (let x = 0; x < TILE; x++) put(T.farmlandSide, x, 0, 82, 50, 26);
+
+  // 14. 草径（村庄暖金乡间道路：压实黄土顶 + 侧面草茎边）
+  fill(T.dirtPathTop, [168, 138, 76], 12, 247);
+  speck(T.dirtPathTop, [190, 162, 96], 20, 248);
+  speck(T.dirtPathTop, [138, 110, 58], 18, 249);
+  fill(T.dirtPathSide, [134, 96, 66], 12, 250);
+  speck(T.dirtPathSide, [106, 74, 48], 14, 251);
+  for (let x = 0; x < TILE; x++) {
+    const drop = 2 + ((x * 5) % 2);
+    for (let y = 0; y < drop; y++) put(T.dirtPathSide, x, y, 166, 136, 74);
+  }
+
   ctx.putImageData(img, 0, 0);
   // 3D 渲染改用 2D 纹理数组（每 tile 独立一层，配合 RepeatWrapping 可让单个 tile 跨大四边形循环）
   const layers = ATLAS_TILES;
@@ -2940,6 +3163,20 @@ function _tileOfRaw(id) {
     case B.LODESTONE: return { top: atlas.T.lodestoneTop, side: atlas.T.lodestoneSide, bottom: atlas.T.lodestoneTop };
     case B.BELL: return { top: atlas.T.bellTop, side: atlas.T.bellSide, bottom: atlas.T.bellSide };
     case B.GRINDSTONE: return { top: atlas.T.grindstoneRound, side: atlas.T.grindstoneSide, bottom: atlas.T.grindstoneSide };
+    case B.PACKED_ICE: return { top: atlas.T.packedIce, side: atlas.T.packedIce, bottom: atlas.T.packedIce };
+    case B.BLUE_ICE: return { top: atlas.T.blueIce, side: atlas.T.blueIce, bottom: atlas.T.blueIce };
+    case B.RED_SAND: return { top: atlas.T.redSand, side: atlas.T.redSand, bottom: atlas.T.redSand };
+    case B.RED_TERRACOTTA: return { top: atlas.T.redTerracotta, side: atlas.T.redTerracotta, bottom: atlas.T.redTerracotta };
+    case B.ORANGE_TERRACOTTA: return { top: atlas.T.orangeTerracotta, side: atlas.T.orangeTerracotta, bottom: atlas.T.orangeTerracotta };
+    case B.YELLOW_TERRACOTTA: return { top: atlas.T.yellowTerracotta, side: atlas.T.yellowTerracotta, bottom: atlas.T.yellowTerracotta };
+    case B.TERRACOTTA: return { top: atlas.T.terracotta, side: atlas.T.terracotta, bottom: atlas.T.terracotta };
+    case B.MYCELIUM: return { top: atlas.T.myceliumTop, side: atlas.T.myceliumSide, bottom: atlas.T.dirt };
+    case B.WHITE_SAND: return { top: atlas.T.whiteSand, side: atlas.T.whiteSand, bottom: atlas.T.whiteSand };
+    case B.PODZOL: return { top: atlas.T.podzolTop, side: atlas.T.podzolSide, bottom: atlas.T.dirt };
+    case B.DEEPSLATE: return { top: atlas.T.deepslateTop, side: atlas.T.deepslateSide, bottom: atlas.T.deepslateTop };
+    case B.MUD: return { top: atlas.T.mud, side: atlas.T.mud, bottom: atlas.T.mud };
+    case B.FARMLAND: return { top: atlas.T.farmlandTop, side: atlas.T.farmlandSide, bottom: atlas.T.dirt };
+    case B.DIRT_PATH: return { top: atlas.T.dirtPathTop, side: atlas.T.dirtPathSide, bottom: atlas.T.dirt };
     case B.CAMPFIRE: return { top: atlas.T.campfireTop, side: atlas.T.campfireSide, bottom: atlas.T.campfireSide };
     case B.DOOR: return { top: atlas.T.doorTop, side: atlas.T.doorBottom, bottom: atlas.T.doorBottom };
     case B.COBWEB: return { top: atlas.T.cobweb, side: atlas.T.cobweb, bottom: atlas.T.cobweb };
@@ -3038,103 +3275,106 @@ float waveH(vec2 p, float t) {
   return w;
 }
 
-// 动态焦散模拟（水底波光柔和折射网格，平滑连续，无高频闪烁）
-float getCaustics(vec2 p, float t) {
-  vec2 p1 = p * 0.85 + vec2(t * 0.18, t * 0.14);
-  vec2 p2 = p * 1.05 - vec2(t * 0.14, t * 0.20);
-  float c1 = sin(p1.x + sin(p1.y * 1.2));
-  float c2 = cos(p2.y + cos(p2.x * 1.2));
-  return (c1 * c1 + c2 * c2) * 0.25;
-}
+  // 动态焦散模拟（双层错向波光折射网格，通透清澈且平滑连续）
+  float getCaustics(vec2 p, float t) {
+    vec2 p1 = p * 0.92 + vec2(t * 0.20, t * 0.15);
+    vec2 p2 = p * 1.18 - vec2(t * 0.16, t * 0.22);
+    float c1 = sin(p1.x + sin(p1.y * 1.25));
+    float c2 = cos(p2.y + cos(p2.x * 1.25));
+    float net = pow(abs(c1 * c2), 0.75);
+    return (c1 * c1 + c2 * c2) * 0.20 + net * 0.35;
+  }
 
 void main() {
   bool isSide = abs(vNormal.y) < 0.6;
   vec2 p = isSide ? (abs(vNormal.x) > 0.5 ? vec2(vWorld.z, vWorld.y - uTime * 0.8) : vec2(vWorld.x, vWorld.y - uTime * 0.8)) : vWorld.xz;
   float t = uTime;
   // 增大法线采样基线，消除微观法线抖动
-  float e = 0.65;
+  float e = 0.62;
   float h  = waveH(p, t);
   float hx = waveH(p + vec2(e, 0.0), t);
   float hz = waveH(p + vec2(0.0, e), t);
 
+  // 叠加高频细微波纹法线，提升近处水面立体水波感
+  float ripX = cos(p.x * 2.35 + t * 1.65) * 0.055;
+  float ripZ = cos(p.y * 2.75 - t * 1.85) * 0.055;
+
   // 稳固水面法线基准（侧面呈现自然流动折射波纹）
-  vec3 n = isSide ? normalize(vNormal + vec3((h - hx) * 0.35, (h - hz) * 0.35, (h - hx) * 0.2)) : normalize(vec3(vNormal.x + (h - hx) * 0.75, vNormal.y * 1.05 + 0.35, vNormal.z + (h - hz) * 0.75));
+  vec3 n = isSide
+    ? normalize(vNormal + vec3((h - hx) * 0.35, (h - hz) * 0.35, (h - hx) * 0.2))
+    : normalize(vec3(vNormal.x + (h - hx) * 0.78 + ripX, vNormal.y * 1.05 + 0.38, vNormal.z + (h - hz) * 0.78 + ripZ));
 
   vec3 V = normalize(uCameraPos - vWorld);
   float ndotv = max(dot(V, n), 0.0);
 
-  // 物理菲涅尔反射率（Schlick 近似，F0 = 0.025）
-  float fres = 0.025 + 0.975 * pow(1.0 - ndotv, 4.0);
+  // 物理菲涅尔反射率（Schlick 近似，F0 = 0.028）
+  float fres = 0.028 + 0.972 * pow(1.0 - ndotv, 4.2);
 
-  // 天空环境反射
+  // 天空环境反射（加入微弱柔和云影倒映层次）
   vec3 R = reflect(-V, n);
-  float skyT = clamp(R.y * 0.5 + 0.5, 0.0, 1.0);
-  vec3 skyRefl = mix(uSkyBottom, uSkyTop, skyT);
+  float skyT = clamp(R.y * 0.52 + 0.48, 0.0, 1.0);
+  vec3 skyRefl = mix(uSkyBottom, uSkyTop, pow(skyT, 0.75));
+  float cloudRefl = smoothstep(0.35, 0.85, sin(R.x * 5.2 + t * 0.04) * cos(R.z * 4.6 - t * 0.03) * 0.5 + 0.5);
+  skyRefl = mix(skyRefl, mix(uSkyBottom, vec3(1.0), 0.65), cloudRefl * 0.14 * (1.0 - uNight * 0.75) * smoothstep(0.05, 0.45, R.y));
 
-  // 柔和高光（彻底消除单像素次像素噪点与高光闪烁，随距离平滑衰减）
+  // 柔和高光 + 阳光海面长廊倒影
   vec3 Lsun = normalize(uSunDir);
   float sDotR = max(dot(R, Lsun), 0.0);
-  float specFade = clamp(1.0 - vDist / 180.0, 0.0, 1.0);
-  float sunSpecSharp = pow(sDotR, 72.0) * 0.85;
-  float sunSpecSpread = pow(sDotR, 18.0) * 0.22;
+  float specFade = clamp(1.0 - vDist / 190.0, 0.0, 1.0);
+  float sunSpecSharp = pow(sDotR, 84.0) * 0.95;
+  float sunSpecSpread = pow(sDotR, 20.0) * 0.26;
   vec3 sunSpecular = uSunColor * (sunSpecSharp + sunSpecSpread) * (1.0 - uNight) * specFade;
+  skyRefl += uSunColor * pow(sDotR, 5.5) * 0.34 * (1.0 - uNight);
 
-  /* 真实水面会映出太阳所在的那片天空：逆光时整片水面上会浮起一层暖色的天光反射，
-     而不只是一个锐利的高光点。这里把宽角度（pow 6）的日光加进天空反射色。 */
-  skyRefl += uSunColor * pow(sDotR, 6.0) * 0.30 * (1.0 - uNight);
-
-  // 月光清冷波光
+  // 月光清冷波光路径
   vec3 Lmoon = normalize(uMoonDir);
   float mDotR = max(dot(R, Lmoon), 0.0);
-  float moonSpec = (pow(mDotR, 64.0) * 0.55 + pow(mDotR, 16.0) * 0.15) * specFade;
-  vec3 moonSpecular = vec3(0.72, 0.85, 1.0) * moonSpec * uNight;
+  float moonSpec = (pow(mDotR, 76.0) * 0.68 + pow(mDotR, 14.0) * 0.18) * specFade;
+  vec3 moonSpecular = vec3(0.76, 0.88, 1.0) * moonSpec * uNight;
 
-  /* ---- 水体本色 ----
-     以前这里把图集里的 T.water（16×16 的横条纹贴图）按 35% 混进水面，
-     平铺 + 时间偏移之后就变成一片缓慢移动的灰蓝色条纹 —— 这正是"水面上灰色条纹"的来源。
-     现在水面改用波高调制的深浅过渡，条纹只保留在立面上（瀑布的垂直水流）。 */
-  float tone = clamp(0.5 + h * 0.42, 0.0, 1.0);
+  /* ---- 通透宝石蓝绿水体本色 ---- */
+  float tone = clamp(0.5 + h * 0.44, 0.0, 1.0);
   vec3 waterBody = mix(uWaterDeep, uWaterShallow, tone);
 
-  // 细波纹：给水面加一层高频微起伏，远处波光才不会糊成一片死色块
+  // 细波纹起伏
   float rip = sin(p.x * 2.15 + t * 1.55) * 0.5 + sin(p.y * 2.65 - t * 1.75) * 0.5;
-  waterBody += vec3(0.020, 0.045, 0.055) * rip * (1.0 - uNight * 0.5);
+  waterBody += vec3(0.022, 0.052, 0.062) * rip * (1.0 - uNight * 0.5);
 
-  // 动态焦散波光注入水体
+  // 动态双层焦散波光注入水体
   float c = getCaustics(p, t);
-  waterBody += vec3(0.05, 0.10, 0.14) * c * (1.0 - uNight * 0.6);
+  waterBody += vec3(0.06, 0.13, 0.16) * c * (1.0 - uNight * 0.62);
 
-  // 波峰碎浪微白浮沫（平缓渐变，避免生硬条带）
-  float foam = smoothstep(0.46, 0.70, h + rip * 0.05);
-  vec3 foamCol = vec3(0.88, 0.94, 0.98);
-  waterBody = mix(waterBody, foamCol, foam * 0.26);
+  // 波峰碎浪微白浮沫（细腻柔和，绝无条带）
+  float foam = smoothstep(0.45, 0.68, h + rip * 0.06);
+  vec3 foamCol = mix(vec3(0.90, 0.96, 1.0), uSunColor, 0.18 * (1.0 - uNight));
+  waterBody = mix(waterBody, foamCol, foam * 0.28);
 
-  // 立面（瀑布 / 水墙）：保留自上而下的流动条纹质感
+  // 立面（瀑布 / 水墙）：采样全新柔和波光 T.water 贴图
   if (isSide) {
-    vec2 uvTex = vec2(abs(vNormal.x) > 0.5 ? vWorld.z : vWorld.x, vWorld.y - uTime * 1.8);
+    vec2 uvTex = vec2(abs(vNormal.x) > 0.5 ? vWorld.z : vWorld.x, vWorld.y - uTime * 1.6);
     vec4 texWater = texture(uAtlas, vec3(fract(uvTex), uWaterLayer));
-    waterBody = mix(waterBody, texWater.rgb * 1.08, 0.65);
+    waterBody = mix(waterBody, texWater.rgb * 1.12, 0.62);
   }
 
   // 阳光在细碎波峰上炸开的点点碎金（只在受光面、近处可见）
-  float glitter = pow(max(0.0, rip * 0.5 + 0.5), 16.0) * pow(sDotR, 10.0) * 0.40;
+  float glitter = pow(max(0.0, rip * 0.5 + 0.5), 14.0) * pow(sDotR, 9.0) * 0.48;
   sunSpecular += uSunColor * glitter * (1.0 - uNight) * specFade;
 
   // 菲涅尔融合水体色与天空反射
-  vec3 col = mix(waterBody, skyRefl, fres * 0.80 + 0.15);
+  vec3 col = mix(waterBody, skyRefl, fres * 0.78 + 0.16);
   col += sunSpecular + moonSpecular;
 
-  // 远景雾气无缝渐隐融合（彻底消除视距边缘水面切割感）
+  // 远景雾气无缝渐隐融合
   float fogFactor = smoothstep(uFogNear, uFogFar, vDist);
   col = mix(col, uFogColor, fogFactor);
 
-  // 通透度：侧面保持高质感立体水流质地与通透度
-  float alpha = isSide ? 0.88 : mix(0.80 + fres * 0.20, 1.0, fogFactor);
+  // 通透度：俯视更清澈见底，掠角更具镜面感
+  float alpha = isSide ? 0.86 : mix(0.76 + fres * 0.23, 1.0, fogFactor);
 
-  // 大面积水面同样需要抖动，否则远处会量化成一道道灰蓝色台阶
+  // 半色阶抖动消除远处量化台阶
   float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
   gl_FragColor = vec4(col + dither * (1.5 / 255.0), alpha);
-}`;
+} `;
 
 // —— 时间与日月方向（昼夜循环）——
 let timeOfDay = 0.5 / 24;        // 进入游戏即 6:30（0=日出6:00，0.25=正午12:00，0.5=日落18:00，0.75=午夜0:00）
@@ -3148,8 +3388,8 @@ const waterMat = new THREE.ShaderMaterial({
     uSunDir: { value: sunDir },
     uMoonDir: { value: moonDir },
     uSunColor: { value: new THREE.Color(0xffe9c8) },
-    uWaterDeep: { value: new THREE.Color(0x0a3254) },
-    uWaterShallow: { value: new THREE.Color(0x1cb4c8) },
+    uWaterDeep: { value: new THREE.Color(0x0c4268) },
+    uWaterShallow: { value: new THREE.Color(0x28c8da) },
     uSkyTop: { value: new THREE.Color(0x2c6fbb) },
     uSkyBottom: { value: new THREE.Color(0xe6cfa6) },
     uFogColor: { value: new THREE.Color(0xd9c9a6) },
@@ -3218,29 +3458,42 @@ const skyMat = new THREE.ShaderMaterial({
       vec3 col;
       if (h > 0.0) {
         float hh = clamp(h, 0.0, 1.0);
-        col = mix(uHorizon, uZenith, pow(hh, 0.42));
-        // 地平线上方一圈更亮的大气散射带，天空与地面衔接不再是硬渐变
-        col += uHorizon * 0.10 * exp(-hh * 12.0);
+        // 细腻瑞利散射过渡：地平线清浅淡蓝，天顶沉静蔚蓝
+        col = mix(uHorizon, uZenith, pow(hh, 0.46));
+        // 地平线上方柔和大气散射亮带
+        col += uHorizon * 0.12 * exp(-hh * 10.5);
+        // 晨昏高空淡玫紫暮色霞带（只在日出日落显现）
+        col += vec3(0.32, 0.12, 0.26) * uHaze * exp(-pow((hh - 0.16) * 6.5, 2.0)) * 0.45;
         float s = max(dot(d, normalize(uSunDir)), 0.0);
-        float sunVis = clamp(1.0 - uNight * 2.2, 0.0, 1.0); // 夜晚彻底屏蔽太阳圆盘与日晕，彻底消除夜空角落残余太阳
+        float sunVis = clamp(1.0 - uNight * 2.2, 0.0, 1.0);
         if (sunVis > 0.0) {
-          // 锐利清晰日盘：带极高对比度发光核心与紧致光冕
-          float sunDisc = smoothstep(0.99915, 0.99945, s);       // 太阳实体边缘锐利边界
-          float sunCorona = smoothstep(0.9975, 0.9992, s);      // 紧密日冕光环
-          float sunGlow = pow(s, 32.0);                          // 柔和微弱外光晕
+          float sunDisc = smoothstep(0.99915, 0.99945, s);
+          float sunCorona = smoothstep(0.9972, 0.9992, s);
+          float sunHalo = pow(s, 14.0);
           vec3 sCol = uSunColor * 1.4;
-          col += (sCol * sunDisc * 15.0 + sCol * sunCorona * 2.2 + sCol * sunGlow * 0.35) * sunVis;
-          col += uSunColor * uHaze * exp(-abs(h) * 9.0) * (0.35 + 0.65 * pow(s, 2.0)) * sunVis;
+          col += (sCol * sunDisc * 15.0 + sCol * sunCorona * 2.4 + sCol * sunHalo * 0.30) * sunVis;
+          col += uSunColor * uHaze * exp(-abs(h) * 8.5) * (0.40 + 0.60 * pow(s, 2.0)) * sunVis;
         }
-        // 星空：稀疏亮星 + 细密暗星，随时间轻微闪烁
-        float h1 = hash13(floor(d * 250.0));
-        float h2 = hash13(floor(d * 90.0) + 7.0);
-        float tw = 0.72 + 0.28 * sin(uTime * 2.6 + h1 * 90.0);
-        float stars = step(0.9982, h1) * 0.85 + step(0.99965, h2) * 1.8;
-        col += vec3(0.90, 0.95, 1.0) * stars * uNight * tw;
-        float m = max(dot(d, normalize(uMoonDir)), 0.0);
-        col += vec3(0.85, 0.9, 1.0) * pow(m, 800.0) * uNight * 1.4;  // 月盘
-        col += vec3(0.7, 0.78, 1.0) * pow(m, 60.0) * uNight * 0.25;  // 月晕
+        // 夜空：淡雅银河丝带 + 多色闪烁星辰 + 带月海纹理的锐利圆月
+        if (uNight > 0.01) {
+          float milky = exp(-pow((d.x * 0.72 - d.z * 0.69 + d.y * 0.25) * 4.5, 2.0));
+          float mwCloud = 0.55 + 0.45 * sin(d.x * 18.0 + d.z * 14.0) * cos(d.y * 15.0 - d.x * 11.0);
+          col += vec3(0.08, 0.11, 0.22) * milky * mwCloud * uNight * smoothstep(0.05, 0.35, hh);
+
+          float h1 = hash13(floor(d * 260.0));
+          float h2 = hash13(floor(d * 105.0) + 7.0);
+          float tw = 0.70 + 0.30 * sin(uTime * 2.8 + h1 * 90.0);
+          vec3 starHue = mix(vec3(0.78, 0.88, 1.0), vec3(1.0, 0.92, 0.76), fract(h1 * 37.0));
+          float stars = step(0.9980, h1) * 0.88 + step(0.99955, h2) * 1.9;
+          col += starHue * stars * uNight * tw * smoothstep(0.02, 0.16, hh);
+
+          vec3 mDir = normalize(uMoonDir);
+          float m = max(dot(d, mDir), 0.0);
+          float moonDisc = smoothstep(0.99905, 0.99935, m);
+          float maria = 0.82 + 0.18 * sin(d.x * 110.0 + d.y * 95.0) * cos(d.z * 105.0 - d.y * 85.0);
+          col += vec3(0.92, 0.95, 1.0) * moonDisc * maria * uNight * 2.6;   // 锐利带月海纹理圆月
+          col += vec3(0.65, 0.78, 1.0) * pow(m, 42.0) * uNight * 0.32;     // 银蓝月晕
+        }
       } else {
         col = mix(uHorizon, uGround, pow(clamp(-h, 0.0, 1.0), 0.6));
       }
@@ -3391,18 +3644,27 @@ function makeVoxelCloudTexture() {
   stamp(168, 225, 12, 6, 3);
   stamp(85, 240, 10, 5, 0);
 
-  // 绘制锐利体素云：纯白向阳顶面 + 柔和半透明云体 + 底部微阴影，非云区完全透明
+  // 绘制立体分层体素云：纯白向阳厚云心 + 柔和受光云肩 + 底部天青云影 + 像素级明暗层次
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       if (grid[y * W + x]) {
-        const hasAbove = grid[((y - 1 + H) % H) * W + x];
-        const hasBelow = grid[((y + 1) % H) * W + x];
-        if (!hasAbove) {
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.78)'; // 顶部受光高光（半透明）
-        } else if (!hasBelow) {
-          ctx.fillStyle = 'rgba(210, 222, 242, 0.52)'; // 底部微阴影
+        const up1 = grid[((y - 1 + H) % H) * W + x];
+        const up2 = grid[((y - 2 + H) % H) * W + x];
+        const dn1 = grid[((y + 1) % H) * W + x];
+        const dn2 = grid[((y + 2) % H) * W + x];
+        const lt1 = grid[y * W + ((x - 1 + W) % W)];
+        const rt1 = grid[y * W + ((x + 1) % W)];
+        const core = up1 && dn1 && lt1 && rt1;
+        if (!up1 || !lt1) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.92)'; // 向阳亮白边缘高光
+        } else if (!dn1) {
+          ctx.fillStyle = 'rgba(182, 202, 232, 0.62)'; // 云底柔和阴影
+        } else if (!dn2) {
+          ctx.fillStyle = 'rgba(214, 228, 246, 0.74)'; // 云底过渡阴影带
+        } else if (core && up2 && ((x * 3 + y * 5) & 7) === 0) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.90)'; // 云心微凸亮块
         } else {
-          ctx.fillStyle = 'rgba(242, 246, 255, 0.65)'; // 云体主质感（轻盈通透）
+          ctx.fillStyle = 'rgba(244, 248, 255, 0.80)'; // 云体主层
         }
         ctx.fillRect(x, y, 1, 1);
       }
@@ -3414,27 +3676,83 @@ function makeVoxelCloudTexture() {
   tex.magFilter = THREE.NearestFilter; // 保证像素级体素方块感
   tex.minFilter = THREE.NearestFilter;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(6, 6); // 适度周期，头顶近空与远方天际均匀覆盖
+  tex.repeat.set(6, 6);
   return tex;
 }
 
 const cloudTex = makeVoxelCloudTexture();
-const cloudMat = new THREE.MeshLambertMaterial({
-  map: cloudTex,
+const cloudVertex = /* glsl */`
+  varying vec2 vUv;
+  varying vec3 vLocal;
+  void main() {
+    vUv = uv;
+    vLocal = position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+const cloudFragment = /* glsl */`
+  uniform sampler2D uMap;
+  uniform vec2 uRepeat;
+  uniform vec2 uOffset;
+  uniform vec3 uColor;
+  uniform vec3 uSunColor;
+  uniform vec3 uSunDir;
+  uniform float uOpacity;
+  uniform float uWarm;
+  varying vec2 vUv;
+  varying vec3 vLocal;
+  void main() {
+    vec4 tex = texture2D(uMap, vUv * uRepeat + uOffset);
+    if (tex.a < 0.05) discard;
+    // 径向远景平滑渐隐：彻底消除云平面在天边切出的生硬方框边界
+    float dist = length(vLocal.xz);
+    float edgeFade = 1.0 - smoothstep(420.0, 1480.0, dist);
+    if (edgeFade < 0.01) discard;
+    // 迎向太阳方向的云层泛起柔和银边 / 暮霞金边
+    vec3 dir = normalize(vec3(vLocal.x, 82.0, vLocal.z));
+    float sDot = max(dot(dir, normalize(uSunDir)), 0.0);
+    vec3 col = tex.rgb * uColor;
+    col += uSunColor * pow(sDot, 5.0) * (0.14 + uWarm * 0.28);
+    gl_FragColor = vec4(col, tex.a * uOpacity * edgeFade);
+  }
+`;
+const cloudMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uMap: { value: cloudTex },
+    uRepeat: { value: new THREE.Vector2(6, 6) },
+    uOffset: { value: new THREE.Vector2(0, 0) },
+    uColor: { value: new THREE.Color(0xffffff) },
+    uSunColor: { value: new THREE.Color(0xffe9c8) },
+    uSunDir: { value: sunDir },
+    uOpacity: { value: 0.90 },
+    uWarm: { value: 0.0 },
+  },
+  vertexShader: cloudVertex,
+  fragmentShader: cloudFragment,
   transparent: true,
-  opacity: 0.88,
-  alphaTest: 0.05, // 仅丢弃全透像素，让半透明像素柔和融入天空，清澈透明无雾蒙蒙
   depthWrite: false,
   side: THREE.DoubleSide,
-  fog: false, // 禁用全局场景雾，确保头顶近处云彩清澈明晰不被场景雾消融
 });
+cloudMat.color = cloudMat.uniforms.uColor.value;
 
 const cloudGeo = new THREE.PlaneGeometry(3200, 3200);
 cloudGeo.rotateX(-Math.PI / 2);
 const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
-cloudMesh.position.y = 138; // 138 格高空，开阔宏伟
+cloudMesh.position.y = 138; // 主积云层
 cloudMesh.frustumCulled = false;
 scene.add(cloudMesh);
+
+// 高空轻薄卷云层：与主云层错速漂移，拉开立体天穹景深
+const cloudMatHigh = cloudMat.clone();
+cloudMatHigh.uniforms = THREE.UniformsUtils.clone(cloudMat.uniforms);
+cloudMatHigh.uniforms.uMap.value = cloudTex;
+cloudMatHigh.uniforms.uSunDir.value = sunDir;
+cloudMatHigh.uniforms.uRepeat.value.set(4.2, 4.2);
+cloudMatHigh.uniforms.uOpacity.value = 0.34;
+const cloudMeshHigh = new THREE.Mesh(cloudGeo, cloudMatHigh);
+cloudMeshHigh.position.y = 162;
+cloudMeshHigh.frustumCulled = false;
+scene.add(cloudMeshHigh);
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
@@ -3481,18 +3799,15 @@ function updateEnvironment(t) {
     hemi.intensity = Math.max(hemi.intensity, 1.8);
   }
 
-  // 天空：白天通透蓝天，日出日落暖橙，夜晚深蓝
-  /* 白天要有"明显的蓝天"：天顶饱和深蓝，地平线只略浅（原来是灰白） */
-  skyMat.uniforms.uZenith.value.setRGB(lerp(0.01, 0.05, day), lerp(0.02, 0.20, day), lerp(0.06, 0.96, day));
-  /* 地平线颜色同时喂给天空/水面/雾：远景与天空衔接才不会出现"两种蓝"。
-     暖色项以红为主、绿只给一点点，日落才会是橙的而不是土黄 */
-  const hr = Math.min(1, lerp(0.04, 0.26, day) + warm * 0.42);
-  const hg = Math.min(1, lerp(0.05, 0.52, day) + warm * 0.14);
-  const hb = Math.max(0, lerp(0.10, 0.95, day) - warm * 0.22);
+  // 天空：电影级青蔚晴空 + 暖橙玫紫晨昏霞光 + 深邃星夜
+  skyMat.uniforms.uZenith.value.setRGB(lerp(0.012, 0.09, day), lerp(0.022, 0.34, day), lerp(0.065, 0.88, day));
+  const hr = Math.min(1, lerp(0.04, 0.36, day) + warm * 0.44);
+  const hg = Math.min(1, lerp(0.055, 0.64, day) + warm * 0.14);
+  const hb = Math.max(0, lerp(0.11, 0.94, day) - warm * 0.24);
   skyMat.uniforms.uHorizon.value.setRGB(hr, hg, hb);
   skyMat.uniforms.uNight.value = night;
-  skyMat.uniforms.uSunColor.value.copy(sun.color);                 // 日盘与光晕跟日光同色
-  skyMat.uniforms.uHaze.value = warm * 0.75 * (1 - precip * 0.6);  // 霞光在日出日落最强，雨雪天收敛
+  skyMat.uniforms.uSunColor.value.copy(sun.color);
+  skyMat.uniforms.uHaze.value = warm * 0.82 * (1 - precip * 0.6);
 
   // 雾：与地平线同源、略微偏向天顶，更像大气散射
   FOG_COLOR.copy(skyMat.uniforms.uHorizon.value).lerp(skyMat.uniforms.uZenith.value, 0.18);
@@ -3515,23 +3830,38 @@ function updateEnvironment(t) {
   }
 
   // 水面材质环境更新
-  waterMat.uniforms.uSkyTop.value.setRGB(lerp(0.01, 0.11, day), lerp(0.02, 0.32, day), lerp(0.05, 0.78, day));
+  waterMat.uniforms.uSkyTop.value.setRGB(lerp(0.012, 0.12, day), lerp(0.022, 0.38, day), lerp(0.06, 0.84, day));
   waterMat.uniforms.uSkyBottom.value.setRGB(hr, hg, hb);
   waterMat.uniforms.uSunColor.value.copy(sun.color);
   waterMat.uniforms.uNight.value = night;
 
-  /* 云是受光材质：日出日落染上金橙色，夜晚随天光变暗为冷蓝银灰，无半透明泛白雾气 */
-  cloudMat.color.setRGB(lerp(0.35, 1.0, day), lerp(0.38, 1.0, day), lerp(0.55, 1.0, day));
+  /* 双层云同步天光染色：白天雪白透亮，日出日落染金橙，夜晚冷蓝银灰 */
+  cloudMat.color.setRGB(lerp(0.32, 1.0, day), lerp(0.36, 1.0, day), lerp(0.54, 1.0, day));
   if (warm > 0) {
-    cloudMat.color.r = Math.min(1, cloudMat.color.r + warm * 0.35);
-    cloudMat.color.g = Math.min(1, cloudMat.color.g + warm * 0.12);
+    cloudMat.color.r = Math.min(1, cloudMat.color.r + warm * 0.32);
+    cloudMat.color.g = Math.min(1, cloudMat.color.g + warm * 0.11);
   }
+  cloudMat.uniforms.uSunColor.value.copy(sun.color);
+  cloudMat.uniforms.uWarm.value = warm;
+  cloudMatHigh.uniforms.uColor.value.copy(cloudMat.color);
+  cloudMatHigh.uniforms.uSunColor.value.copy(sun.color);
+  cloudMatHigh.uniforms.uWarm.value = warm;
+  cloudMesh.visible = !inNether;
+  cloudMeshHigh.visible = !inNether;
 }
 
 /* ============================ 世界 ============================ */
 const key = (cx, cz) => cx * 65536 + cz;
-/* 恶地地表：砂岩/红砖/沙交替成层（用现有方块做出"台地"条纹） */
-const badBand = (y) => (y % 8 < 2 ? B.BRICK : (y % 8 < 5 ? B.SANDSTONE : B.SAND));
+/* 恶地地表：自然层状丹霞陶瓦与红沙交替成层（红/橙/黄/原色陶瓦 + 红沙，告别人工红砖） */
+const badBand = (y) => {
+  const m = ((y % 12) + 12) % 12;
+  if (m < 2) return B.RED_TERRACOTTA;
+  if (m < 4) return B.ORANGE_TERRACOTTA;
+  if (m < 6) return B.TERRACOTTA;
+  if (m < 8) return B.YELLOW_TERRACOTTA;
+  if (m < 10) return B.ORANGE_TERRACOTTA;
+  return B.RED_SAND;
+};
 /* 群系名（HUD 与调试用） */
 const BIOME_NAMES = { 1: '🌿 平原', 2: '🌲 森林', 3: '🏜️ 沙漠', 4: '❄️ 雪原', 5: '🐸 沼泽湿地', 6: '🌾 热带草原', 7: '🌳 白桦林', 8: '🌴 丛林', 9: '🏜️ 恶地', 10: '🍄 蘑菇岛', 11: '🌷 花海', 12: '🪨 砾石平原', 13: '🏖️ 白沙丘', 14: '🧊 冰刺平原', 15: '🌲 针叶林', 16: '🌴 沙漠绿洲', 17: '🌲 黑森林', 18: '🌸 樱花林', 19: '🎋 竹林', 20: '🌋 熔岩火山', 21: '🍁 枫树林', 22: '🏔️ 极地冰川', 23: '🌾 田园麦原' };
 
@@ -3670,44 +4000,53 @@ class World {
           if (y <= 2) {
             id = B.BEDROCK;
           } else if (y < surf - 3) {
-            id = B.STONE;
+            // 地下深层（y <= 14，并在 12~16 格间自然交错过渡）改用深板岩
+            if (y <= 12 || (y <= 16 && plantHash(wx * 5 + y * 13, wz * 7 + y * 11) < (17 - y) * 0.2)) {
+              id = B.DEEPSLATE;
+            } else {
+              id = B.STONE;
+            }
           } else if (y < surf) {
             // 次表层过渡层（1~3格深度，泥土/砂石，绝无草方块）
             if (beach || desert) id = badlands ? badBand(y) : B.SAND;
-            else if (whiteSand) id = B.SANDSTONE;
+            else if (whiteSand) id = B.WHITE_SAND;
             else if (gravelly) id = B.GRAVEL;
-            else if (frozenGlacier && patchNoise > 0.1) id = B.ICE;
+            else if (frozenGlacier && patchNoise > 0.05) id = patchNoise > 0.38 ? B.BLUE_ICE : B.PACKED_ICE;
+            else if (swamp && patchNoise < 0.05) id = B.MUD;
             else if (volcanic && patchNoise > 0.15) id = B.COBBLE;
             else id = B.DIRT;
           } else {
             // y === surf 露天地表最高层！草方块仅在此层生成
             if (beach || desert) {
-              id = badlands ? badBand(y) : B.SAND;
+              id = badlands ? (patchNoise > 0.25 ? B.RED_SAND : badBand(y)) : B.SAND;
             } else if (whiteSand) {
-              id = B.QUARTZ;
+              id = B.WHITE_SAND;
             } else if (volcanic) {
               id = patchNoise > 0.35 ? B.MAGMA : B.BASALT;
             } else if (frozenGlacier) {
-              id = patchNoise > 0.1 ? B.ICE : B.SNOW;
+              id = patchNoise > 0.36 ? B.BLUE_ICE : (patchNoise > 0.04 ? B.PACKED_ICE : B.SNOW);
             } else if (gravelly) {
               id = B.GRAVEL;
             } else if (iceSpike || snowy || surf > 72) {
               id = B.SNOW;
             } else if (taiga) {
-              id = patchNoise > 0.38 ? B.MOSSY : B.GRASS;
+              id = patchNoise > 0.22 ? B.PODZOL : B.GRASS;
             } else if (oasis) {
               id = patchNoise > 0.25 ? B.SAND : B.GRASS;
             } else if (swamp) {
-              // 沼泽水下浅床为泥土，陆地表层为湿草地、泥土与苔石交融
-              if (surf < SEA) id = B.DIRT;
-              else id = patchNoise > 0.32 ? B.MOSSY : (patchNoise < -0.2 ? B.DIRT : B.GRASS);
+              // 沼泽水下浅床为泥巴，陆地表层为湿草地、泥巴与苔石交融
+              if (surf < SEA) id = B.MUD;
+              else id = patchNoise > 0.34 ? B.MOSSY : (patchNoise < -0.10 ? B.MUD : B.GRASS);
             } else if (mushroom) {
-              id = patchNoise > 0.15 ? B.MOSSY : B.GRASS;
+              id = B.MYCELIUM;
             } else {
               id = B.GRASS;
             }
           }
-          if (id === B.STONE) id = oreFor(wx, y, wz);
+          if (id === B.STONE || id === B.DEEPSLATE) {
+            const ore = oreFor(wx, y, wz);
+            if (ore !== B.STONE) id = ore;
+          }
           c.blocks[y * 256 + lz * 16 + lx] = id;
         }
         // 沼泽与绿洲：保持天然水系在海平面及以下，不在陆地上突兀生成一格格的单格水
@@ -3813,23 +4152,24 @@ class World {
             c.blocks[(surf + 1) * 256 + lz * 16 + lx] = kind;
           }
         }
-        // 冰刺平原：雪原上立起石英"冰刺"（3~9 格），和冰刺平原一样能当地标
-        // （村庄附近不生成：避免与教堂祭坛的石英方块撞车、也避免扎进房屋与道路）
+        // 冰刺平原：雪原上立起晶莹浮冰/蓝冰"冰刺"（3~9 格），彻底告别原先用石英块充数
+        // （村庄附近仍避让，避免扎进房屋与道路）
         if (iceSpike && !nearVillage && surf > SEA && surf + 1 < HEIGHT) {
           const pr = plantHash(wx * 17 + 5, wz * 19 + 9);
           if (pr < 0.008) {
             const h = 3 + ((plantHash(wx + 13, wz + 3) * 7) | 0);
             for (let k = 1; k <= h && surf + k < HEIGHT; k++) {
               const taper = k > h - 3 ? 1 : 0;                       // 顶部收细
-              c.blocks[(surf + k) * 256 + lz * 16 + lx] = B.QUARTZ;
-              if (taper === 0 && lx + 1 < 16) c.blocks[(surf + k) * 256 + lz * 16 + lx + 1] = B.QUARTZ;
+              const iceId = (h >= 6 && k <= 2) ? B.BLUE_ICE : B.PACKED_ICE;
+              c.blocks[(surf + k) * 256 + lz * 16 + lx] = iceId;
+              if (taper === 0 && lx + 1 < 16) c.blocks[(surf + k) * 256 + lz * 16 + lx + 1] = B.PACKED_ICE;
             }
           }
         }
-        // 蘑菇岛：蘑菇成片生长（密度再度减半）
+        // 蘑菇岛：菌丝地表上蘑菇成片生长
         if (mushroom && surf > SEA && surf + 1 < HEIGHT) {
           const gb = c.blocks[surf * 256 + lz * 16 + lx];
-          if (gb === B.MOSSY || gb === B.GRASS) {
+          if (gb === B.MYCELIUM || gb === B.MOSSY || gb === B.GRASS) {
             const patch = plantHash(Math.floor(wx / 6) * 7 + 1, Math.floor(wz / 6) * 13 + 3);
             const pr = plantHash(wx * 3 + 11, wz * 7 + 5);
             if (patch < 0.45 && pr < 0.055) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = (pr < 0.028 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
@@ -3876,6 +4216,14 @@ class World {
               if (below !== B.AIR && below !== B.WATER) {
                 const pr = plantHash(wx * 11 + y, wz * 17);
                 if (pr < 0.009) c.blocks[y * 256 + lz * 16 + lx] = (pr < 0.0045 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
+              }
+              // 地下喀斯特溶洞：天花板偶生滴水石块与倒悬尖锥钟乳石
+              if ((above === B.STONE || above === B.DEEPSLATE) && y < surf - 6 && y > 8) {
+                const dp = plantHash(wx * 19 + y * 3, wz * 23 + 7);
+                if (dp < 0.016 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
+                  c.blocks[(y + 1) * 256 + lz * 16 + lx] = B.DRIPSTONE_BLOCK;
+                  c.blocks[y * 256 + lz * 16 + lx] = B.POINTED_DRIPSTONE;
+                }
               }
             }
           }
@@ -4239,7 +4587,7 @@ function plantTrees(c) {
       const surf = Math.floor(surfaceHeight(wx, wz));
       if (surf <= SEA) continue;
       const ground = world.getBlock(wx, surf, wz);
-      if (ground !== B.GRASS && ground !== B.SNOW && ground !== B.MOSSY) continue;
+      if (ground !== B.GRASS && ground !== B.SNOW && ground !== B.MOSSY && ground !== B.PODZOL) continue;
       const bm = biomeOf(wx, wz);
       if (bm === 3 || bm === 9 || bm === 10 || bm === 12 || bm === 13 || bm === 14 || bm === 20 || bm === 22) continue;   // 沙漠/恶地/蘑菇岛/砾石平原/白沙丘/冰刺平原/火山/极地冰川不种普通树
       // 雪地：多层厚雪块的地方不长树；再叠一层 24x24 分区的林线遮罩，让雪原出现大片纯粹的空旷雪野
@@ -5136,6 +5484,10 @@ const BLOCK_COLORS = {
   [B.COMPOSTER]: 0x835c3b, [B.BONE_MEAL]: 0xf1f2f6,
   [B.BLAST_FURNACE]: 0x4b4b4b, [B.SMOKER]: 0x3d3d3d, [B.LODESTONE]: 0x95a5a6,
   [B.BELL]: 0xf1c40f, [B.GRINDSTONE]: 0x7f8c8d, [B.GOAT_HORN]: 0xf5f6fa,
+  [B.PACKED_ICE]: 0x8abae8, [B.BLUE_ICE]: 0x5e96e6, [B.RED_SAND]: 0xc46a34,
+  [B.RED_TERRACOTTA]: 0x923e30, [B.ORANGE_TERRACOTTA]: 0xae5c2c, [B.YELLOW_TERRACOTTA]: 0xbe8c38, [B.TERRACOTTA]: 0x9a664c,
+  [B.MYCELIUM]: 0x726672, [B.WHITE_SAND]: 0xeae6da, [B.PODZOL]: 0x6c4824,
+  [B.DEEPSLATE]: 0x42444a, [B.MUD]: 0x403a40, [B.FARMLAND]: 0x5c3a20, [B.DIRT_PATH]: 0xa88a4c,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -8010,11 +8362,10 @@ function buildVillage(c) {
         const checkB = world.getBlock(x, curY, z);
         if (checkB === B.PLANKS || checkB === B.LOG || checkB === B.STONE_BRICK || checkB === B.DOOR || checkB === B.GLASS || checkB === B.CHEST || checkB === B.FURNACE || checkB === B.BED || checkB === B.QUARTZ) continue;
 
-        /* 路面材质：原来用 (x*5+z*11)%4 会形成规则的斜条纹，
-           改成哈希混合 → 圆石为主、掺沙砾与苔石，像被踩出来的乡间土路。 */
+        /* 路面材质：采用暖金草径为主体、点缀圆石与沙砾，呈现原汁原味的乡间村道 */
         const hsh = (Math.imul(x, 73856093) ^ Math.imul(z, 19349663)) >>> 0;
         const pick = hsh % 100;
-        const mat = pick < 52 ? B.COBBLE : (pick < 84 ? B.GRAVEL : (pick < 94 ? B.COBBLE : B.MOSSY));
+        const mat = pick < 64 ? B.DIRT_PATH : (pick < 84 ? B.COBBLE : (pick < 95 ? B.GRAVEL : B.MOSSY));
         world.setBlock(x, curY, z, mat);
 
         // 仅在上方是自然方块（空气/花草/树叶/泥土/沙子）时清理净空，绝不掏空建筑屋顶或室内
@@ -8063,13 +8414,13 @@ function buildVillage(c) {
       world.setBlock(cx8 + dx, gy + 1, cz8 + dz, isEdge ? B.COBBLE : B.AIR);
     }
   }
-  // 4 根井角原木立柱与照明火把
+  // 4 根井角原木立柱与铁艺照明提灯
   for (const [px, pz] of [[-1, -1], [-1, 2], [2, -1], [2, 2]]) {
     world.setBlock(cx8 + px, gy + 2, cz8 + pz, B.LOG);
     world.setBlock(cx8 + px, gy + 3, cz8 + pz, B.LOG);
-    world.setBlock(cx8 + px, gy + 4, cz8 + pz, B.TORCH);
+    world.setBlock(cx8 + px, gy + 4, cz8 + pz, B.LANTERN);
   }
-  // 井盖顶棚（悬在上方，保持开阔通透，中心悬挂黄金金钟）
+  // 井盖顶棚（悬在上方，保持开阔通透，中心悬挂真正的村庄大钟）
   for (let dz = -1; dz <= 2; dz++) {
     for (let dx = -1; dx <= 2; dx++) {
       world.setBlock(cx8 + dx, gy + 4, cz8 + dz, B.COBBLE);
@@ -8080,8 +8431,8 @@ function buildVillage(c) {
       }
     }
   }
-  // 黄金村庄之钟（悬挂于水井顶棚下方中心）
-  world.setBlock(cx8, gy + 3, cz8, B.GOLD_BLOCK);
+  // 村庄之钟（使用专用 B.BELL 方块，悬挂于水井顶棚下方中心）
+  world.setBlock(cx8, gy + 3, cz8, B.BELL);
   // 广场小营火与原木长椅
   world.setBlock(cx8 + 3, gy, cz8 + 2, B.CAMPFIRE);
   world.setBlock(cx8 + 3, gy, cz8 + 3, B.LOG);
@@ -8177,13 +8528,14 @@ function buildVillage(c) {
       world.setBlock(smithX + dx, gy + 3, smithZ + dz, B.STONE_BRICK);
     }
   }
-  // 熔炉、铁砧与宝箱
-  world.setBlock(smithX + 2, gy, smithZ + 1, B.FURNACE);
+  // 高炉、熔炉、专用铁砧、砂轮与宝箱
+  world.setBlock(smithX + 2, gy, smithZ + 1, B.BLAST_FURNACE);
   world.setBlock(smithX + 2, gy, smithZ, B.FURNACE);
-  world.setBlock(smithX, gy, smithZ, B.IRON_BLOCK);   // 铁砧！可右键消耗铁锭修复
+  world.setBlock(smithX, gy, smithZ, B.ANVIL);           // 专用铁砧！可右键消耗铁锭修复
+  world.setBlock(smithX, gy, smithZ + 2, B.GRINDSTONE);  // 砂轮磨石！可右键免费磨修工具
   world.setBlock(smithX + 2, gy, smithZ - 2, B.CHEST);
   populateVillageChest(smithX + 2, gy, smithZ - 2, 'blacksmith');
-  world.setBlock(smithX + 2, gy + 1, smithZ - 2, B.TORCH);
+  world.setBlock(smithX + 2, gy + 1, smithZ - 2, B.LANTERN);
   // 铁匠铺双格木门与门前畅通走廊
   world.setBlock(smithX - 3, gy, smithZ, B.DOOR);
   world.setBlock(smithX - 3, gy + 1, smithZ, B.DOOR);
@@ -8202,6 +8554,7 @@ function buildVillage(c) {
         world.setWater(farmX + dx, gy, farmZ + dz, 8);
         if (Math.abs(dz) === 2) world.setBlock(farmX + dx, gy + 1, farmZ + dz, B.LILY_PAD);
       } else {
+        world.setBlock(farmX + dx, gy, farmZ + dz, B.FARMLAND); // 专用湿润犁沟耕地！
         const cropR = plantHash(farmX + dx, farmZ + dz);
         if (cropR < 0.6) world.setBlock(farmX + dx, gy + 1, farmZ + dz, B.WHEAT_CROP_MATURE);
         else if (cropR < 0.8) world.setBlock(farmX + dx, gy + 1, farmZ + dz, B.MELON);
@@ -8209,6 +8562,8 @@ function buildVillage(c) {
       }
     }
   }
+  // 农田入口旁放置农夫堆肥桶
+  world.setBlock(farmX + 4, gy + 1, farmZ + 4, B.COMPOSTER);
   // 农田中央稻草人（加速生长光环）
   world.setBlock(farmX, gy, farmZ, B.LOG);
   world.setBlock(farmX, gy + 1, farmZ, B.JACK_O_LANTERN);
@@ -12069,19 +12424,38 @@ function findSpawn() {
 
 const heartsEl = document.getElementById('hearts');
 const hungerEl = document.getElementById('hunger');
+const _SVG_HEART_BG = '<path d="M2 1h3v1h1v1h2V2h1V1h3v1h1v4h-1v1h-1v1h-1v1H9v1H8v1H6v-1H5V9H4V8H3V7H2V6H1V2h1V1z" fill="#181014"/>';
+const _SVG_HEART_FULL = '<svg viewBox="0 0 14 13">' + _SVG_HEART_BG + '<path d="M2 2h3v1h1v1h2V3h1V2h3v4h-1v1h-1v1H9v1H8v1H6V9H5V8H4V7H3V6H2V2z" fill="#e52535"/><path d="M3 3h2v1H3V3z" fill="#ff9aa2"/></svg>';
+const _SVG_HEART_HALF = '<svg viewBox="0 0 14 13">' + _SVG_HEART_BG + '<path d="M2 2h3v1h1v1h1v6H6V9H5V8H4V7H3V6H2V2z" fill="#e52535"/><path d="M7 4h1V3h1V2h3v4h-1v1h-1v1H9v1H8v1H7V4z" fill="#3a2a30"/><path d="M3 3h2v1H3V3z" fill="#ff9aa2"/></svg>';
+const _SVG_HEART_EMPTY = '<svg viewBox="0 0 14 13">' + _SVG_HEART_BG + '<path d="M2 2h3v1h1v1h2V3h1V2h3v4h-1v1h-1v1H9v1H8v1H6V9H5V8H4V7H3V6H2V2z" fill="#3a2a30"/></svg>';
+const _SVG_HEART_GOLD = '<svg viewBox="0 0 14 13">' + _SVG_HEART_BG + '<path d="M2 2h3v1h1v1h2V3h1V2h3v4h-1v1h-1v1H9v1H8v1H6V9H5V8H4V7H3V6H2V2z" fill="#f5b82e"/><path d="M3 3h2v1H3V3z" fill="#fff3b0"/></svg>';
+const _SVG_FOOD_FULL = '<svg viewBox="0 0 14 14"><path d="M6 1h4v1h2v1h1v4h-1v2h-1v1H9v1H7v-1H6v1H4v2H2v-2h1V9h1V8h1V6H4V4h1V2h1V1z" fill="#1e120a"/><path d="M6 2h4v1h2v4h-1v2H9v1H7V8H5V5h1V2z" fill="#d97a2b"/><path d="M7 3h3v2H8v1H7V3z" fill="#f6b36b"/><path d="M5 9h1v1H5v2H3v-1h1v-1h1V9z" fill="#f2ead9"/></svg>';
+const _SVG_FOOD_HALF = '<svg viewBox="0 0 14 14"><path d="M6 1h4v1h2v1h1v4h-1v2h-1v1H9v1H7v-1H6v1H4v2H2v-2h1V9h1V8h1V6H4V4h1V2h1V1z" fill="#1e120a"/><path d="M6 2h2v8H7V8H5V5h1V2z" fill="#d97a2b"/><path d="M8 2h2v1h2v4h-1v2H9v1H8V2z" fill="#463529"/><path d="M5 9h1v1H5v2H3v-1h1v-1h1V9z" fill="#f2ead9"/></svg>';
+const _SVG_FOOD_EMPTY = '<svg viewBox="0 0 14 14"><path d="M6 1h4v1h2v1h1v4h-1v2h-1v1H9v1H7v-1H6v1H4v2H2v-2h1V9h1V8h1V6H4V4h1V2h1V1z" fill="#1e120a"/><path d="M6 2h4v1h2v4h-1v2H9v1H7V8H5V5h1V2z" fill="#463529"/><path d="M5 9h1v1H5v2H3v-1h1v-1h1V9z" fill="#7c7065"/></svg>';
+
 function updateHearts() {
-  const full = Math.max(0, Math.ceil(player.hp / 2));
-  let str = '❤'.repeat(full) + '🖤'.repeat(10 - full);
+  const hp = Math.max(0, Math.round(player.hp));
+  let html = '';
+  for (let i = 0; i < 10; i++) {
+    const v = hp - i * 2;
+    html += v >= 2 ? _SVG_HEART_FULL : (v === 1 ? _SVG_HEART_HALF : _SVG_HEART_EMPTY);
+  }
   if (player.absorption && player.absorption > 0) {
     const goldHearts = Math.max(0, Math.ceil(player.absorption / 2));
-    str += ' ' + '💛'.repeat(goldHearts);
+    for (let i = 0; i < goldHearts; i++) html += _SVG_HEART_GOLD;
   }
-  heartsEl.textContent = str;
+  heartsEl.innerHTML = html;
+  heartsEl.classList.toggle('low-hp', hp > 0 && hp <= 4);
   updateArmorBar();
 }
 function updateHungerBar() {
-  const full = Math.max(0, Math.ceil(player.hunger / 2));
-  hungerEl.textContent = '🍗'.repeat(full) + '🦴'.repeat(10 - full);
+  const hg = Math.max(0, Math.round(player.hunger));
+  let html = '';
+  for (let i = 0; i < 10; i++) {
+    const v = hg - i * 2;
+    html += v >= 2 ? _SVG_FOOD_FULL : (v === 1 ? _SVG_FOOD_HALF : _SVG_FOOD_EMPTY);
+  }
+  hungerEl.innerHTML = html;
 }
 function getXpNeededForLevel(lvl) {
   if (lvl >= 30) return 112 + (lvl - 30) * 9;
@@ -13016,7 +13390,8 @@ function burst(dur, vol, freq, type, delay) {
 function isStoneMat(id) {
   return id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK ||
          id === B.SANDSTONE || id === B.QUARTZ || id === B.FURNACE || isOre(id) || id === B.BASALT || id === B.MAGMA ||
-         id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.BEDROCK;
+         id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.BEDROCK ||
+         id === B.DEEPSLATE || id === B.TERRACOTTA || id === B.RED_TERRACOTTA || id === B.ORANGE_TERRACOTTA || id === B.YELLOW_TERRACOTTA;
 }
 function isWoodMat(id) {
   return isLog(id) || id === B.PLANKS || id === B.BOOKSHELF || id === B.CHEST || id === B.DOOR || id === B.LADDER;
@@ -13025,7 +13400,8 @@ function isPlantMat(id) {
   return isLeaf(id) || isCrossPlant(id) || id === B.HAY_BALE;
 }
 function isEarthMat(id) {
-  return id === B.DIRT || id === B.GRASS || id === B.SAND || id === B.GRAVEL || id === B.SNOW;
+  return id === B.DIRT || id === B.GRASS || id === B.SAND || id === B.GRAVEL || id === B.SNOW ||
+         id === B.RED_SAND || id === B.WHITE_SAND || id === B.MYCELIUM || id === B.PODZOL || id === B.MUD || id === B.FARMLAND || id === B.DIRT_PATH;
 }
 // 金属：清脆带余韵的金属声（铁块/金块/铜块/磁石/钟/锁链/铁砧/避雷针/信标/标靶）
 function isMetalMat(id) {
@@ -13036,7 +13412,8 @@ function isMetalMat(id) {
 // 晶体/灯具：玻璃质的高频叮咛（紫水晶/海晶灯/荧石/点亮的红石灯/末影箱）
 function isCrystalMat(id) {
   return id === B.AMETHYST_BLOCK || id === B.SEA_LANTERN || id === B.GLOWSTONE ||
-         id === B.REDSTONE_LAMP_ON || id === B.ENDER_CHEST || id === B.SCULK_SENSOR;
+         id === B.REDSTONE_LAMP_ON || id === B.ENDER_CHEST || id === B.SCULK_SENSOR ||
+         id === B.PACKED_ICE || id === B.BLUE_ICE;
 }
 // 软质：黏糊/闷响（粘液块、蜂蜜块、海绵、羊毛、床）
 function isSoftMat(id) {
@@ -13535,6 +13912,10 @@ const NAMES = {
   [B.COMPOSTER]: '堆肥桶', [B.BONE_MEAL]: '骨粉',
   [B.BLAST_FURNACE]: '高炉', [B.SMOKER]: '烟熏炉', [B.LODESTONE]: '磁石',
   [B.BELL]: '钟', [B.GRINDSTONE]: '砂轮', [B.GOAT_HORN]: '山羊角',
+  [B.PACKED_ICE]: '浮冰', [B.BLUE_ICE]: '蓝冰', [B.RED_SAND]: '红沙',
+  [B.RED_TERRACOTTA]: '红陶瓦', [B.ORANGE_TERRACOTTA]: '橙陶瓦', [B.YELLOW_TERRACOTTA]: '黄陶瓦', [B.TERRACOTTA]: '陶瓦',
+  [B.MYCELIUM]: '菌丝', [B.WHITE_SAND]: '白沙', [B.PODZOL]: '灰化土',
+  [B.DEEPSLATE]: '深板岩', [B.MUD]: '泥巴', [B.FARMLAND]: '耕地', [B.DIRT_PATH]: '草径',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 function isHelmet(id) { return id === B.IRON_HELMET || id === B.DIAMOND_HELMET || id === B.NETHERITE_HELMET || id === B.TURTLE_HELMET; }
@@ -13787,6 +14168,8 @@ const RECIPES = [
   { out: B.BELL, n: 1, need: [[B.GOLD_INGOT, 4], [B.LOG, 3], [B.STONE, 1]] },
   { out: B.GRINDSTONE, n: 1, need: [[B.STONE, 1], [B.STICK, 2], [B.PLANKS, 2]] },
   { out: B.GOAT_HORN, n: 1, need: [[B.BONE, 3], [B.COPPER_BLOCK, 1]] },
+  { out: B.QUARTZ, n: 2, need: [[B.WHITE_SAND, 4], [B.STONE, 1]] },
+  { out: B.BLUE_ICE, n: 1, need: [[B.PACKED_ICE, 4]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -15459,6 +15842,10 @@ const HARDNESS = {
   [B.DRIPSTONE_BLOCK]: 1.5, [B.POINTED_DRIPSTONE]: 1.5,
   [B.COMPOSTER]: 0.6, [B.BLAST_FURNACE]: 3.5, [B.SMOKER]: 3.5, [B.LODESTONE]: 3.5,
   [B.BELL]: 3.0, [B.GRINDSTONE]: 2.0,
+  [B.PACKED_ICE]: 0.6, [B.BLUE_ICE]: 1.4, [B.RED_SAND]: 0.4,
+  [B.RED_TERRACOTTA]: 1.25, [B.ORANGE_TERRACOTTA]: 1.25, [B.YELLOW_TERRACOTTA]: 1.25, [B.TERRACOTTA]: 1.25,
+  [B.MYCELIUM]: 0.55, [B.WHITE_SAND]: 0.4, [B.PODZOL]: 0.5,
+  [B.DEEPSLATE]: 2.2, [B.MUD]: 0.45, [B.FARMLAND]: 0.5, [B.DIRT_PATH]: 0.55,
 };
 function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
 // 破坏掉落物
@@ -15513,6 +15900,7 @@ function dropOf(id) {
   if (id === B.LODESTONE) return B.LODESTONE;
   if (id === B.BELL) return B.BELL;
   if (id === B.GRINDSTONE) return B.GRINDSTONE;
+  if (id === B.FARMLAND || id === B.DIRT_PATH) return B.DIRT;
   if (isLeaf(id)) return null;               // 树叶不掉落（苹果单独判定）
   if (isTool(id) || id === B.STICK || id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.EGG || id === B.SNOWBALL || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.EMERALD || id === B.HONEYCOMB || id === B.BONE_MEAL || id === B.GOAT_HORN) return null;
   return id;
@@ -15534,7 +15922,7 @@ function effSpeed(id) {
   if (isPickaxe(t)) {
     if (id === B.OBSIDIAN || id === B.ENDER_CHEST || id === B.CRYING_OBSIDIAN || id === B.RESPAWN_ANCHOR) return isNetheriteTier(t) ? 22 : (isDiamondTier(t) ? 14 : (isIronTier(t) ? 4.0 : 1.5));
     if (id === B.ENCHANTING_TABLE || id === B.BEACON) return tierOf(t);
-    if (id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK || id === B.SANDSTONE || id === B.QUARTZ || isOre(id) || id === B.FURNACE || id === B.BASALT || id === B.MAGMA || id === B.ICE || id === B.GLOWSTONE || id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.AMETHYST_BLOCK || id === B.LIGHTNING_ROD || id === B.COPPER_BLOCK || id === B.SEA_LANTERN || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.BUTTON || id === B.CHAIN || id === B.SCULK_SENSOR || id === B.SCULK_BLOCK || id === B.DRIPSTONE_BLOCK || id === B.POINTED_DRIPSTONE || id === B.BLAST_FURNACE || id === B.SMOKER || id === B.LODESTONE || id === B.BELL || id === B.GRINDSTONE) return tierOf(t);
+    if (id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK || id === B.SANDSTONE || id === B.QUARTZ || isOre(id) || id === B.FURNACE || id === B.BASALT || id === B.MAGMA || id === B.ICE || id === B.PACKED_ICE || id === B.BLUE_ICE || id === B.DEEPSLATE || id === B.TERRACOTTA || id === B.RED_TERRACOTTA || id === B.ORANGE_TERRACOTTA || id === B.YELLOW_TERRACOTTA || id === B.GLOWSTONE || id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.AMETHYST_BLOCK || id === B.LIGHTNING_ROD || id === B.COPPER_BLOCK || id === B.SEA_LANTERN || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.BUTTON || id === B.CHAIN || id === B.SCULK_SENSOR || id === B.SCULK_BLOCK || id === B.DRIPSTONE_BLOCK || id === B.POINTED_DRIPSTONE || id === B.BLAST_FURNACE || id === B.SMOKER || id === B.LODESTONE || id === B.BELL || id === B.GRINDSTONE) return tierOf(t);
     return 1.15;
   }
   if (isAxe(t)) {
@@ -15542,7 +15930,7 @@ function effSpeed(id) {
     return 1.15;
   }
   if (isShovel(t)) {
-    if (id === B.DIRT || id === B.GRASS || id === B.SAND || id === B.GRAVEL || id === B.SNOW || id === B.HAY_BALE) return tierOf(t);
+    if (id === B.DIRT || id === B.GRASS || id === B.SAND || id === B.RED_SAND || id === B.WHITE_SAND || id === B.GRAVEL || id === B.SNOW || id === B.MYCELIUM || id === B.PODZOL || id === B.MUD || id === B.FARMLAND || id === B.DIRT_PATH || id === B.HAY_BALE) return tierOf(t);
     return 1.15;
   }
   if (isSword(t)) {
@@ -16035,12 +16423,12 @@ function onMousedown(btn) {
       }
       // 右键大钟 → 敲响金钟并触发宏亮洪钟共振
       if (hit.id === B.BELL) {
+        if (typeof ringVillageBell === 'function') ringVillageBell(hit.x, hit.y, hit.z);
         tone(880, 587.33, 0.65, 'sine', 0.45);
         setTimeout(() => tone(587.33, 293.66, 0.85, 'triangle', 0.4), 80);
         burst(0.2, 0.22, 1200);
         spawnParticles(hit.x + 0.5, hit.y + 0.6, hit.z + 0.5, 0xf1c40f, 26);
         spawnParticles(hit.x + 0.5, hit.y + 0.6, hit.z + 0.5, 0xffa502, 16);
-        toast('🔔 敲响了村庄大钟！清脆宏亮的洪钟回音响彻旷野！');
         return;
       }
       // 右键砂轮 → 精细打磨修复手持装备耐久
@@ -17511,10 +17899,15 @@ function animate() {
   updatePlayerModel(dt);   // 第三人称玩家模型的位置 / 朝向 / 四肢摆动
 
   // 云层在平流层缓缓漂移（高空大尺度离散方块云，随风向天际悠然流淌）
-  cloudTex.offset.x = (clock.elapsedTime * 0.0005) % 1;
-  cloudTex.offset.y = (clock.elapsedTime * 0.00025) % 1;
+  // 双层云缓慢错速流动并始终贴合玩家上空，绝无边缘截断
+  const cOffX = (clock.elapsedTime * 0.00055) % 1;
+  const cOffY = (clock.elapsedTime * 0.00026) % 1;
+  cloudMat.uniforms.uOffset.value.set(cOffX, cOffY);
   cloudMesh.position.x = player.pos.x;
   cloudMesh.position.z = player.pos.z;
+  cloudMatHigh.uniforms.uOffset.value.set((clock.elapsedTime * 0.00028 + 0.37) % 1, (clock.elapsedTime * 0.00014 + 0.61) % 1);
+  cloudMeshHigh.position.x = player.pos.x;
+  cloudMeshHigh.position.z = player.pos.z;
 
   // 火把轻微跳动：按火把自身世界坐标生成独立相位，区块增删互不干扰，稳定柔和
   torchFlickerT += dt;
@@ -17545,7 +17938,12 @@ function animate() {
     const facingNames = ['南', '西南', '西', '西北', '北', '东北', '东', '东南'];
     const facingIdx = Math.floor((((player.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4) + 0.5) % 8;
     const facingStr = facingNames[facingIdx];
-    hudMeta.textContent = `FPS ${fps} · 坐标 ${Math.round(player.pos.x)}, ${Math.round(player.pos.y)}, ${Math.round(player.pos.z)} · 朝向 ${facingStr} · ${biomeName} · 时间 ${clockStr} · ${player.fly ? '✨ 创造' : '🚶 生存'}${submerged ? ' · 🫧 水下' : ''}`;
+    hudMeta.innerHTML =
+      `<span class="hud-chip">⚡ ${fps} FPS</span>` +
+      `<span class="hud-chip">📍 ${Math.round(player.pos.x)}, ${Math.round(player.pos.y)}, ${Math.round(player.pos.z)} · ${facingStr}</span>` +
+      `<span class="hud-chip biome">${biomeName}</span>` +
+      `<span class="hud-chip">🕒 ${clockStr}</span>` +
+      `<span class="hud-chip mode">${player.fly ? '✨ 创造' : '🚶 生存'}${submerged ? ' · 🫧 水下' : ''}</span>`;
     adaptiveResolution(fps);
     fpsAcc = 0; fpsFrames = 0;
   }
