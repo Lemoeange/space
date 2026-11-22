@@ -839,7 +839,7 @@
     inset: 0;
     z-index: 100;
     overflow: hidden;
-    background: radial-gradient(circle at 50% 28%, #feffeb 0%, #f6fec9 26%, #dcf88a 60%, #b8eb65 86%, #9ade46 100%);
+    background: radial-gradient(circle at 50% 35%, #feffef 0%, #e7f8ff 52%, #e6fb9c 100%);
     transition: opacity .85s cubic-bezier(0.4, 0, 0.2, 1), filter .85s ease, transform .85s ease;
   }
   .intro.leave {
@@ -847,6 +847,22 @@
     transform: scale(1.08);
     filter: blur(28px);
     pointer-events: none;
+  }
+  .intro-bg-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    z-index: 0;
+    pointer-events: none;
+    animation: intro-bg-breathe 18s ease-in-out infinite alternate;
+    will-change: transform;
+  }
+  @keyframes intro-bg-breathe {
+    from { transform: scale(1.02); }
+    to { transform: scale(1.07); }
   }
   .intro-soda-canvas {
     position: absolute;
@@ -858,30 +874,20 @@
     pointer-events: none;
   }
 
-  /* 玻璃杯反光与冷凝水雾 */
+  /* 轻透玻璃反光与柔和柔光层 */
   .intro-glass-overlay {
     position: absolute;
     inset: 0;
     z-index: 2;
     pointer-events: none;
-    box-shadow:
-      inset 0 0 50px rgba(255, 255, 255, 0.65),
-      inset 0 0 130px rgba(217, 249, 157, 0.45);
+    box-shadow: inset 0 0 60px rgba(255, 255, 255, 0.45);
   }
   .intro-glass-overlay::before {
     content: "";
     position: absolute;
     top: 0; left: 0; right: 0;
-    height: 140px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.12) 60%, transparent 100%);
-  }
-  .intro-glass-overlay::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background:
-      radial-gradient(ellipse at 15% 25%, rgba(255, 255, 255, 0.3) 0%, transparent 45%),
-      radial-gradient(ellipse at 85% 75%, rgba(220, 252, 160, 0.25) 0%, transparent 45%);
+    height: 120px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, transparent 100%);
   }
 
   /* 开场主体容器 */
@@ -911,7 +917,7 @@
     gap: 6px;
     padding: 6px 16px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.92);
+    background: rgba(255, 255, 255, 0.90);
     -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
     border: 1.5px solid rgba(255, 255, 255, 0.95);
@@ -919,7 +925,7 @@
     font-size: 13px;
     font-weight: 800;
     letter-spacing: 1.5px;
-    box-shadow: 0 4px 18px rgba(101, 163, 13, 0.18);
+    box-shadow: 0 4px 18px rgba(101, 163, 13, 0.16);
   }
   .intro-title-wrap {
     margin-top: 10px;
@@ -929,7 +935,7 @@
     max-width: min(84vw, 440px);
     height: auto;
     margin: 0 auto;
-    filter: drop-shadow(0 6px 18px rgba(77, 124, 15, 0.28)) drop-shadow(0 0 10px rgba(255, 255, 255, 0.6));
+    filter: drop-shadow(0 6px 18px rgba(77, 124, 15, 0.24)) drop-shadow(0 0 12px rgba(255, 255, 255, 0.75));
   }
 
   /* 核心互动大柠檬片舞台 */
@@ -955,45 +961,6 @@
     50% { transform: translateY(-12px) rotate(2.5deg); }
   }
 
-  /* 陪伴冰块与薄荷叶 */
-  .intro-ice-companion {
-    position: absolute;
-    top: -24px;
-    right: -24px;
-    width: 78px;
-    height: 78px;
-    border-radius: 16px;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.75) 0%, rgba(224, 242, 254, 0.4) 60%, rgba(255, 255, 255, 0.2) 100%);
-    border: 2px solid rgba(255, 255, 255, 0.85);
-    box-shadow: 0 8px 24px rgba(101, 163, 13, 0.2), inset 0 0 12px rgba(255, 255, 255, 0.7);
-    transform: rotate(18deg);
-    z-index: 1;
-    pointer-events: none;
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
-  }
-  .intro-ice-companion::after {
-    content: "";
-    position: absolute;
-    top: 8px; left: 8px;
-    width: 14px; height: 14px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.8);
-    box-shadow: 18px 14px 0 -3px rgba(255, 255, 255, 0.7);
-  }
-
-  .intro-mint-companion {
-    position: absolute;
-    top: -26px;
-    left: -28px;
-    width: 74px;
-    height: 74px;
-    z-index: 1;
-    pointer-events: none;
-    transform: rotate(-22deg);
-    filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.16));
-  }
-
   /* 大柠檬片按钮 */
   .intro-lemon-btn {
     position: relative;
@@ -1016,8 +983,8 @@
     outline-offset: 8px;
   }
   .intro-lemon-btn:hover {
-    transform: scale(1.08) rotate(3deg);
-    filter: drop-shadow(0 18px 45px rgba(132, 204, 22, 0.6)) drop-shadow(0 0 24px rgba(234, 254, 150, 0.9));
+    transform: scale(1.08) rotate(4deg);
+    filter: drop-shadow(0 18px 42px rgba(160, 190, 30, 0.45)) drop-shadow(0 0 26px rgba(255, 250, 195, 0.95));
   }
   .intro-lemon-btn:active {
     transform: scale(0.94);
@@ -1031,46 +998,48 @@
     100% { transform: scale(2.8) rotate(36deg); opacity: 0; }
   }
 
-  .lemon-svg {
+  .lemon-img {
     display: block;
-    width: clamp(230px, 34vw, 320px);
-    height: clamp(230px, 34vw, 320px);
-    filter: drop-shadow(0 14px 35px rgba(101, 163, 13, 0.3));
+    width: clamp(220px, 32vw, 310px);
+    height: clamp(220px, 32vw, 310px);
+    object-fit: contain;
+    filter: drop-shadow(0 16px 32px rgba(130, 150, 20, 0.28)) drop-shadow(0 0 18px rgba(255, 255, 255, 0.65));
     transition: filter .28s ease;
+    pointer-events: none;
   }
 
   .lemon-glow-ring {
     position: absolute;
-    inset: -14px;
+    inset: -16px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(254, 240, 138, 0.55) 20%, rgba(190, 242, 100, 0.35) 55%, transparent 75%);
-    filter: blur(14px);
+    background: radial-gradient(circle, rgba(255, 250, 200, 0.72) 22%, rgba(217, 249, 157, 0.36) 56%, transparent 76%);
+    filter: blur(16px);
     z-index: -1;
     pointer-events: none;
     animation: glow-pulse 3s ease-in-out infinite;
   }
   @keyframes glow-pulse {
-    0%, 100% { transform: scale(0.96); opacity: 0.7; }
+    0%, 100% { transform: scale(0.96); opacity: 0.72; }
     50% { transform: scale(1.08); opacity: 1; }
   }
 
   /* 提示进入按钮徽章 */
   .intro-hint-box {
-    margin-top: 24px;
+    margin-top: 22px;
     display: inline-flex;
     align-items: center;
     gap: 10px;
     padding: 10px 24px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.94);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-    border: 2px solid rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.92);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border: 2px solid rgba(255, 255, 255, 0.95);
     color: #365314;
     font-size: clamp(15px, 2.2vw, 18px);
     font-weight: 800;
     font-family: var(--font-display);
-    box-shadow: 0 8px 24px rgba(101, 163, 13, 0.22);
+    box-shadow: 0 8px 24px rgba(101, 163, 13, 0.20);
     cursor: pointer;
     transition: all .25s ease;
     letter-spacing: 2px;
@@ -1089,7 +1058,7 @@
   .intro-hint-box:hover {
     background: #ffffff;
     transform: translateY(-4px) scale(1.04);
-    box-shadow: 0 12px 32px rgba(101, 163, 13, 0.32);
+    box-shadow: 0 12px 32px rgba(101, 163, 13, 0.30);
     color: #1a2e05;
   }
   .hint-pulse-dot {
@@ -1109,8 +1078,13 @@
   .intro-footer-tip {
     font-size: 13px;
     font-weight: 700;
-    color: rgba(255, 255, 255, 0.95);
-    text-shadow: 0 2px 8px rgba(54, 83, 20, 0.45);
+    color: #3f6212;
+    padding: 5px 16px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.74);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.85);
     letter-spacing: 1px;
     margin-bottom: 1vh;
     animation: intro-fade-up .8s ease .3s both;
@@ -1130,12 +1104,10 @@
     .intro-tag { font-size: 11px; padding: 4px 12px; }
     .intro-hint-box { font-size: 14px; padding: 8px 18px; margin-top: 16px; }
     .intro-footer-tip { font-size: 12px; }
-    .intro-ice-companion { width: 56px; height: 56px; top: -16px; right: -16px; }
-    .intro-mint-companion { width: 56px; height: 56px; top: -18px; left: -18px; }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .intro-lemon-wrap, .intro-hint-box, .lemon-glow-ring, .hint-pulse-dot { animation: none; }
+    .intro-bg-img, .intro-lemon-wrap, .intro-hint-box, .lemon-glow-ring, .hint-pulse-dot { animation: none; }
     .intro-lemon-btn.bursting { animation: none !important; opacity: 0; }
     .sidebar, .mask, .btn, .intro, .tab, .tab-indicator { transition: none; }
     .name-row h1 { animation: none; }
@@ -1146,10 +1118,13 @@
 <div class="bg-deco"></div>
 <noscript><style>.intro { display: none; }</style></noscript>
 <div class="intro" id="intro" role="region" aria-label="夏日冰镇柠檬汽水开场">
-  <!-- 动态夏日冰镇柠檬汽水全屏画布 -->
+  <!-- 日系水彩清新柠檬气泡开屏插画背景 -->
+  <img class="intro-bg-img" src="assets/intro-bg.webp" alt="" width="1600" height="900" fetchpriority="high" decoding="async">
+
+  <!-- 动态夏日冰镇柠檬汽水全屏画布(碳酸气泡 + 点击果汁溅射) -->
   <canvas class="intro-soda-canvas" id="sodaCanvas" aria-hidden="true"></canvas>
 
-  <!-- 玻璃杯冰爽反光与冷凝水雾 -->
+  <!-- 轻透玻璃反光层 -->
   <div class="intro-glass-overlay" aria-hidden="true"></div>
 
   <!-- 开场主体交互层 -->
@@ -1171,124 +1146,9 @@
     <!-- 核心互动大柠檬片舞台 -->
     <div class="intro-lemon-stage">
       <div class="intro-lemon-wrap" id="lemonWrap">
-        <!-- 陪伴晶莹冰块 -->
-        <div class="intro-ice-companion" aria-hidden="true"></div>
-
-        <!-- 陪伴清新薄荷叶 -->
-        <div class="intro-mint-companion" aria-hidden="true">
-          <svg viewBox="0 0 80 80" width="100%" height="100%" aria-hidden="true">
-            <defs>
-              <linearGradient id="mintGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#4ade80" />
-                <stop offset="100%" stop-color="#15803d" />
-              </linearGradient>
-              <linearGradient id="mintGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#86efac" />
-                <stop offset="100%" stop-color="#16a34a" />
-              </linearGradient>
-            </defs>
-            <path d="M 40 70 C 15 50 10 25 40 10 C 70 25 65 50 40 70 Z" fill="url(#mintGrad1)" />
-            <path d="M 40 15 L 40 65 M 40 28 L 26 22 M 40 38 L 22 34 M 40 48 L 26 46 M 40 28 L 54 22 M 40 38 L 58 34 M 40 48 L 54 46" stroke="#bbf7d0" stroke-width="1.8" stroke-linecap="round" opacity="0.75" fill="none" />
-            <path d="M 30 50 C 8 38 10 18 32 14 C 42 26 38 42 30 50 Z" fill="url(#mintGrad2)" opacity="0.9" />
-            <circle cx="36" cy="32" r="3.2" fill="#ffffff" opacity="0.85" />
-          </svg>
-        </div>
-
-        <!-- 大柠檬片按钮 -->
+        <!-- 日系插画风格透明大柠檬片按钮 -->
         <button class="intro-lemon-btn" id="heroLemonSlice" type="button" aria-label="点击大柠檬片，开启冰爽夏日进入主页">
-          <svg class="lemon-svg" viewBox="0 0 320 320" width="320" height="320" aria-hidden="true">
-            <defs>
-              <radialGradient id="lemonPeelGrad" cx="35%" cy="30%" r="70%">
-                <stop offset="0%" stop-color="#feffc2" />
-                <stop offset="38%" stop-color="#fef08a" />
-                <stop offset="76%" stop-color="#d9f99d" />
-                <stop offset="100%" stop-color="#a3e635" />
-              </radialGradient>
-              <radialGradient id="pulpGrad" cx="45%" cy="45%" r="65%">
-                <stop offset="0%" stop-color="#ffffff" />
-                <stop offset="26%" stop-color="#fef9c3" />
-                <stop offset="66%" stop-color="#fef08a" />
-                <stop offset="86%" stop-color="#e2f87a" />
-                <stop offset="100%" stop-color="#bef264" />
-              </radialGradient>
-              <linearGradient id="lemonGlossGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#ffffff" stop-opacity="0.8" />
-                <stop offset="60%" stop-color="#ffffff" stop-opacity="0.18" />
-                <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
-              </linearGradient>
-              <radialGradient id="rimBubbleGrad" cx="30%" cy="30%" r="70%">
-                <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95" />
-                <stop offset="55%" stop-color="#f7fee7" stop-opacity="0.75" />
-                <stop offset="100%" stop-color="#bef264" stop-opacity="0.35" />
-              </radialGradient>
-              <path id="lemonSegment" d="M 188.4 150.5 L 268.1 123.8 Q 273.8 121.9 275.6 127.7 A 120 120 0 0 1 275.6 192.3 Q 273.8 198.1 268.1 196.2 L 188.4 169.5 Q 182.8 167.6 183.3 165.8 A 24 24 0 0 0 183.3 154.2 Q 182.8 152.4 188.4 150.5 Z" />
-            </defs>
-
-            <!-- 1. 柠檬外果皮与皮质孔隙 -->
-            <circle cx="160" cy="160" r="148" fill="url(#lemonPeelGrad)" stroke="#65a30d" stroke-width="1.8" />
-            <circle cx="160" cy="160" r="144" fill="none" stroke="#f7fee7" stroke-width="1.8" stroke-dasharray="2 5" opacity="0.7" />
-
-            <!-- 2. 白色中果皮（白络环） -->
-            <circle cx="160" cy="160" r="136" fill="#fcfef5" stroke="#f4fce3" stroke-width="1.5" />
-
-            <!-- 3. 内果皮基底 -->
-            <circle cx="160" cy="160" r="126" fill="#f7fee7" />
-
-            <!-- 4. 八瓣晶莹淡黄果肉 -->
-            <g id="lemonPulpGroup">
-              <use href="#lemonSegment" fill="url(#pulpGrad)" />
-              <use href="#lemonSegment" fill="url(#pulpGrad)" transform="rotate(45 160 160)" />
-              <use href="#lemonSegment" fill="url(#pulpGrad)" transform="rotate(90 160 160)" />
-              <use href="#lemonSegment" fill="url(#pulpGrad)" transform="rotate(135 160 160)" />
-              <use href="#lemonSegment" fill="url(#pulpGrad)" transform="rotate(180 160 160)" />
-              <use href="#lemonSegment" fill="url(#pulpGrad)" transform="rotate(225 160 160)" />
-              <use href="#lemonSegment" fill="url(#pulpGrad)" transform="rotate(270 160 160)" />
-              <use href="#lemonSegment" fill="url(#pulpGrad)" transform="rotate(315 160 160)" />
-            </g>
-
-            <!-- 果肉微晶质感点缀 (Juicy Vesicles) -->
-            <g opacity="0.7" fill="#fefff0">
-              <circle cx="218" cy="154" r="2.5" />
-              <circle cx="238" cy="148" r="3" />
-              <circle cx="246" cy="162" r="2" />
-              <circle cx="154" cy="218" r="2.5" />
-              <circle cx="148" cy="238" r="3" />
-              <circle cx="162" cy="246" r="2" />
-              <circle cx="102" cy="154" r="2.5" />
-              <circle cx="82" cy="148" r="3" />
-              <circle cx="74" cy="162" r="2" />
-              <circle cx="154" cy="102" r="2.5" />
-              <circle cx="148" cy="82" r="3" />
-              <circle cx="162" cy="74" r="2" />
-              <circle cx="204" cy="204" r="2.8" />
-              <circle cx="116" cy="204" r="2.8" />
-              <circle cx="116" cy="116" r="2.8" />
-              <circle cx="204" cy="116" r="2.8" />
-            </g>
-
-            <!-- 5. 柠檬果心 -->
-            <circle cx="160" cy="160" r="16" fill="#fefffa" stroke="#e2f87a" stroke-width="1.8" />
-            <circle cx="160" cy="160" r="6" fill="#bef264" />
-
-            <!-- 6. 水润高光折射层 -->
-            <path d="M 50 140 A 124 124 0 0 1 270 140 A 110 80 0 0 0 50 140 Z" fill="url(#lemonGlossGrad)" opacity="0.55" />
-
-            <!-- 7. 贴附外圈的气泡 -->
-            <g fill="url(#rimBubbleGrad)">
-              <circle cx="34" cy="130" r="7" />
-              <circle cx="28" cy="170" r="5" />
-              <circle cx="48" cy="220" r="8" />
-              <circle cx="130" cy="296" r="6" />
-              <circle cx="178" cy="298" r="8" />
-              <circle cx="230" cy="276" r="7" />
-              <circle cx="288" cy="200" r="6" />
-              <circle cx="294" cy="140" r="8" />
-              <circle cx="270" cy="78" r="6" />
-              <circle cx="210" cy="30" r="7" />
-              <circle cx="140" cy="24" r="6" />
-              <circle cx="80" cy="50" r="8" />
-            </g>
-          </svg>
+          <img class="lemon-img" src="assets/intro-lemon.webp" alt="" width="640" height="640" fetchpriority="high" decoding="async" draggable="false">
           <div class="lemon-glow-ring" aria-hidden="true"></div>
         </button>
       </div>
@@ -1613,61 +1473,6 @@
         }
         for (let i = 0; i < BUBBLE_COUNT; i++) resetBubble(i);
 
-        // 浮动晶莹冰块 (6 个不同层深的冰块)
-        const iceCubes = [
-          { rx: 0.16, ry: 0.22, s: 72, ang: 0.25, vRot: 0.001, bSpeed: 0.0018, bAmp: 10, phase: 0 },
-          { rx: 0.84, ry: 0.26, s: 86, ang: -0.3, vRot: -0.0012, bSpeed: 0.0015, bAmp: 12, phase: 1.5 },
-          { rx: 0.12, ry: 0.68, s: 58, ang: 0.45, vRot: 0.0008, bSpeed: 0.002, bAmp: 9, phase: 3 },
-          { rx: 0.86, ry: 0.65, s: 76, ang: -0.15, vRot: -0.0009, bSpeed: 0.0017, bAmp: 11, phase: 4.2 },
-          { rx: 0.28, ry: 0.86, s: 52, ang: 0.35, vRot: 0.0014, bSpeed: 0.0022, bAmp: 8, phase: 2.1 },
-          { rx: 0.72, ry: 0.84, s: 64, ang: -0.4, vRot: -0.001, bSpeed: 0.0019, bAmp: 10, phase: 5.4 }
-        ];
-
-        // 绘制冰块函数
-        function drawIceCube(x, y, size, angle) {
-          ctx.save();
-          ctx.translate(x, y);
-          ctx.rotate(angle);
-
-          const hs = size / 2;
-          const rad = size * 0.22;
-
-          // 冰块半透明本体
-          ctx.beginPath();
-          ctx.roundRect(-hs, -hs, size, size, rad);
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.32)';
-          ctx.fill();
-
-          // 冰块立体折射内切面
-          ctx.beginPath();
-          ctx.roundRect(-hs + 6, -hs + 6, size - 12, size - 12, rad * 0.7);
-          ctx.fillStyle = 'rgba(224, 242, 254, 0.25)';
-          ctx.fill();
-
-          // 边缘水晶亮光
-          ctx.lineWidth = 1.8;
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-          ctx.stroke();
-
-          // 冰内微气泡
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-          ctx.beginPath();
-          ctx.arc(-hs * 0.3, -hs * 0.2, size * 0.08, 0, Math.PI * 2);
-          ctx.arc(hs * 0.35, hs * 0.25, size * 0.06, 0, Math.PI * 2);
-          ctx.fill();
-
-          // 冰面高光斑
-          ctx.beginPath();
-          ctx.moveTo(-hs + 10, -hs + 6);
-          ctx.lineTo(hs - 10, -hs + 6);
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-          ctx.lineWidth = 2.5;
-          ctx.lineCap = 'round';
-          ctx.stroke();
-
-          ctx.restore();
-        }
-
         let time = 0;
         function render(now) {
           /* 增量时间:高刷屏(120Hz)与低刷屏(60Hz)动画速度完全一致 */
@@ -1690,31 +1495,7 @@
 
           ctx.clearRect(0, 0, cw, ch);
 
-          // 1. 顶部阳光焦散水波
-          const waveY = 80;
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.09)';
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.lineTo(0, waveY);
-          for (let x = 0; x <= cw; x += 30) {
-            const y = waveY + Math.sin(x * 0.008 + time * 0.025) * 12 + Math.cos(x * 0.015 + time * 0.015) * 6;
-            ctx.lineTo(x, y);
-          }
-          ctx.lineTo(cw, 0);
-          ctx.closePath();
-          ctx.fill();
-
-          // 2. 绘制浮动冰块(低配时跳过 2 个远端小块)
-          const cubeMax = quality === 1 ? iceCubes.length : 4;
-          for (let i = 0; i < cubeMax; i++) {
-            const cube = iceCubes[i];
-            const ix = cube.rx * cw;
-            const iy = cube.ry * ch + Math.sin(time * cube.bSpeed + cube.phase) * cube.bAmp;
-            cube.ang += cube.vRot * dt;
-            drawIceCube(ix, iy, cube.s, cube.ang);
-          }
-
-          // 3. 绘制汽水气泡 (微粒上升与摆动;低配时隔一个画一个)
+          // 1. 绘制汽水气泡 (微粒上升与摆动;低配时隔一个画一个)
           const bMax = quality === 1 ? bubbles.length : Math.ceil(bubbles.length * 0.5);
           for (let i = 0; i < bMax; i++) {
             const b = bubbles[i];
