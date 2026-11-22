@@ -3628,6 +3628,15 @@ class World {
   }
   _fill(c) {
     const baseX = c.cx * CHUNK, baseZ = c.cz * CHUNK;
+    /* 这一区块是否落在（或紧邻）一座村庄：村庄会横跨 ±2 个区块，
+       冰刺平原的石英"冰刺"如果长在村里，就会和教堂祭坛用同一种方块，
+       看着像"教堂附近凭空冒出一堆石英柱子"。这里直接跳过冰刺生成。 */
+    let nearVillage = false;
+    for (let dz = -2; dz <= 2 && !nearVillage; dz++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        if (isVillageChunk(c.cx + dx, c.cz + dz)) { nearVillage = true; break; }
+      }
+    }
     for (let lz = 0; lz < CHUNK; lz++) {
       const wz = baseZ + lz;
       for (let lx = 0; lx < CHUNK; lx++) {
@@ -3805,7 +3814,8 @@ class World {
           }
         }
         // 冰刺平原：雪原上立起石英"冰刺"（3~9 格），和冰刺平原一样能当地标
-        if (iceSpike && surf > SEA && surf + 1 < HEIGHT) {
+        // （村庄附近不生成：避免与教堂祭坛的石英方块撞车、也避免扎进房屋与道路）
+        if (iceSpike && !nearVillage && surf > SEA && surf + 1 < HEIGHT) {
           const pr = plantHash(wx * 17 + 5, wz * 19 + 9);
           if (pr < 0.008) {
             const h = 3 + ((plantHash(wx + 13, wz + 3) * 7) | 0);
@@ -4232,12 +4242,14 @@ function plantTrees(c) {
       if (ground !== B.GRASS && ground !== B.SNOW && ground !== B.MOSSY) continue;
       const bm = biomeOf(wx, wz);
       if (bm === 3 || bm === 9 || bm === 10 || bm === 12 || bm === 13 || bm === 14 || bm === 20 || bm === 22) continue;   // 沙漠/恶地/蘑菇岛/砾石平原/白沙丘/冰刺平原/火山/极地冰川不种普通树
-      // 雪地：多层厚雪块的地方不长树，降低长树概率
+      // 雪地：多层厚雪块的地方不长树；再叠一层 24x24 分区的林线遮罩，让雪原出现大片纯粹的空旷雪野
       if (bm === 4) {
         if (ground === B.SNOW && world.getBlock(wx, surf - 1, wz) === B.SNOW) continue;
+        // 仅约 35% 的雪原区块带允许长零星云杉，其余 65% 完全留白成开阔雪野
+        if (plantHash(Math.floor(wx / 24) * 31 + 17, Math.floor(wz / 24) * 23 + 11) > 0.35) continue;
       }
       let log = B.LOG, leaf = B.LEAVES, prob = 0.0075, spruce = false, cherry = false, maple = false;
-      if (bm === 4) { log = B.SPRUCE_LOG; leaf = B.SPRUCE_LEAVES; prob = 0.004; spruce = true; }   // 雪地：降低云杉长树概率至 0.004
+      if (bm === 4) { log = B.SPRUCE_LOG; leaf = B.SPRUCE_LEAVES; prob = 0.0012; spruce = true; }   // 雪地：极稀疏孤立的针叶树（有效密度约 0.06 棵/区块）
       else if (bm === 15) { log = B.SPRUCE_LOG; leaf = B.SPRUCE_LEAVES; prob = 0.024; spruce = true; } // 针叶林：高大云杉群
       else if (bm === 18) { log = B.CHERRY_LOG; leaf = B.CHERRY_LEAVES; prob = 0.0105; cherry = true; } // 樱花林：专属樱花树干
       else if (bm === 21) { log = B.MAPLE_LOG; leaf = B.MAPLE_LEAVES; prob = 0.022; maple = true; }          // 枫树林：秋季火红/金黄枫树与专属枫木树干
@@ -7470,6 +7482,20 @@ const villagers = [];
 const villageCenters = new Set();
 /* 已建成村庄的世界坐标（环境音用它判断"是否靠近村庄"）。 */
 const villagePositions = [];
+/* 判断某格是不是"教堂祭坛"。
+   大教堂中心在 (cx8, cz8 + 13)，祭坛位于 (cx8, gy, chZ + 3) = (cx8, gy, cz8 + 16)
+   与其上方 (cx8, gy + 1, cz8 + 16) 的金块，正好落在村中心北侧相邻区块 (vcx, vcz + 1)。
+   同时检查 villageCenters 与 isVillageChunk，保证旧存档里的老村庄读档后祭坛依然有效；
+   石英还用于冰刺、白沙丘与广场镶边，限定到祭坛坐标可避免其它石英方块误触发教堂祈福。 */
+function isCathedralAltar(x, y, z) {
+  const vcx = x >> 4, vcz = (z >> 4) - 1;
+  if (!villageCenters.has(`${vcx},${vcz}`) && !isVillageChunk(vcx, vcz)) return false;
+  const cx8 = vcx * 16 + 8, cz8 = vcz * 16 + 8;
+  if (x !== cx8 || z !== cz8 + 16) return false;
+  const gy = Math.floor(surfaceHeight(cx8, cz8));
+  if (gy <= SEA + 1) return false;
+  return y === gy || y === gy + 1;
+}
 let tradeOpen = false;
 let currentTradingVillager = null;
 
@@ -7863,6 +7889,8 @@ function isVillageChunk(cx, cz) {
   if (cx === 3 && cz === 3) return true;
   const REGION = 16;
   const rx = Math.floor(cx / REGION), rz = Math.floor(cz / REGION);
+  // 村庄生成概率减半：每个 16×16 区块大区仅 50% 概率生成一座村庄，且保留命中的大区原坐标（兼容旧存档）
+  if (plantHash(rx * 997 + 41, rz * 613 + 29) >= 0.5) return false;
   const targetCx = rx * REGION + Math.floor(plantHash(rx * 317 + 11, rz * 571 + 19) * (REGION - 6)) + 3;
   const targetCz = rz * REGION + Math.floor(plantHash(rx * 823 + 23, rz * 139 + 7) * (REGION - 6)) + 3;
   return (cx === targetCx && cz === targetCz);
@@ -11948,7 +11976,13 @@ const playerHairMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [74, 5
 const playerHeadMats = [playerHairMat, playerHairMat, playerHairMat, playerHeadMat, playerHairMat, playerFaceMat];
 const playerBodyMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [0, 168, 168], 9004, paintPlayerBody) });
 const playerArmMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [226, 186, 150], 9005, paintPlayerArm) });
+const playerArmTopMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [0, 168, 168], 9007, null) });
+// 手臂 6 面（+X, -X, +Y, -Y, +Z, -Z）：顶部肩面纯衣服短袖色，底面手掌纯肤色，四周短袖+小臂
+const playerArmMats = [playerArmMat, playerArmMat, playerArmTopMat, playerHeadMat, playerArmMat, playerArmMat];
 const playerLegMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [70, 64, 143], 9006, paintPlayerLeg) });
+const playerLegTopMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [70, 64, 143], 9008, null) });
+const playerShoeSoleMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, [38, 38, 46], 9009, null) });
+const playerLegMats = [playerLegMat, playerLegMat, playerLegTopMat, playerShoeSoleMat, playerLegMat, playerLegMat];
 
 const playerModel = new THREE.Group();
 const playerHead = new THREE.Mesh(partGeo(0.5, 0.5, 0.5), playerHeadMats);
@@ -11966,7 +12000,7 @@ const playerArms = [], playerLegs = [];
 for (const sx of [-1, 1]) {
   const pivot = new THREE.Group();
   pivot.position.set(sx * 0.375, 1.3, 0);
-  const arm = new THREE.Mesh(partGeo(0.25, 0.6, 0.25), playerArmMat);
+  const arm = new THREE.Mesh(partGeo(0.25, 0.6, 0.25), playerArmMats);
   arm.position.y = -0.3;
   arm.castShadow = true; arm.receiveShadow = true;
   pivot.add(arm);
@@ -11976,7 +12010,7 @@ for (const sx of [-1, 1]) {
 for (const sx of [-1, 1]) {
   const pivot = new THREE.Group();
   pivot.position.set(sx * 0.125, 0.7, 0);
-  const leg = new THREE.Mesh(partGeo(0.25, 0.7, 0.25), playerLegMat);
+  const leg = new THREE.Mesh(partGeo(0.25, 0.7, 0.25), playerLegMats);
   leg.position.y = -0.35;
   leg.castShadow = true; leg.receiveShadow = true;
   pivot.add(leg);
@@ -16442,6 +16476,21 @@ function onMousedown(btn) {
         openFurnace();
         return;
       }
+      // 右键大教堂神圣祭坛（祭坛石英台与其上方金块）→ 受到神圣祈福，生命值与饱食度瞬间全满
+      // 放在村庄之钟之前判定且严格限定在祭坛坐标：避免冰刺平原石英柱、广场石英镶边、白沙丘或自建石英误触发祈福，
+      // 也避免未命中祭坛时提前 return 导致无法在普通石英块旁放置方块。
+      if ((hit.id === B.QUARTZ || hit.id === B.GOLD_BLOCK) && isCathedralAltar(hit.x, hit.y, hit.z)) {
+        player.hp = 20;
+        player.hunger = 20;
+        updateHearts();
+        updateHungerBar();
+        tone(523, 659, 0.35, 'sine', 0.25);
+        setTimeout(() => tone(659, 784, 0.40, 'sine', 0.25), 120);
+        setTimeout(() => tone(784, 1046, 0.55, 'sine', 0.30), 240);
+        spawnParticles(hit.x + 0.5, hit.y + 1.2, hit.z + 0.5, 0xffe066, 24);
+        toast('✨ 受到神圣大教堂祭坛的祈福与庇护！生命与饱食度已全满恢复');
+        return;
+      }
       // 右键村庄之钟（水井顶端的金块或村落集结钟）
       if (hit.id === B.GOLD_BLOCK) {
         ringVillageBell(hit.x, hit.y, hit.z);
@@ -16472,19 +16521,6 @@ function onMousedown(btn) {
           toast('💡 手持受损的工具、剑或盾牌右键铁砧，可消耗铁锭修复');
           return;
         }
-      }
-      // 右键大教堂神圣祭坛（石英方块）→ 受到神圣祈福，生命值与饱食度瞬间全满
-      if (hit.id === B.QUARTZ) {
-        player.hp = 20;
-        player.hunger = 20;
-        updateHearts();
-        updateHungerBar();
-        tone(523, 659, 0.35, 'sine', 0.25);
-        setTimeout(() => tone(659, 784, 0.40, 'sine', 0.25), 120);
-        setTimeout(() => tone(784, 1046, 0.55, 'sine', 0.30), 240);
-        spawnParticles(hit.x + 0.5, hit.y + 1.2, hit.z + 0.5, 0xffe066, 24);
-        toast('✨ 受到神圣大教堂祭坛的祈福与庇护！生命与饱食度已全满恢复');
-        return;
       }
       // 右键红床 → 睡觉
       if (hit.id === B.BED) {

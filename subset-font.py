@@ -11,6 +11,8 @@ def charset():
     for name in glob.glob("*.html"):
         try:
             html = open(name, encoding="utf-8").read()
+            if "ZCOOLQingKeHuangYou" not in html:
+                continue
             chars.update(c for c in html if not c.isspace() and ord(c) < 0xFFFF)
         except OSError:
             pass
