@@ -3495,7 +3495,7 @@ const portalMat = new THREE.ShaderMaterial({
   side: THREE.DoubleSide,
 });
 
-/* ============================ 水面 Shader (高拟真多波列焦散与菲涅尔水体) ============================ */
+/* ============================ 水面 Shader (域扭曲流动波纹 + 像素水纹融合 + 清澈菲涅尔通透水体) ============================ */
 const waterVertex = /* glsl */`
 varying vec3 vWorld;
 varying vec3 vNormal;
@@ -3529,116 +3529,108 @@ varying vec3 vWorld;
 varying vec3 vNormal;
 varying float vDist;
 
-// 平滑多波列叠加（去除刺目高频跳变，呈现自然平滑的涌浪）
-float waveH(vec2 p, float t) {
-  float w = 0.0;
-  w += sin(p.x * 0.32 + p.y * 0.16 + t * 0.75) * 0.28;
-  w += sin(p.x * 0.16 - p.y * 0.28 + t * 0.62) * 0.24;
-  w += sin((p.x + p.y) * 0.48 + t * 0.95) * 0.12;
-  w += cos((p.x * 0.54 - p.y * 0.38) + t * 0.85) * 0.10;
-  return w;
+// 域扭曲有机水流场（参考熔岩流体的多层旋涡涌动，呈现灵动自然的清波层次）
+float flowWave(vec2 p, float t) {
+  vec2 q = p + vec2(sin(p.y * 0.55 + t * 0.52) * 0.58, cos(p.x * 0.50 - t * 0.46) * 0.58);
+  float w = sin(q.x * 0.78 + t * 0.68) * cos(q.y * 0.72 - t * 0.54);
+  w += 0.52 * sin((q.x * 1.28 - q.y * 1.05) + t * 0.92);
+  w += 0.26 * cos((q.x * 2.05 + q.y * 1.85) - t * 1.15);
+  return w * 0.5 + 0.5;
 }
 
-  // 动态焦散模拟（双层错向波光折射网格，通透清澈且平滑连续）
-  float getCaustics(vec2 p, float t) {
-    vec2 p1 = p * 0.92 + vec2(t * 0.20, t * 0.15);
-    vec2 p2 = p * 1.18 - vec2(t * 0.16, t * 0.22);
-    float c1 = sin(p1.x + sin(p1.y * 1.25));
-    float c2 = cos(p2.y + cos(p2.x * 1.25));
-    float net = pow(abs(c1 * c2), 0.75);
-    return (c1 * c1 + c2 * c2) * 0.20 + net * 0.35;
-  }
+// 动态双层折射焦散网纹
+float getCaustics(vec2 p, float t) {
+  vec2 p1 = p * 0.88 + vec2(t * 0.22, t * 0.16);
+  vec2 p2 = p * 1.14 - vec2(t * 0.18, t * 0.24);
+  float c1 = sin(p1.x + sin(p1.y * 1.25));
+  float c2 = cos(p2.y + cos(p2.x * 1.25));
+  float net = pow(abs(c1 * c2), 0.75);
+  return (c1 * c1 + c2 * c2) * 0.18 + net * 0.34;
+}
 
 void main() {
   bool isSide = abs(vNormal.y) < 0.6;
-  vec2 p = isSide ? (abs(vNormal.x) > 0.5 ? vec2(vWorld.z, vWorld.y - uTime * 0.8) : vec2(vWorld.x, vWorld.y - uTime * 0.8)) : vWorld.xz;
   float t = uTime;
-  // 增大法线采样基线，消除微观法线抖动
-  float e = 0.62;
-  float h  = waveH(p, t);
-  float hx = waveH(p + vec2(e, 0.0), t);
-  float hz = waveH(p + vec2(0.0, e), t);
+  // 顶面随微风缓缓流淌，立面（瀑布 / 水柱）自上而下连贯倾泻
+  vec2 uvBase = isSide
+    ? (abs(vNormal.x) > 0.5 ? vec2(vWorld.z, vWorld.y + t * 1.35) : vec2(vWorld.x, vWorld.y + t * 1.35))
+    : (vWorld.xz + vec2(t * 0.14, -t * 0.10));
 
-  // 叠加高频细微波纹法线，提升近处水面立体水波感
-  float ripX = cos(p.x * 2.35 + t * 1.65) * 0.055;
-  float ripZ = cos(p.y * 2.75 - t * 1.85) * 0.055;
+  // 多层域扭曲波高与平滑微分法线
+  vec2 wp = uvBase * 0.68;
+  float e = 0.42;
+  float h  = flowWave(wp, t);
+  float hx = flowWave(wp + vec2(e, 0.0), t);
+  float hz = flowWave(wp + vec2(0.0, e), t);
 
-  // 稳固水面法线基准（侧面呈现自然流动折射波纹）
   vec3 n = isSide
-    ? normalize(vNormal + vec3((h - hx) * 0.35, (h - hz) * 0.35, (h - hx) * 0.2))
-    : normalize(vec3(vNormal.x + (h - hx) * 0.78 + ripX, vNormal.y * 1.05 + 0.38, vNormal.z + (h - hz) * 0.78 + ripZ));
+    ? normalize(vNormal + vec3((h - hx) * 0.32, (h - hz) * 0.28, (h - hx) * 0.22))
+    : normalize(vec3(vNormal.x + (h - hx) * 0.85, vNormal.y * 1.12 + 0.32, vNormal.z + (h - hz) * 0.85));
 
   vec3 V = normalize(uCameraPos - vWorld);
   float ndotv = max(dot(V, n), 0.0);
 
-  // 物理菲涅尔反射率（Schlick 近似，F0 = 0.028）
-  float fres = 0.028 + 0.972 * pow(1.0 - ndotv, 4.2);
+  // 物理菲涅尔反射率（Schlick 近似）
+  float fres = 0.028 + 0.972 * pow(1.0 - ndotv, 4.0);
 
-  // 天空环境反射（加入微弱柔和云影倒映层次）
+  // 天空环境反射与柔和云影倒映
   vec3 R = reflect(-V, n);
   float skyT = clamp(R.y * 0.52 + 0.48, 0.0, 1.0);
   vec3 skyRefl = mix(uSkyBottom, uSkyTop, pow(skyT, 0.75));
   float cloudRefl = smoothstep(0.35, 0.85, sin(R.x * 5.2 + t * 0.04) * cos(R.z * 4.6 - t * 0.03) * 0.5 + 0.5);
-  skyRefl = mix(skyRefl, mix(uSkyBottom, vec3(1.0), 0.65), cloudRefl * 0.14 * (1.0 - uNight * 0.75) * smoothstep(0.05, 0.45, R.y));
+  skyRefl = mix(skyRefl, mix(uSkyBottom, vec3(1.0), 0.65), cloudRefl * 0.15 * (1.0 - uNight * 0.75) * smoothstep(0.05, 0.45, R.y));
 
-  // 柔和高光 + 阳光海面长廊倒影
+  // 阳光与月光镜面波光长廊
+  float specFade = clamp(1.0 - vDist / 190.0, 0.0, 1.0);
   vec3 Lsun = normalize(uSunDir);
   float sDotR = max(dot(R, Lsun), 0.0);
-  float specFade = clamp(1.0 - vDist / 190.0, 0.0, 1.0);
-  float sunSpecSharp = pow(sDotR, 84.0) * 0.95;
-  float sunSpecSpread = pow(sDotR, 20.0) * 0.26;
-  vec3 sunSpecular = uSunColor * (sunSpecSharp + sunSpecSpread) * (1.0 - uNight) * specFade;
-  skyRefl += uSunColor * pow(sDotR, 5.5) * 0.34 * (1.0 - uNight);
+  vec3 sunSpecular = uSunColor * (pow(sDotR, 82.0) * 0.95 + pow(sDotR, 18.0) * 0.26) * (1.0 - uNight) * specFade;
+  skyRefl += uSunColor * pow(sDotR, 5.5) * 0.32 * (1.0 - uNight);
 
-  // 月光清冷波光路径
   vec3 Lmoon = normalize(uMoonDir);
   float mDotR = max(dot(R, Lmoon), 0.0);
-  float moonSpec = (pow(mDotR, 76.0) * 0.68 + pow(mDotR, 14.0) * 0.18) * specFade;
-  vec3 moonSpecular = vec3(0.76, 0.88, 1.0) * moonSpec * uNight;
+  vec3 moonSpecular = vec3(0.76, 0.88, 1.0) * (pow(mDotR, 74.0) * 0.65 + pow(mDotR, 14.0) * 0.18) * specFade * uNight;
 
-  /* ---- 通透宝石蓝绿水体本色 ---- */
-  float tone = clamp(0.5 + h * 0.44, 0.0, 1.0);
-  vec3 waterBody = mix(uWaterDeep, uWaterShallow, tone);
+  // 四阶清澈水体色阶：深蓝波谷 → 碧蓝中调 → 晴青波峰 → 莹白浪花微光
+  float dayScale = mix(1.0, 0.46, uNight);
+  vec3 deepCol  = uWaterDeep * dayScale;
+  vec3 midCol   = mix(uWaterDeep, uWaterShallow, 0.56) * dayScale;
+  vec3 crestCol = uWaterShallow * mix(1.10, 0.50, uNight);
+  vec3 foamCol  = mix(vec3(0.90, 0.97, 1.0), uSunColor, 0.20 * (1.0 - uNight)) * mix(1.0, 0.52, uNight);
 
-  // 细波纹起伏
-  float rip = sin(p.x * 2.15 + t * 1.55) * 0.5 + sin(p.y * 2.65 - t * 1.75) * 0.5;
-  waterBody += vec3(0.022, 0.052, 0.062) * rip * (1.0 - uNight * 0.5);
+  float flow = clamp(h, 0.0, 1.0);
+  vec3 waterBody = mix(deepCol, midCol, smoothstep(0.18, 0.52, flow));
+  waterBody = mix(waterBody, crestCol, smoothstep(0.54, 0.82, flow));
+  waterBody = mix(waterBody, foamCol, smoothstep(0.84, 0.98, flow) * 0.42);
 
-  // 动态双层焦散波光注入水体
-  float c = getCaustics(p, t);
-  waterBody += vec3(0.06, 0.13, 0.16) * c * (1.0 - uNight * 0.62);
+  // 叠加柔和焦散波光
+  float caust = getCaustics(uvBase, t);
+  waterBody += vec3(0.05, 0.13, 0.16) * caust * (1.0 - uNight * 0.65);
 
-  // 波峰碎浪微白浮沫（细腻柔和，绝无条带）
-  float foam = smoothstep(0.45, 0.68, h + rip * 0.06);
-  vec3 foamCol = mix(vec3(0.90, 0.96, 1.0), uSunColor, 0.18 * (1.0 - uNight));
-  waterBody = mix(waterBody, foamCol, foam * 0.28);
+  // 采样 16x16 像素水纹贴图并施加柔和流体扭曲，水面与瀑布均保留体素锐利水纹质感
+  vec2 texWarp = vec2(sin(uvBase.y * 1.55 + t * 0.95), cos(uvBase.x * 1.45 - t * 0.85)) * 0.055;
+  vec3 texCol = texture(uAtlas, vec3(fract(uvBase * 0.5 + texWarp), uWaterLayer)).rgb * mix(1.10, 0.48, uNight);
+  waterBody = mix(waterBody, texCol, isSide ? 0.44 : 0.24);
+  if (isSide) waterBody = mix(waterBody, foamCol, smoothstep(0.68, 0.95, flow) * 0.25);
 
-  // 立面（瀑布 / 水墙）：采样全新柔和波光 T.water 贴图
-  if (isSide) {
-    vec2 uvTex = vec2(abs(vNormal.x) > 0.5 ? vWorld.z : vWorld.x, vWorld.y - uTime * 1.6);
-    vec4 texWater = texture(uAtlas, vec3(fract(uvTex), uWaterLayer));
-    waterBody = mix(waterBody, texWater.rgb * 1.12, 0.62);
-  }
-
-  // 阳光在细碎波峰上炸开的点点碎金（只在受光面、近处可见）
-  float glitter = pow(max(0.0, rip * 0.5 + 0.5), 14.0) * pow(sDotR, 9.0) * 0.48;
+  // 阳光在细碎波峰上跃动的碎金亮点
+  float glitter = pow(flow, 8.0) * pow(sDotR, 10.0) * 0.55;
   sunSpecular += uSunColor * glitter * (1.0 - uNight) * specFade;
 
-  // 菲涅尔融合水体色与天空反射
-  vec3 col = mix(waterBody, skyRefl, fres * 0.78 + 0.16);
+  // 菲涅尔融合清澈水体与天空倒影
+  vec3 col = mix(waterBody, skyRefl, fres * 0.68 + 0.12);
   col += sunSpecular + moonSpecular;
 
   // 远景雾气无缝渐隐融合
   float fogFactor = smoothstep(uFogNear, uFogFar, vDist);
   col = mix(col, uFogColor, fogFactor);
 
-  // 通透度：俯视更清澈见底，掠角更具镜面感
-  float alpha = isSide ? 0.86 : mix(0.76 + fres * 0.23, 1.0, fogFactor);
+  // 保持水体清澈透明（与不透明的岩浆区分）：俯视通透见底，掠角增强镜面反射，瀑布半透连贯
+  float alpha = isSide ? mix(0.82, 0.98, fogFactor) : mix(0.68 + fres * 0.25, 1.0, fogFactor);
 
-  // 半色阶抖动消除远处量化台阶
   float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
   gl_FragColor = vec4(col + dither * (1.5 / 255.0), alpha);
-} `;
+}`;
 
 // —— 时间与日月方向（昼夜循环）——
 let timeOfDay = 0.5 / 24;        // 进入游戏即 6:30（0=日出6:00，0.25=正午12:00，0.5=日落18:00，0.75=午夜0:00）
@@ -5766,6 +5758,8 @@ function buildChunkGeometry(c) {
   const T = { pos: [], nor: [], uv: [], layer: [], col: [], idx: [] };   // 火把与提灯（自发光）
   const P = { pos: [], nor: [], uv: [], idx: [] };                        // 下界传送门（动态紫晶旋涡）
   const solid = (x, y, z) => !isSeeThrough(getB(x, y, z));
+  // 流体渲染高度：满源格(L>=8)或上方有流体倾泻的下落水柱/岩浆柱(getW(y+1)>0)均占满整格 1.0，杜绝瀑布/岩浆柱出现 1/8 格横向断缝
+  const fluidHgt = (x, y, z, w) => (w <= 0 ? 0 : (w >= 8 || getW(x, y + 1, z) > 0) ? 1.0 : (w / 8));
 
   for (let y = 0; y <= yMax; y++) {
     for (let lz = 0; lz < 16; lz++) {
@@ -5775,15 +5769,15 @@ function buildChunkGeometry(c) {
         const id = c.blocks[i];
         // 睡莲：水面水平圆片（可与水共存于同一格，需先于水的 continue 渲染）
         if (isLilyPad(id)) pushLilyPad(C, wx, y, wz, tileOf(id).top);
-        // 水单独存放在 c.water，必须先于实体方块判断
+        // 水/岩浆流体单独存放在 c.water，必须先于实体方块判断
         const L = c.water[i];
         if (L > 0) {
-          // 水的所有暴露在空气或透光非水方块的侧面（FACES 0, 1, 4, 5）及底面（FACES 3）均必须渲染！
-          const hgt = L < 8 ? (L / 8) : 1.0;
+          // 流体的所有暴露侧面（FACES 0, 1, 4, 5）及底面（FACES 3）均按连续高度渲染
+          const hgt = fluidHgt(wx, y, wz, L);
           for (let fi = 0; fi < 6; fi++) {
             const f = FACES[fi];
             if (fi === 2) {
-              // 顶面：流动水(L < 8)在此单独补顶面；满水(L === 8)交由下方贪心合并统一处理
+              // 顶面：非满源且上方无流体的平流格在此单独补顶面；满源格(L === 8)交由下方贪心合并统一处理
               if (L < 8) {
                 const nbTop = getB(wx, y + 1, wz);
                 if (getW(wx, y + 1, wz) === 0 && isSeeThrough(nbTop)) {
@@ -5800,13 +5794,13 @@ function buildChunkGeometry(c) {
               }
               continue;
             }
-            // 侧面（FACES 0, 1, 4, 5）：若邻居透光且水深低于本格水（例如空气或落差水流），渲染侧面！
+            // 侧面（FACES 0, 1, 4, 5）：若邻居透光且邻居流体高度低于本格流体高度，渲染无缝衔接的侧面
             const dx = f.dir[0], dy = f.dir[1], dz = f.dir[2];
             const nb = getB(wx + dx, y + dy, wz + dz);
             const nbW = getW(wx + dx, y + dy, wz + dz);
-            if (nbW < L && isSeeThrough(nb)) {
-              const bHgt = nbW > 0 ? (nbW / 8) : 0;
-              pushWaterFace(W, wx, y, wz, f, hgt, bHgt);
+            const nbHgt = fluidHgt(wx + dx, y + dy, wz + dz, nbW);
+            if (nbHgt < hgt && isSeeThrough(nb)) {
+              pushWaterFace(W, wx, y, wz, f, hgt, nbHgt);
             }
           }
           continue;
