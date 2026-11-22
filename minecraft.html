@@ -41,6 +41,13 @@
     backdrop-filter: saturate(1.15);
     transition: opacity 0.35s ease;
   }
+  #lavaOverlay {
+    position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0;
+    background:
+      radial-gradient(ellipse at 50% 45%, rgba(255, 166, 36, 0.42), rgba(224, 62, 12, 0.78) 62%, rgba(122, 18, 4, 0.92) 100%);
+    backdrop-filter: saturate(1.35) contrast(1.08);
+    transition: opacity 0.25s ease;
+  }
   #portalOverlay {
     position: fixed; inset: -12%; pointer-events: none; z-index: 7; opacity: 0;
     background:
@@ -390,6 +397,7 @@
 
 <div id="vignette"></div>
 <div id="underwater"></div>
+<div id="lavaOverlay"></div>
 <div id="portalOverlay"></div>
 <div id="portalFlash"></div>
 <div id="sleepFade" style="position:fixed;inset:0;background:#060814;opacity:0;pointer-events:none;transition:opacity 0.65s cubic-bezier(0.4, 0, 0.2, 1);z-index:9999;"></div>
@@ -578,7 +586,8 @@
 <!-- ============ 纯噪声与地形生成（无 DOM / 无依赖） ============ -->
 <script>
 const HEIGHT = 96;      // 世界高度
-const SEA = 34;         // 海平面
+const SEA = 34;         // 主世界海平面
+const NETHER_SEA = 28;  // 下界岩浆海平面
 const B = {
   AIR:0, GRASS:1, DIRT:2, STONE:3, COBBLE:4, SAND:5, GRAVEL:6,
   LOG:7, LEAVES:8, PLANKS:9, BEDROCK:10, WATER:11, SNOW:12,
@@ -640,7 +649,9 @@ const B = {
   BELL:209, GRINDSTONE:210, GOAT_HORN:211,
   PACKED_ICE:212, BLUE_ICE:213, RED_SAND:214, RED_TERRACOTTA:215, ORANGE_TERRACOTTA:216,
   YELLOW_TERRACOTTA:217, TERRACOTTA:218, MYCELIUM:219, WHITE_SAND:220, PODZOL:221,
-  DEEPSLATE:222, MUD:223, FARMLAND:224, DIRT_PATH:225
+  DEEPSLATE:222, MUD:223, FARMLAND:224, DIRT_PATH:225,
+  NETHERRACK:226, SOUL_SAND:227, NETHER_BRICKS:228, NETHER_QUARTZ_ORE:229,
+  NETHER_GOLD_ORE:230, BLACKSTONE:231, CRIMSON_NYLIUM:232, WARPED_NYLIUM:233
 };
 
 function mulberry32(a) {
@@ -914,9 +925,60 @@ function biomeOfClimate(cl) {
 }
 function biomeOf(x, z) { return biomeOfClimate(climateAt(x, z)); }
 
+/* ---------- 下界（Nether）独立群系与地形噪声 ---------- */
+function netherBiomeAt(x, z) {
+  const wx = x + WX, wz = z + WZ;
+  const nTemp = P.terrain.fbm2(wx * 0.0042 + 4100, wz * 0.0042 + 4100, 3);
+  const nWild = P.terrain.fbm2(wx * 0.0042 + 5700, wz * 0.0042 + 5700, 3);
+  if (nTemp < -0.14 && nWild < 0.08) return 2;   // 灵魂沙峡谷
+  if (nTemp < -0.10 && nWild >= 0.08) return 3;  // 玄武岩三角洲
+  if (nTemp > 0.14 && nWild >= 0.0) return 4;    // 绯红菌林
+  if (nTemp > 0.14 && nWild < 0.0) return 5;     // 诡异菌林
+  return 1;                                      // 下界荒地
+}
+
+function netherColumnAt(x, z) {
+  const wx = x + WX, wz = z + WZ;
+  const basin = P.terrain.fbm2(wx * 0.0072 + 2300, wz * 0.0072 + 2300, 3);
+  const detail = P.terrain.fbm2(wx * 0.024 + 3100, wz * 0.024 + 3100, 3);
+  const ceilN = P.terrain.fbm2(wx * 0.015 + 6400, wz * 0.015 + 6400, 3);
+  const floorH = Math.max(10, Math.min(58, Math.floor(29.5 + basin * 34 + detail * 13)));
+  const ceilH = Math.max(66, Math.min(87, Math.floor(77 + ceilN * 14)));
+  const patch = P.terrain.fbm2(wx * 0.065 + 7200, wz * 0.065 + 7200, 2);
+  return { floorH, ceilH, patch };
+}
+
+function netherCavernNoise(x, y, z) {
+  return P.cave.fbm3((x + WX) * 0.024 + 190, y * 0.044 + 73, (z + WZ) * 0.024 + 310, 2);
+}
+
+function netherOreFor(wx, y, wz) {
+  const CELL_XZ = 7, CELL_Y = 6;
+  const cx = Math.floor(wx / CELL_XZ), cy = Math.floor(y / CELL_Y), cz = Math.floor(wz / CELL_XZ);
+  let h = (Math.imul(cx, 73856093) ^ Math.imul(cy, 19349663) ^ Math.imul(cz, 83492791) ^ 0x6b21a5c3 ^ Math.imul(WX + 29, 37) ^ WZ) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b) >>> 0;
+  const hash = ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  let target = B.NETHERRACK;
+  if (y >= 8 && y <= 84 && hash < 0.22) target = B.NETHER_QUARTZ_ORE;
+  else if (y >= 10 && y <= 80 && hash >= 0.22 && hash < 0.34) target = B.NETHER_GOLD_ORE;
+  if (target === B.NETHERRACK) return B.NETHERRACK;
+  const hx = ((h * 17) % 1000) / 1000;
+  const hy = ((h * 41) % 1000) / 1000;
+  const hz = ((h * 73) % 1000) / 1000;
+  const ox = cx * CELL_XZ + 1.8 + hx * (CELL_XZ - 3.6);
+  const oy = cy * CELL_Y + 1.4 + hy * (CELL_Y - 2.8);
+  const oz = cz * CELL_XZ + 1.8 + hz * (CELL_XZ - 3.6);
+  const dx = wx + 0.5 - ox, dy = y + 0.5 - oy, dz = wz + 0.5 - oz;
+  const distSq = dx * dx + dy * dy * 1.4 + dz * dz;
+  const maxR = 1.25 + (((h * 89) % 1000) / 1000) * 0.55;
+  return distSq <= maxR * maxR ? target : B.NETHERRACK;
+}
+
 const NOISE = {
-  HEIGHT, SEA, B, mulberry32, Perlin, surfaceHeight, surfaceHeightAt, isCave, oreFor, oreNoise,
+  HEIGHT, SEA, NETHER_SEA, B, mulberry32, Perlin, surfaceHeight, surfaceHeightAt, isCave, oreFor, oreNoise,
   biomeOf, biomeOfClimate, climateAt, setWorldOffset, getWorldOffset,
+  netherBiomeAt, netherColumnAt, netherCavernNoise, netherOreFor,
 };
 if (typeof window !== 'undefined') window.NOISE = NOISE;
 if (typeof globalThis !== 'undefined') globalThis.NOISE = NOISE;
@@ -965,7 +1027,7 @@ if (!THREE || !THREE.Vector3) {
 }
 setLoading('正在生成地形…');
 
-const { HEIGHT, SEA, B, mulberry32, surfaceHeight, surfaceHeightAt, isCave, oreFor, oreNoise, biomeOf, biomeOfClimate, climateAt, setWorldOffset, getWorldOffset } = globalThis.NOISE;
+const { HEIGHT, SEA, NETHER_SEA, B, mulberry32, surfaceHeight, surfaceHeightAt, isCave, oreFor, oreNoise, biomeOf, biomeOfClimate, climateAt, setWorldOffset, getWorldOffset, netherBiomeAt, netherColumnAt, netherCavernNoise, netherOreFor } = globalThis.NOISE;
 
 /* ============================ 常量 ============================ */
 const CHUNK = 16;
@@ -1055,6 +1117,12 @@ function makeAtlas() {
   T.myceliumTop = i++; T.myceliumSide = i++; T.whiteSand = i++;
   T.podzolTop = i++; T.podzolSide = i++; T.deepslateTop = i++; T.deepslateSide = i++;
   T.mud = i++; T.farmlandTop = i++; T.farmlandSide = i++; T.dirtPathTop = i++; T.dirtPathSide = i++;
+  T.netherrack = i++; T.soulSand = i++; T.netherBricks = i++;
+  T.netherQuartzOre = i++; T.netherGoldOre = i++;
+  T.blackstoneTop = i++; T.blackstoneSide = i++;
+  T.crimsonNyliumTop = i++; T.crimsonNyliumSide = i++;
+  T.warpedNyliumTop = i++; T.warpedNyliumSide = i++;
+  T.lava = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -3033,6 +3101,117 @@ function makeAtlas() {
     for (let y = 0; y < drop; y++) put(T.dirtPathSide, x, y, 166, 136, 74);
   }
 
+  // ===== 下界专属方块贴图 (地狱岩 / 灵魂沙 / 下界砖 / 下界矿石 / 黑石 / 菌岩 / 熔岩) =====
+  // 15. 地狱岩（经典暗绯红多孔火山岩：温润块状岩理 + 暗红裂隙）
+  const paintNetherrackBase = (tile, seed) => {
+    fill(tile, [128, 52, 48], 11, seed);
+    for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+      const n = Math.sin(x * 0.85 + y * 0.65 + seed) + Math.cos(x * 0.55 - y * 0.95 + seed * 0.5);
+      if (n > 0.72) put(tile, x, y, 156, 70, 62);
+      else if (n < -0.78) put(tile, x, y, 86, 30, 30);
+    }
+    speck(tile, [98, 36, 34], 22, seed + 1);
+    speck(tile, [166, 80, 70], 18, seed + 2);
+  };
+  paintNetherrackBase(T.netherrack, 255);
+
+  // 16. 灵魂沙（深褐细沙 + 幽暗漩涡空洞）
+  fill(T.soulSand, [96, 74, 60], 10, 260);
+  speck(T.soulSand, [120, 94, 76], 20, 261);
+  speck(T.soulSand, [70, 52, 42], 20, 262);
+  const soulHollows = [[3,3],[4,3],[3,4],[9,4],[10,4],[10,5],[5,9],[6,9],[6,10],[12,11],[13,11],[12,12],[2,12],[3,13]];
+  for (const [hx, hy] of soulHollows) {
+    put(T.soulSand, hx, hy, 50, 34, 26);
+    if (hx + 1 < TILE) put(T.soulSand, hx + 1, hy, 68, 50, 38);
+  }
+
+  // 17. 下界砖（深紫红要塞砌砖 + 深色灰缝）
+  fill(T.netherBricks, [68, 34, 42], 7, 265);
+  for (let y = 0; y < TILE; y++) {
+    const mortarRow = (y % 4 === 0);
+    const shift = ((y >> 2) & 1) * 4;
+    for (let x = 0; x < TILE; x++) {
+      if (mortarRow || ((x + shift) % 8 === 0)) {
+        put(T.netherBricks, x, y, 34, 16, 22);
+      } else if (y % 4 === 1 && ((x + shift) % 8 !== 7)) {
+        put(T.netherBricks, x, y, 90, 48, 58);
+      }
+    }
+  }
+  speck(T.netherBricks, [54, 26, 34], 16, 266);
+
+  // 18. 下界石英矿（地狱岩基底 + 锐利乳白石英晶簇）
+  paintNetherrackBase(T.netherQuartzOre, 270);
+  const quartzCrystals = [
+    [2,2],[3,2],[3,3],[4,3],[2,4],
+    [10,2],[11,2],[11,3],[12,3],[10,4],
+    [6,7],[7,7],[8,7],[7,8],[8,8],[6,9],
+    [2,11],[3,11],[3,12],[4,12],
+    [11,10],[12,10],[12,11],[13,11],[11,12]
+  ];
+  for (let k = 0; k < quartzCrystals.length; k++) {
+    const [qx, qy] = quartzCrystals[k];
+    if (k % 3 === 0) put(T.netherQuartzOre, qx, qy, 250, 246, 238);
+    else if (k % 3 === 1) put(T.netherQuartzOre, qx, qy, 230, 222, 210);
+    else put(T.netherQuartzOre, qx, qy, 198, 184, 170);
+  }
+
+  // 19. 下界金矿（地狱岩基底 + 闪耀自然金粒）
+  paintNetherrackBase(T.netherGoldOre, 275);
+  const goldNuggets = [
+    [2,3],[3,3],[3,4],[9,2],[10,2],[10,3],[11,3],
+    [5,7],[6,7],[6,8],[13,7],[12,8],[13,8],
+    [3,11],[4,11],[4,12],[9,12],[10,12],[10,13],[11,12]
+  ];
+  for (let k = 0; k < goldNuggets.length; k++) {
+    const [gx, gy] = goldNuggets[k];
+    if (k % 3 === 0) put(T.netherGoldOre, gx, gy, 255, 238, 118);
+    else if (k % 3 === 1) put(T.netherGoldOre, gx, gy, 244, 196, 48);
+    else put(T.netherGoldOre, gx, gy, 186, 126, 20);
+  }
+
+  // 20. 黑石（深炭紫玄武火山岩：冷硬棱面与暗缝）
+  fill(T.blackstoneTop, [44, 40, 50], 9, 280);
+  speck(T.blackstoneTop, [24, 21, 28], 24, 281);
+  speck(T.blackstoneTop, [68, 63, 76], 16, 282);
+  fill(T.blackstoneSide, [40, 36, 46], 8, 283);
+  for (let y = 0; y < TILE; y++) {
+    if (y % 5 === 0) for (let x = 0; x < TILE; x++) if (((x * 5 + y * 3) & 3) !== 0) put(T.blackstoneSide, x, y, 22, 20, 27);
+    else if (y % 5 === 2) for (let x = 0; x < TILE; x++) if (((x * 7 + y * 5) & 3) === 0) put(T.blackstoneSide, x, y, 66, 60, 74);
+  }
+  speck(T.blackstoneSide, [54, 48, 62], 14, 284);
+
+  // 21. 绯红菌岩（深绯红菌苔顶 + 侧面覆边接下界岩）
+  fill(T.crimsonNyliumTop, [148, 32, 44], 12, 286);
+  speck(T.crimsonNyliumTop, [196, 54, 62], 24, 287);
+  speck(T.crimsonNyliumTop, [104, 20, 30], 22, 288);
+  paintNetherrackBase(T.crimsonNyliumSide, 289);
+  for (let x = 0; x < TILE; x++) {
+    const drop = 3 + ((x * 7 + 2) % 4);
+    for (let y = 0; y < drop; y++) put(T.crimsonNyliumSide, x, y, y === drop - 1 ? 116 : 162, y === drop - 1 ? 24 : 38, y === drop - 1 ? 34 : 48);
+  }
+
+  // 22. 诡异菌岩（幽蓝青翠菌苔顶 + 侧面覆边接下界岩）
+  fill(T.warpedNyliumTop, [24, 126, 122], 12, 292);
+  speck(T.warpedNyliumTop, [44, 184, 168], 24, 293);
+  speck(T.warpedNyliumTop, [16, 84, 88], 22, 294);
+  paintNetherrackBase(T.warpedNyliumSide, 295);
+  for (let x = 0; x < TILE; x++) {
+    const drop = 3 + ((x * 5 + 3) % 4);
+    for (let y = 0; y < drop; y++) put(T.warpedNyliumSide, x, y, y === drop - 1 ? 18 : 30, y === drop - 1 ? 92 : 144, y === drop - 1 ? 94 : 138);
+  }
+
+  // 23. 熔岩贴图（炽烈橙红岩浆流纹 + 金黄亮脉 + 暗红冷壳）
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const v = Math.sin(x * 0.62 + Math.cos(y * 0.55) * 1.4) + Math.cos(y * 0.48 - x * 0.35);
+    if (v > 0.85) put(T.lava, x, y, 255, 232, 112);
+    else if (v > 0.25) put(T.lava, x, y, 252, 152, 26);
+    else if (v > -0.45) put(T.lava, x, y, 222, 74, 14);
+    else put(T.lava, x, y, 134, 28, 10);
+  }
+  speck(T.lava, [255, 244, 154], 12, 298);
+  speck(T.lava, [104, 20, 8], 12, 299);
+
   ctx.putImageData(img, 0, 0);
   // 3D 渲染改用 2D 纹理数组（每 tile 独立一层，配合 RepeatWrapping 可让单个 tile 跨大四边形循环）
   const layers = ATLAS_TILES;
@@ -3193,6 +3372,14 @@ function _tileOfRaw(id) {
     case B.MUD: return { top: atlas.T.mud, side: atlas.T.mud, bottom: atlas.T.mud };
     case B.FARMLAND: return { top: atlas.T.farmlandTop, side: atlas.T.farmlandSide, bottom: atlas.T.dirt };
     case B.DIRT_PATH: return { top: atlas.T.dirtPathTop, side: atlas.T.dirtPathSide, bottom: atlas.T.dirt };
+    case B.NETHERRACK: return { top: atlas.T.netherrack, side: atlas.T.netherrack, bottom: atlas.T.netherrack };
+    case B.SOUL_SAND: return { top: atlas.T.soulSand, side: atlas.T.soulSand, bottom: atlas.T.soulSand };
+    case B.NETHER_BRICKS: return { top: atlas.T.netherBricks, side: atlas.T.netherBricks, bottom: atlas.T.netherBricks };
+    case B.NETHER_QUARTZ_ORE: return { top: atlas.T.netherQuartzOre, side: atlas.T.netherQuartzOre, bottom: atlas.T.netherQuartzOre };
+    case B.NETHER_GOLD_ORE: return { top: atlas.T.netherGoldOre, side: atlas.T.netherGoldOre, bottom: atlas.T.netherGoldOre };
+    case B.BLACKSTONE: return { top: atlas.T.blackstoneTop, side: atlas.T.blackstoneSide, bottom: atlas.T.blackstoneTop };
+    case B.CRIMSON_NYLIUM: return { top: atlas.T.crimsonNyliumTop, side: atlas.T.crimsonNyliumSide, bottom: atlas.T.netherrack };
+    case B.WARPED_NYLIUM: return { top: atlas.T.warpedNyliumTop, side: atlas.T.warpedNyliumSide, bottom: atlas.T.netherrack };
     case B.CAMPFIRE: return { top: atlas.T.campfireTop, side: atlas.T.campfireSide, bottom: atlas.T.campfireSide };
     case B.DOOR: return { top: atlas.T.doorTop, side: atlas.T.doorBottom, bottom: atlas.T.doorBottom };
     case B.COBWEB: return { top: atlas.T.cobweb, side: atlas.T.cobweb, bottom: atlas.T.cobweb };
@@ -3484,6 +3671,78 @@ const waterMat = new THREE.ShaderMaterial({
   side: THREE.DoubleSide,
 });
 
+/* ============================ 下界岩浆流体 Shader (炽烈翻涌熔岩海与熔岩瀑布) ============================ */
+const lavaFragment = /* glsl */`
+uniform float uTime;
+uniform vec3 uFogColor;
+uniform float uFogNear;
+uniform float uFogFar;
+uniform sampler2DArray uAtlas;
+uniform float uLavaLayer;
+
+varying vec3 vWorld;
+varying vec3 vNormal;
+varying float vDist;
+
+float lavaWave(vec2 p, float t) {
+  vec2 q = p + vec2(sin(p.y * 0.45 + t * 0.28) * 0.65, cos(p.x * 0.42 - t * 0.24) * 0.65);
+  float w = sin(q.x * 0.68 + t * 0.34) * cos(q.y * 0.62 - t * 0.26);
+  w += 0.55 * sin((q.x * 1.15 - q.y * 0.92) + t * 0.48);
+  w += 0.28 * cos((q.x * 1.85 + q.y * 1.65) - t * 0.62);
+  return w * 0.5 + 0.5;
+}
+
+void main() {
+  bool isSide = abs(vNormal.y) < 0.6;
+  float t = uTime;
+  vec2 uvBase = isSide
+    ? (abs(vNormal.x) > 0.5 ? vec2(vWorld.z, vWorld.y + t * 0.55) : vec2(vWorld.x, vWorld.y + t * 0.55))
+    : (vWorld.xz + vec2(t * 0.07, -t * 0.05));
+
+  // 采样 16x16 像素岩浆贴图 + 缓慢黏稠翻涌扭曲
+  vec2 warp = vec2(sin(uvBase.y * 1.4 + t * 0.55), cos(uvBase.x * 1.3 - t * 0.48)) * 0.06;
+  vec3 texCol = texture(uAtlas, vec3(fract(uvBase * 0.5 + warp), uLavaLayer)).rgb;
+
+  // 多层黏稠岩浆热力场：暗红冷壳 → 橘红熔流 → 金黄亮脉 → 白炽核心
+  float heat = clamp(lavaWave(uvBase * 0.72, t), 0.0, 1.0);
+  float pulse = 0.92 + 0.08 * sin(t * 1.8 + uvBase.x * 0.5 + uvBase.y * 0.4);
+  vec3 crustCol = vec3(0.30, 0.055, 0.02);
+  vec3 magmaCol = vec3(0.96, 0.28, 0.035);
+  vec3 brightCol = vec3(1.18, 0.72, 0.12);
+  vec3 coreCol = vec3(1.38, 1.06, 0.52);
+
+  vec3 col = mix(crustCol, magmaCol, smoothstep(0.16, 0.48, heat));
+  col = mix(col, brightCol, smoothstep(0.52, 0.80, heat));
+  col = mix(col, coreCol, smoothstep(0.84, 0.98, heat));
+
+  // 融合像素岩浆纹理，保留体素世界的锐利质感
+  col = mix(col, texCol * 1.28, 0.36) * pulse;
+  if (isSide) col *= 1.06;
+
+  // 与下界深红迷雾无缝融合
+  float fogFactor = smoothstep(uFogNear, uFogFar, vDist);
+  col = mix(col, uFogColor, fogFactor);
+
+  float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+  gl_FragColor = vec4(col + dither * (1.5 / 255.0), 1.0);
+}`;
+
+const lavaMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+    uFogColor: { value: new THREE.Color(0x4d0e0a) },
+    uFogNear: { value: 22 },
+    uFogFar: { value: 115 },
+    uAtlas: { value: atlas.tex },
+    uLavaLayer: { value: atlas.T.lava },
+  },
+  vertexShader: waterVertex,
+  fragmentShader: lavaFragment,
+  transparent: false,
+  depthWrite: true,
+  side: THREE.DoubleSide,
+});
+
 /* ============================ 场景 ============================ */
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -3498,6 +3757,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 const FOG_COLOR = new THREE.Color(0xd9c9a6);
 const FOG_UNDERWATER = new THREE.Color(0x2478b8); // 清爽明亮透彻的碧蓝水色
+const FOG_LAVA = new THREE.Color(0xd4380a);       // 浸没熔岩时的炽烈橘红浓雾
 const _caveFogTarget = new THREE.Color();
 scene.fog = new THREE.Fog(FOG_COLOR, FOG_NEAR, FOG_FAR);
 
@@ -3864,6 +4124,7 @@ function updateEnvironment(t) {
   moon.intensity = night * 0.65;                                   // 月光（柔和清冷色）
   hemi.intensity = lerp(0.28, 0.36, day) * dim;                    // 半球光（PBR 天光氛围）
   hemi.color.setRGB(lerp(0.14, 0.75, day), lerp(0.18, 0.85, day), lerp(0.36, 1.0, day));
+  hemi.groundColor.setHex(0x8a7a5a);
   ambient.intensity = lerp(0.18, 0.24, day) * dim;                 // 环境光均匀柔和补光，消除死黑角
   if (player.nightVisionTimer && player.nightVisionTimer > 0) {
     // 开启【夜视药水】效果：照亮黑夜与深邃矿洞，如白昼般清晰通透
@@ -3894,16 +4155,22 @@ function updateEnvironment(t) {
   ambient.color.copy(skyMat.uniforms.uHorizon.value).lerp(_ambientNeutral, 0.45);
 
   if (inNether) {
-    // 下界异次元氛围：幽暗赤红天幕、熔岩翻滚霞光与深红迷雾
-    ambient.intensity = 0.58;
-    hemi.intensity = 0.52;
-    hemi.color.setRGB(0.85, 0.25, 0.18);
-    sun.intensity = 0.2;
-    sun.color.setRGB(0.9, 0.2, 0.1);
-    skyMat.uniforms.uZenith.value.setRGB(0.18, 0.02, 0.02);
-    skyMat.uniforms.uHorizon.value.setRGB(0.42, 0.08, 0.04);
-    skyMat.uniforms.uNight.value = 0.2;
-    FOG_COLOR.setRGB(0.32, 0.05, 0.04);
+    // 下界异次元氛围：幽暗赤红天幕、岩浆海暖橙底光与深红火山迷雾
+    sun.castShadow = false;
+    moon.castShadow = false;
+    moon.intensity = 0;
+    ambient.intensity = (player.nightVisionTimer && player.nightVisionTimer > 0) ? 1.15 : 0.84;
+    ambient.color.setRGB(0.96, 0.62, 0.50);
+    hemi.intensity = (player.nightVisionTimer && player.nightVisionTimer > 0) ? 1.0 : 0.82;
+    hemi.color.setRGB(0.88, 0.38, 0.28);
+    hemi.groundColor.setRGB(1.0, 0.54, 0.20); // 岩浆海自下而上的暖橙辉光
+    sun.intensity = 0.36;
+    sun.color.setRGB(1.0, 0.56, 0.32);
+    skyMat.uniforms.uZenith.value.setRGB(0.18, 0.03, 0.025);
+    skyMat.uniforms.uHorizon.value.setRGB(0.32, 0.06, 0.04);
+    skyMat.uniforms.uNight.value = 0.0;
+    skyMat.uniforms.uHaze.value = 0.0;
+    FOG_COLOR.setRGB(0.30, 0.055, 0.04);
   }
 
   // 水面材质环境更新
@@ -3941,6 +4208,7 @@ const badBand = (y) => {
 };
 /* 群系名（HUD 与调试用） */
 const BIOME_NAMES = { 1: '🌿 平原', 2: '🌲 森林', 3: '🏜️ 沙漠', 4: '❄️ 雪原', 5: '🐸 沼泽湿地', 6: '🌾 热带草原', 7: '🌳 白桦林', 8: '🌴 丛林', 9: '🏜️ 恶地', 10: '🍄 蘑菇岛', 11: '🌷 花海', 12: '🪨 砾石平原', 13: '🏖️ 白沙丘', 14: '🧊 冰刺平原', 15: '🌲 针叶林', 16: '🌴 沙漠绿洲', 17: '🌲 黑森林', 18: '🌸 樱花林', 19: '🎋 竹林', 20: '🌋 熔岩火山', 21: '🍁 枫树林', 22: '🏔️ 极地冰川', 23: '🌾 田园麦原' };
+const NETHER_BIOME_NAMES = { 1: '🔥 下界荒地', 2: '🦴 灵魂沙峡谷', 3: '🌋 玄武岩三角洲', 4: '🍄 绯红菌林', 5: '💠 诡异菌林' };
 
 // —— 储物箱数据存储与地牢宝箱生成 ——
 const chestStorages = new Map();
@@ -4023,15 +4291,208 @@ const GROUND_CACHE_MAX = 20000;
 let groundScans = 0;          // 调试用：缓存省下了多少格扫描
 
 class World {
-  constructor() { this.chunks = new Map(); }
+  constructor() {
+    this.overworldChunks = new Map();
+    this.netherChunks = new Map();
+    this.dim = 'overworld';
+    this.chunks = this.overworldChunks;
+  }
   chunkLoaded(cx, cz) { return this.chunks.has(key(cx, cz)); }
   ensureChunk(cx, cz) {
     const k = key(cx, cz);
     if (this.chunks.has(k)) return;
-    const c = { cx, cz, blocks: new Uint8Array(CHUNK * CHUNK * HEIGHT), water: new Uint8Array(CHUNK * CHUNK * HEIGHT), treesPlanted: false, dirty: true, group: null, edited: false, topY: 0 };
+    const isNetherDim = (this.dim === 'nether');
+    const c = {
+      cx, cz, dim: this.dim,
+      blocks: new Uint8Array(CHUNK * CHUNK * HEIGHT),
+      water: new Uint8Array(CHUNK * CHUNK * HEIGHT),
+      treesPlanted: isNetherDim,
+      villageChunk: isNetherDim ? false : undefined,
+      villageBuilt: isNetherDim,
+      dirty: true, group: null, edited: false, topY: 0
+    };
     this.chunks.set(k, c);
-    this._fill(c);
+    if (isNetherDim) this._fillNether(c);
+    else this._fill(c);
     applyEditedChunk(c);   // 有存档/卸载快照就把改动盖回去（离出生点很远的地方也能恢复）
+  }
+  _fillNether(c) {
+    const baseX = c.cx * CHUNK, baseZ = c.cz * CHUNK;
+    const colMeta = new Array(256);
+    for (let lz = 0; lz < CHUNK; lz++) {
+      const wz = baseZ + lz;
+      for (let lx = 0; lx < CHUNK; lx++) {
+        const wx = baseX + lx;
+        const bm = netherBiomeAt(wx, wz);
+        const { floorH, ceilH, patch } = netherColumnAt(wx, wz);
+        colMeta[lz * 16 + lx] = { bm, floorH, ceilH, patch };
+        for (let y = 0; y < HEIGHT; y++) {
+          const idx = y * 256 + lz * 16 + lx;
+          if (y <= 1 || y >= HEIGHT - 2) {
+            c.blocks[idx] = B.BEDROCK;
+            continue;
+          }
+          if (y === 2 || y === HEIGHT - 3) {
+            c.blocks[idx] = plantHash(wx * 5 + y * 13, wz * 7 - y * 11) < 0.56 ? B.BEDROCK : B.NETHERRACK;
+            continue;
+          }
+          let isSolidVox = (y <= floorH || y >= ceilH);
+          if (y > 6 && y < HEIGHT - 5) {
+            // 中层 3D 下界岩洞拱桥、悬崖台地与地下熔岩隧洞
+            if (!isSolidVox && y < ceilH && y > floorH) {
+              const n3 = netherCavernNoise(wx, y, wz);
+              // 保留熔岩海上方开阔视野，同时生成壮观的地狱岩拱桥与孤柱
+              const archThreshold = (y >= NETHER_SEA + 1 && y <= NETHER_SEA + 18) ? 0.27 : 0.21;
+              if (n3 > archThreshold) isSolidVox = true;
+            } else if (isSolidVox && y <= floorH && floorH > NETHER_SEA + 5 && y > 8) {
+              const n3 = netherCavernNoise(wx, y, wz);
+              if (n3 < -0.25) isSolidVox = false;
+            }
+          }
+          if (isSolidVox) {
+            let id = B.NETHERRACK;
+            if (bm === 3) {
+              // 玄武岩三角洲：黑石与玄武岩为主体
+              id = patch > 0.10 ? B.BASALT : B.BLACKSTONE;
+            } else if (bm === 2 && y >= floorH - 2 && y <= floorH) {
+              // 灵魂沙峡谷浅表基底
+              id = B.SOUL_SAND;
+            } else {
+              // 地狱岩主体 + 下界石英矿 / 下界金矿矿脉
+              id = netherOreFor(wx, y, wz);
+            }
+            c.blocks[idx] = id;
+          } else if (y <= NETHER_SEA) {
+            // 岩浆海平面以下所有开放空腔注入炽烈熔岩流体（c.water 槽位）
+            c.water[idx] = 8;
+          }
+        }
+      }
+    }
+
+    // 第二遍：下界地表覆层（灵魂沙滩、岩浆块岸边、绯红/诡异菌岩、玄武岩柱、顶部悬垂萤石簇与高空熔岩瀑布）
+    for (let lz = 0; lz < CHUNK; lz++) {
+      const wz = baseZ + lz;
+      for (let lx = 0; lx < CHUNK; lx++) {
+        const wx = baseX + lx;
+        const { bm, floorH, ceilH, patch } = colMeta[lz * 16 + lx];
+
+        // 地表/岸边覆层（自上而下扫描，杜绝向上循环把新放置的蘑菇/石柱层层叠到穹顶）
+        let colFeaturePlaced = false;
+        for (let y = Math.min(HEIGHT - 8, ceilH - 2); y >= Math.max(4, NETHER_SEA - 3); y--) {
+          const idx = y * 256 + lz * 16 + lx;
+          const id = c.blocks[idx];
+          if (id !== B.NETHERRACK && id !== B.SOUL_SAND && id !== B.BLACKSTONE && id !== B.BASALT) continue;
+          const aboveIdx = (y + 1) * 256 + lz * 16 + lx;
+          const aboveB = c.blocks[aboveIdx];
+          const aboveW = c.water[aboveIdx];
+          if (aboveB !== B.AIR) continue;
+
+          // 熔岩海岸线（y ≈ NETHER_SEA-2 .. NETHER_SEA+2）
+          if (y >= NETHER_SEA - 2 && y <= NETHER_SEA + 2) {
+            if (bm === 1) {
+              if (patch > 0.28) c.blocks[idx] = B.SOUL_SAND;
+              else if (patch < -0.30) c.blocks[idx] = B.GRAVEL;
+              else if (y === NETHER_SEA && plantHash(wx * 13 + 3, wz * 17 + 5) < 0.24) c.blocks[idx] = B.MAGMA;
+            } else if (bm === 2) {
+              c.blocks[idx] = B.SOUL_SAND;
+            } else if (bm === 3 && y <= NETHER_SEA + 1 && plantHash(wx * 11 + 2, wz * 19 + 7) < 0.28) {
+              c.blocks[idx] = B.MAGMA;
+            }
+          }
+
+          // 熔岩海之上干燥暴露地表的群系装饰
+          if (aboveW === 0 && y > NETHER_SEA) {
+            if (bm === 4 && id === B.NETHERRACK) {
+              c.blocks[idx] = B.CRIMSON_NYLIUM;
+              if (!colFeaturePlaced && plantHash(wx * 9 + y * 3, wz * 13 + 7) < 0.036) {
+                c.blocks[aboveIdx] = B.MUSHROOM_RED;
+                colFeaturePlaced = true;
+              }
+            } else if (bm === 5 && id === B.NETHERRACK) {
+              c.blocks[idx] = B.WARPED_NYLIUM;
+              if (!colFeaturePlaced && plantHash(wx * 7 + y * 5, wz * 11 + 9) < 0.036) {
+                c.blocks[aboveIdx] = B.MUSHROOM_BROWN;
+                colFeaturePlaced = true;
+              }
+            } else if (bm === 2) {
+              c.blocks[idx] = B.SOUL_SAND;
+              if (y > 4 && c.blocks[(y - 1) * 256 + lz * 16 + lx] === B.NETHERRACK) {
+                c.blocks[(y - 1) * 256 + lz * 16 + lx] = B.SOUL_SAND;
+              }
+              // 灵魂沙峡谷稀疏玄武岩石柱（每列最多 1 根）
+              if (!colFeaturePlaced && y <= NETHER_SEA + 12 && plantHash(wx * 17 + 3, wz * 23 + 11) < 0.0045) {
+                const ph = 4 + Math.floor(plantHash(wx * 3 + 7, wz * 5 + 2) * 7);
+                for (let k = 1; k <= ph && y + k < ceilH - 2; k++) {
+                  const pidx = (y + k) * 256 + lz * 16 + lx;
+                  if (c.blocks[pidx] === B.AIR) c.blocks[pidx] = B.BASALT;
+                }
+                colFeaturePlaced = true;
+              }
+            } else if (bm === 3) {
+              // 玄武岩三角洲尖锐玄武岩/黑石石笋（每列最多 1 根）
+              if (!colFeaturePlaced && plantHash(wx * 19 + 1, wz * 29 + 3) < 0.018) {
+                const sh = 2 + Math.floor(plantHash(wx * 7 + 1, wz * 11 + 4) * 4);
+                for (let k = 1; k <= sh && y + k < ceilH - 2; k++) {
+                  const sidx = (y + k) * 256 + lz * 16 + lx;
+                  if (c.blocks[sidx] === B.AIR) c.blocks[sidx] = (k % 2 === 0 ? B.BLACKSTONE : B.BASALT);
+                }
+                colFeaturePlaced = true;
+              }
+            } else if (bm === 1 && !colFeaturePlaced && id === B.NETHERRACK && plantHash(wx * 23 + y * 7, wz * 17 + 9) < 0.012) {
+              c.blocks[aboveIdx] = plantHash(wx + 3, wz + 7) < 0.5 ? B.MUSHROOM_BROWN : B.MUSHROOM_RED;
+              colFeaturePlaced = true;
+            }
+          }
+        }
+
+        // 穹顶悬垂萤石晶簇（照亮下界地狱岩天幕）
+        const cgx = Math.floor(wx / 3), cgz = Math.floor(wz / 3);
+        if (plantHash(cgx * 19 + 5, cgz * 23 + 11) < 0.068) {
+          let roofY = -1;
+          for (let y = Math.min(HEIGHT - 5, ceilH + 2); y >= Math.max(NETHER_SEA + 18, ceilH - 6); y--) {
+            if (c.blocks[y * 256 + lz * 16 + lx] !== B.AIR && c.blocks[(y - 1) * 256 + lz * 16 + lx] === B.AIR) {
+              roofY = y;
+              break;
+            }
+          }
+          if (roofY > NETHER_SEA + 18) {
+            const centerDist = Math.abs((wx - cgx * 3) - 1) + Math.abs((wz - cgz * 3) - 1);
+            const dropLen = Math.max(1, 4 - centerDist - Math.floor(plantHash(wx * 7, wz * 13) * 2));
+            for (let k = 1; k <= dropLen && roofY - k > NETHER_SEA + 6; k++) {
+              const gidx = (roofY - k) * 256 + lz * 16 + lx;
+              if (c.blocks[gidx] === B.AIR && c.water[gidx] === 0) c.blocks[gidx] = B.GLOWSTONE;
+              else break;
+            }
+          }
+        }
+
+        // 稀有壮观高空熔岩瀑布（从岩壁/穹顶边缘笔直倾泻入熔岩海）
+        if (plantHash(wx * 31 + 7, wz * 37 + 13) < 0.0014) {
+          let startY = -1;
+          for (let y = Math.min(HEIGHT - 8, ceilH); y >= NETHER_SEA + 14; y--) {
+            if (c.blocks[y * 256 + lz * 16 + lx] !== B.AIR && c.blocks[(y - 1) * 256 + lz * 16 + lx] === B.AIR) {
+              startY = y - 1;
+              break;
+            }
+          }
+          if (startY >= NETHER_SEA + 14) {
+            let clear = true;
+            for (let yy = startY; yy > NETHER_SEA; yy--) {
+              if (c.blocks[yy * 256 + lz * 16 + lx] !== B.AIR) { clear = false; break; }
+            }
+            if (clear) {
+              c.water[startY * 256 + lz * 16 + lx] = 8;
+              for (let yy = startY - 1; yy > NETHER_SEA; yy--) {
+                c.water[yy * 256 + lz * 16 + lx] = 7;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    c.topY = HEIGHT - 1;
   }
   _fill(c) {
     const baseX = c.cx * CHUNK, baseZ = c.cz * CHUNK;
@@ -4462,13 +4923,15 @@ function markDirtyBlock(x, y, z) {
 }
 
 /* ============================ 存档（localStorage） ============================ */
-/* 已编辑、但当前可能已被卸载的区块。卸载时把数组交给它保管，
-   否则 30 秒自动存档会因为"人走远了、区块被卸载"而把改动整片丢掉。 */
-const editedChunks = new Map();   // 数值 key(cx,cz) -> { cx, cz, blocks, water }
+/* 已编辑、但当前可能已被卸载的区块（主世界与下界分维度独立保管，互不串写）。 */
+const overworldEdited = new Map(); // 数值 key(cx,cz) -> { cx, cz, blocks, water }
+const netherEdited = new Map();
+let editedChunks = overworldEdited;
 
 function stashEditedChunk(c) {
   if (!c.edited) return;
-  editedChunks.set(key(c.cx, c.cz), { cx: c.cx, cz: c.cz, blocks: c.blocks, water: c.water });
+  const map = (c.dim === 'nether') ? netherEdited : overworldEdited;
+  map.set(key(c.cx, c.cz), { cx: c.cx, cz: c.cz, blocks: c.blocks, water: c.water });
 }
 
 /* 恢复区块里的火把光源：否则读档后火把还在，却不再发光 */
@@ -4486,7 +4949,8 @@ function restoreTorchLights(c) {
 /* 区块（重新）加载时，把存档/快照里的改动盖回去 */
 function applyEditedChunk(c) {
   const k = key(c.cx, c.cz);
-  const s = editedChunks.get(k);
+  const map = (c.dim === 'nether') ? netherEdited : overworldEdited;
+  const s = map.get(k);
   if (!s) return false;
   if (s.blocks && s.blocks.length === c.blocks.length) c.blocks.set(s.blocks);
   if (s.water && s.water.length === c.water.length) c.water.set(s.water);
@@ -4494,7 +4958,7 @@ function applyEditedChunk(c) {
   c.topY = world._recalcTop(c);   // 再往下找回真正的顶：之后网格化就不会白扫空气层
   c.edited = true;
   c.dirty = true;
-  editedChunks.delete(k);         // 已装回区块，之后以区块自身为准
+  map.delete(k);                  // 已装回区块，之后以区块自身为准
   restoreTorchLights(c);
   return true;
 }
@@ -4516,40 +4980,39 @@ function base64ToUint8(str) {
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return arr;
 }
-function saveWorld() {
-  if (discardSave) return;   // 刚清过档：别让 beforeunload 把旧世界又写回去
+function saveDimChunks(storageKey, chunkMap, editedMap) {
   const seen = new Set();
   const saved = [];
   const push = (cx, cz, blocks, water) => {
     const k = cx + ',' + cz;
-    if (seen.has(k)) return;      // 同一区块只写一次（内存里的优先）
+    if (seen.has(k)) return;
     seen.add(k);
-    /* 不含水的区块不写 water，能省掉约一半体积（陆地区块占大多数） */
     saved.push({ cx, cz, b: uint8ToBase64(blocks), w: allZero(water) ? '' : uint8ToBase64(water) });
   };
-  for (const c of world.chunks.values()) if (c.edited) push(c.cx, c.cz, c.blocks, c.water);
-  for (const s of editedChunks.values()) push(s.cx, s.cz, s.blocks, s.water);
+  for (const c of chunkMap.values()) if (c.edited) push(c.cx, c.cz, c.blocks, c.water);
+  for (const s of editedMap.values()) push(s.cx, s.cz, s.blocks, s.water);
+  if (saved.length === 0) return;
+  const writeWorld = (list) => localStorage.setItem(storageKey, JSON.stringify(list));
   try {
-    if (saved.length > 0) {
-      /* 村庄/道路会横跨十几个区块，每个区块 base64 后约 33KB —— 存档很容易顶到
-         localStorage 的 5MB 配额。配额爆掉时如果直接放弃，玩家连身边的家都会丢。
-         这里做"按距离裁剪"降级：先保玩家附近，逐步砍半，直到写得进去。 */
-      const writeWorld = (list) => localStorage.setItem('mc_world_v1', JSON.stringify(list));
-      try {
-        writeWorld(saved);
-      } catch (quotaErr) {
-        const px = Math.floor(player.pos.x / 16), pz = Math.floor(player.pos.z / 16);
-        const ranked = saved.slice().sort((a, b) =>
-          (Math.abs(a.cx - px) + Math.abs(a.cz - pz)) - (Math.abs(b.cx - px) + Math.abs(b.cz - pz)));
-        let keep = ranked;
-        let ok = false;
-        for (let attempt = 0; attempt < 8 && !ok; attempt++) {
-          keep = ranked.slice(0, Math.max(12, Math.ceil(keep.length / 2)));
-          try { writeWorld(keep); ok = true; } catch (e2) { /* 继续砍半 */ }
-        }
-        if (!ok) console.warn('[save] localStorage 配额不足，本次仅保存背包');
-      }
+    writeWorld(saved);
+  } catch (quotaErr) {
+    const px = Math.floor(player.pos.x / 16), pz = Math.floor(player.pos.z / 16);
+    const ranked = saved.slice().sort((a, b) =>
+      (Math.abs(a.cx - px) + Math.abs(a.cz - pz)) - (Math.abs(b.cx - px) + Math.abs(b.cz - pz)));
+    let keep = ranked;
+    let ok = false;
+    for (let attempt = 0; attempt < 8 && !ok; attempt++) {
+      keep = ranked.slice(0, Math.max(12, Math.ceil(keep.length / 2)));
+      try { writeWorld(keep); ok = true; } catch (e2) { /* 继续砍半 */ }
     }
+    if (!ok) console.warn(`[save] localStorage 配额不足，跳过写入 ${storageKey}`);
+  }
+}
+function saveWorld() {
+  if (discardSave) return;   // 刚清过档：别让 beforeunload 把旧世界又写回去
+  try {
+    saveDimChunks('mc_world_v1', world.overworldChunks, overworldEdited);
+    saveDimChunks('mc_nether_v2', world.netherChunks, netherEdited);
     // 背包存档（含工具耐久）
     const invData = {
       hotbar: hotbar.map((s) => (s ? [s.id, s.count, s.dur || 0] : null)),
@@ -4581,8 +5044,9 @@ function saveWorld() {
 function loadWorld() {
   let restoredInv = false;
   try {
-    const raw = localStorage.getItem('mc_world_v1');
-    if (raw) {
+    const loadDimMap = (storageKey, targetMap) => {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return;
       const saved = JSON.parse(raw);
       const need = CHUNK * CHUNK * HEIGHT;
       for (const s of saved) {
@@ -4590,14 +5054,16 @@ function loadWorld() {
         const blocks = base64ToUint8(s.b || '');
         if (blocks.length !== need) continue;          // 旧版/损坏的存档直接跳过，别把数组写坏
         const water = s.w ? base64ToUint8(s.w) : new Uint8Array(need);
-        editedChunks.set(key(s.cx, s.cz), {
+        targetMap.set(key(s.cx, s.cz), {
           cx: s.cx, cz: s.cz, blocks,
           water: water.length === need ? water : new Uint8Array(need),
         });
       }
-      // 已经加载过的区块（开局的 7×7）立刻盖回去；其余的等 ensureChunk 时再盖
-      for (const c of [...world.chunks.values()]) applyEditedChunk(c);
-    }
+    };
+    loadDimMap('mc_world_v1', overworldEdited);
+    loadDimMap('mc_nether_v2', netherEdited);
+    // 已经加载过的区块（开局的 7×7）立刻盖回去；其余的等 ensureChunk 时再盖
+    for (const c of [...world.overworldChunks.values()]) applyEditedChunk(c);
     const invRaw = localStorage.getItem('mc_inv_v1');
     if (invRaw) {
       const d = JSON.parse(invRaw);
@@ -4869,7 +5335,12 @@ function aoAt(bx, by, bz, f, wx, wy, wz, solid) {
   return AO_LEVELS[occ];
 }
 
-function undergroundFactor(colTop, lx, lz, y) {
+function undergroundFactor(colTop, lx, lz, y, isNether) {
+  if (isNether) {
+    // 下界天然被地狱岩穹顶封顶，依靠岩浆海辉光与熔岩热雾提供柔和照明，避免整片下界被主世界地下衰减压黑
+    const lavaBoost = y <= NETHER_SEA + 8 ? Math.max(0, 1 - Math.abs(y - NETHER_SEA) / 9) * 0.12 : 0;
+    return Math.min(1.0, 0.90 + lavaBoost);
+  }
   const t = colTop[lz * 16 + lx];
   if (t < 0 || y >= t) return 1.0;
   return Math.max(0.32, 0.62 - (t - y) * 0.006);
@@ -4931,6 +5402,7 @@ function pushGreedyFace(A, f, ox, oy, oz, W, D, tile, under, baseX, baseZ) {
 }
 // 不透明方块贪心网格（按 6 个方向分别合并）
 function buildOpaqueGreedy(c, A, baseX, baseZ, yMax, colTop, getB, solid) {
+  const isNetherChunk = (c.dim === 'nether');
   const mask = new Uint8Array((yMax + 1) * 16);
   const keys = new Int32Array((yMax + 1) * 16);
   const blk = [0, 0, 0];
@@ -4953,7 +5425,9 @@ function buildOpaqueGreedy(c, A, baseX, baseZ, yMax, colTop, getB, solid) {
         if (!isSeeThrough(nb)) continue;
         let tile = tileFace(id, fi);
         if (id === B.CHEST && f.face === 'side' && fdz === 1) tile = atlas.T.chestFront;
-        const under = undergroundFactor(colTop, lx, lz, ly);
+        const under = (id === B.GLOWSTONE || id === B.MAGMA || id === B.SEA_LANTERN || id === B.REDSTONE_LAMP_ON)
+          ? 1.0
+          : undergroundFactor(colTop, lx, lz, ly, isNetherChunk);
         if (aoAllOne(bx, ly, bz, f, solid)) {
           mask[t2 * 16 + t1] = 1;
           keys[t2 * 16 + t1] = tile * 2000 + Math.min(999, Math.max(0, Math.round(under * 1000)));
@@ -5359,28 +5833,29 @@ function buildChunkGeometry(c) {
           pushSubBox(T, wx, y, wz, 0.28, 0.02, 0.28, 0.72, 0.68, 0.72, lt.top, lt.side, lt.bottom, 1.0);
           continue;
         }
+        const isNetherChunk = (c.dim === 'nether');
         if (id === B.BELL) {
           const bt = tileOf(id);
-          pushSubBox(C, wx, y, wz, 0.16, 0.16, 0.16, 0.84, 0.96, 0.84, bt.top, bt.side, bt.bottom, undergroundFactor(colTop, lx, lz, y));
+          pushSubBox(C, wx, y, wz, 0.16, 0.16, 0.16, 0.84, 0.96, 0.84, bt.top, bt.side, bt.bottom, undergroundFactor(colTop, lx, lz, y, isNetherChunk));
           continue;
         }
         if (id === B.GRINDSTONE) {
           const gt = tileOf(id);
-          pushSubBox(C, wx, y, wz, 0.14, 0.0, 0.14, 0.86, 0.82, 0.86, gt.top, gt.side, gt.bottom, undergroundFactor(colTop, lx, lz, y));
+          pushSubBox(C, wx, y, wz, 0.14, 0.0, 0.14, 0.86, 0.82, 0.86, gt.top, gt.side, gt.bottom, undergroundFactor(colTop, lx, lz, y, isNetherChunk));
           continue;
         }
         if (id === B.CHAIN || id === B.LIGHTNING_ROD) {
           const ct = tileOf(id);
-          pushSubBox(C, wx, y, wz, 0.40, 0.0, 0.40, 0.60, 1.0, 0.60, ct.top, ct.side, ct.bottom, undergroundFactor(colTop, lx, lz, y));
+          pushSubBox(C, wx, y, wz, 0.40, 0.0, 0.40, 0.60, 1.0, 0.60, ct.top, ct.side, ct.bottom, undergroundFactor(colTop, lx, lz, y, isNetherChunk));
           continue;
         }
         if (id === B.LEVER || id === B.BUTTON) {
           const st = tileOf(id);
-          pushSubBox(C, wx, y, wz, 0.30, 0.0, 0.30, 0.70, id === B.LEVER ? 0.55 : 0.22, 0.70, st.top, st.side, st.bottom, undergroundFactor(colTop, lx, lz, y));
+          pushSubBox(C, wx, y, wz, 0.30, 0.0, 0.30, 0.70, id === B.LEVER ? 0.55 : 0.22, 0.70, st.top, st.side, st.bottom, undergroundFactor(colTop, lx, lz, y, isNetherChunk));
           continue;
         }
         if (id === B.GLASS) {                     // 玻璃：cutout，逐面（不参与贪心）
-          const under = undergroundFactor(colTop, lx, lz, y);
+          const under = undergroundFactor(colTop, lx, lz, y, isNetherChunk);
           for (let fi = 0; fi < 6; fi++) {
             const f = FACES[fi];
             const nb = getB(wx + f.dir[0], y + f.dir[1], wz + f.dir[2]);
@@ -5433,7 +5908,11 @@ function buildChunkMeshes(c) {
   const geo = buildChunkGeometry(c);
   if (geo.opaque) { const m = new THREE.Mesh(geo.opaque, opaqueMat); m.castShadow = true; m.receiveShadow = true; g.add(m); }
   if (geo.cutout) { const m = new THREE.Mesh(geo.cutout, cutoutMat); m.castShadow = true; m.receiveShadow = true; g.add(m); }
-  if (geo.water) { const m = new THREE.Mesh(geo.water, waterMat); m.castShadow = false; m.receiveShadow = false; g.add(m); }
+  if (geo.water) {
+    const fluidMat = (c.dim === 'nether') ? lavaMat : waterMat;
+    const m = new THREE.Mesh(geo.water, fluidMat);
+    m.castShadow = false; m.receiveShadow = false; g.add(m);
+  }
   if (geo.torch) { const m = new THREE.Mesh(geo.torch, torchMat); g.add(m); }
   if (geo.portal) { const m = new THREE.Mesh(geo.portal, portalMat); m.renderOrder = 2; g.add(m); }
   c.group = g;
@@ -5465,16 +5944,18 @@ function waterStep(x, y, z) {
   const L = world.getWater(x, y, z);
   if (L === 0) return;
 
-  // 检测水流接触岩浆块生成黑曜石 (Water meets Magma creates Obsidian)
-  const checkDirs = [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
-  for (const [cdx, cdy, cdz] of checkDirs) {
-    const cx = x + cdx, cy = y + cdy, cz = z + cdz;
-    if (cy >= 0 && cy < HEIGHT && world.getBlock(cx, cy, cz) === B.MAGMA) {
-      world.setBlock(cx, cy, cz, B.OBSIDIAN);
-      burst(0.2, 0.15, 1200, 'bandpass');
-      spawnParticles(cx + 0.5, cy + 1.0, cz + 0.5, 0x555555, 14);
-      spawnParticles(cx + 0.5, cy + 1.0, cz + 0.5, 0x22182c, 10);
-      toast('💨 水流冷却了岩浆块，凝固形成了坚不可摧的【黑曜石】！');
+  // 仅主世界水流接触岩浆块时生成黑曜石；下界流体本身即为岩浆，不与岩浆块反应
+  if (!inNether) {
+    const checkDirs = [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
+    for (const [cdx, cdy, cdz] of checkDirs) {
+      const cx = x + cdx, cy = y + cdy, cz = z + cdz;
+      if (cy >= 0 && cy < HEIGHT && world.getBlock(cx, cy, cz) === B.MAGMA) {
+        world.setBlock(cx, cy, cz, B.OBSIDIAN);
+        burst(0.2, 0.15, 1200, 'bandpass');
+        spawnParticles(cx + 0.5, cy + 1.0, cz + 0.5, 0x555555, 14);
+        spawnParticles(cx + 0.5, cy + 1.0, cz + 0.5, 0x22182c, 10);
+        toast('💨 水流冷却了岩浆块，凝固形成了坚不可摧的【黑曜石】！');
+      }
     }
   }
 
@@ -5523,7 +6004,8 @@ function waterStep(x, y, z) {
       }
     }
   }
-  if (L > 1) {
+  const minFlowLevel = inNether ? 3 : 1; // 下界岩浆更黏稠，水平蔓延距离略短于清水
+  if (L > minFlowLevel) {
     const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     for (const [dx, dz] of dirs) {
       const nx = x + dx, nz = z + dz;
@@ -5644,6 +6126,9 @@ const BLOCK_COLORS = {
   [B.RED_TERRACOTTA]: 0x923e30, [B.ORANGE_TERRACOTTA]: 0xae5c2c, [B.YELLOW_TERRACOTTA]: 0xbe8c38, [B.TERRACOTTA]: 0x9a664c,
   [B.MYCELIUM]: 0x726672, [B.WHITE_SAND]: 0xeae6da, [B.PODZOL]: 0x6c4824,
   [B.DEEPSLATE]: 0x42444a, [B.MUD]: 0x403a40, [B.FARMLAND]: 0x5c3a20, [B.DIRT_PATH]: 0xa88a4c,
+  [B.NETHERRACK]: 0x722c2a, [B.SOUL_SAND]: 0x544034, [B.NETHER_BRICKS]: 0x30181e,
+  [B.NETHER_QUARTZ_ORE]: 0xb87670, [B.NETHER_GOLD_ORE]: 0xd8a032, [B.BLACKSTONE]: 0x2c2832,
+  [B.CRIMSON_NYLIUM]: 0x94202c, [B.WARPED_NYLIUM]: 0x187e7a,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -5754,6 +6239,12 @@ function rainChance(bm) {
   return 0.40;                                             // 其余
 }
 function updateWeather(dt) {
+  if (inNether) {
+    rain.lines.visible = false;
+    snow.lines.visible = false;
+    precip = 0;
+    return;
+  }
   weatherTimer -= dt;
   if (weatherTimer <= 0) {
     const bm = biomeOf(Math.floor(player.pos.x), Math.floor(player.pos.z));
@@ -11735,15 +12226,32 @@ function tryLightNetherPortal(hit) {
 }
 
 function buildNetherStructure(nx, ny, nz) {
-  // 生成下界要塞玄武岩与岩浆平台
+  // 生成下界要塞下界砖与黑石平台 + 支撑石柱（直达下方实心地形/熔岩海底，绝不悬空）
   for (let dx = -4; dx <= 4; dx++) {
     for (let dz = -4; dz <= 4; dz++) {
       const isEdge = Math.abs(dx) === 4 || Math.abs(dz) === 4;
-      world.setBlock(nx + dx, ny, nz + dz, isEdge ? B.MAGMA : B.BASALT);
-      for (let dy = 1; dy <= 6; dy++) {
+      const isCorner = Math.abs(dx) === 4 && Math.abs(dz) === 4;
+      const floorBlock = isCorner ? B.BLACKSTONE : (isEdge ? B.NETHER_BRICKS : ((Math.abs(dx) + Math.abs(dz)) % 3 === 0 ? B.BLACKSTONE : B.NETHER_BRICKS));
+      world.setBlock(nx + dx, ny, nz + dz, floorBlock);
+      world.setBlock(nx + dx, ny - 1, nz + dz, B.NETHERRACK);
+      for (let dy = 1; dy <= 7; dy++) {
         world.setBlock(nx + dx, ny + dy, nz + dz, B.AIR);
+        world.setWater(nx + dx, ny + dy, nz + dz, 0);
+      }
+      // 四角下界砖支撑柱向下延伸直至触底
+      if (isCorner) {
+        for (let py = ny - 2; py >= 3; py--) {
+          const cur = world.getBlock(nx + dx, py, nz + dz);
+          if (cur !== B.AIR && cur !== B.WATER) break;
+          world.setBlock(nx + dx, py, nz + dz, B.NETHER_BRICKS);
+        }
       }
     }
+  }
+  // 边缘矮护栏（四角留出下界砖护柱与荧石灯，防止刚进下界踩空跌入岩浆海）
+  for (const [cx, cz] of [[-4, -4], [4, -4], [-4, 4], [4, 4]]) {
+    world.setBlock(nx + cx, ny + 1, nz + cz, B.NETHER_BRICKS);
+    world.setBlock(nx + cx, ny + 2, nz + cz, B.GLOWSTONE);
   }
   // 下界黑曜石传送门回程架构
   world.setBlock(nx - 1, ny, nz, B.OBSIDIAN);
@@ -11760,17 +12268,62 @@ function buildNetherStructure(nx, ny, nz) {
       world.setBlock(nx - 1 + i, ny + dy, nz, B.NETHER_PORTAL);
     }
   }
-  // 四角萤石灯柱
-  world.setBlock(nx - 3, ny + 1, nz - 3, B.GLOWSTONE);
-  world.setBlock(nx + 3, ny + 1, nz - 3, B.GLOWSTONE);
-  world.setBlock(nx - 3, ny + 1, nz + 3, B.GLOWSTONE);
-  world.setBlock(nx + 3, ny + 1, nz + 3, B.GLOWSTONE);
+  // 四角萤石灯柱与玄武岩装饰底座
+  for (const [gx, gz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) {
+    world.setBlock(nx + gx, ny, nz + gz, B.BASALT);
+    world.setBlock(nx + gx, ny + 1, nz + gz, B.GLOWSTONE);
+  }
 
   for (let dx = -4; dx <= 4; dx += 4) {
     for (let dz = -4; dz <= 4; dz += 4) {
       enqueueAround(nx + dx, ny, nz + dz);
     }
   }
+}
+
+function setOverworldEntitiesVisible(visible) {
+  const groups = [animals, zombies, creepers, skeletons, endermen, spiders, villagers, horses, wolves, cats, ironGolems, snowGolems, pillagers, ravagers, traderLlamas];
+  for (const arr of groups) {
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i] && arr[i].g) arr[i].g.visible = visible;
+    }
+  }
+  if (wanderingTrader && wanderingTrader.g) wanderingTrader.g.visible = visible;
+  // 清理当前场景掉落物，避免另一维度的掉落物悬浮在新维度里
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (items[i] && items[i].mesh) scene.remove(items[i].mesh);
+  }
+  items.length = 0;
+}
+
+function switchDimension(toNether) {
+  if (player.ridingHorse) player.ridingHorse = null;
+  stopBreaking();
+
+  // 1. 卸载当前维度的已挂载场景网格（数据保留在对应维度 chunk map 中，绝不丢失）
+  for (const c of world.chunks.values()) {
+    if (c.group) { scene.remove(c.group); disposeGroup(c.group); c.group = null; }
+    c.dirty = true;
+  }
+  // 2. 清理当前维度动态火把光源、流体更新队列与立柱高度缓存
+  for (const l of torchLights.values()) scene.remove(l);
+  torchLights.clear();
+  waterQ.length = 0;
+  waterHead = 0;
+  waterSet.clear();
+  groundCache.clear();
+
+  // 3. 切换维度状态与独立区块仓库
+  inNether = toNether;
+  world.dim = toNether ? 'nether' : 'overworld';
+  world.chunks = toNether ? world.netherChunks : world.overworldChunks;
+  editedChunks = toNether ? netherEdited : overworldEdited;
+
+  // 4. 隐藏/恢复主世界生物，避免动物与村民漂浮在下界岩浆海里
+  setOverworldEntitiesVisible(!toNether);
+
+  // 5. 立即同步环境光照与迷雾
+  updateEnvironment(timeOfDay);
 }
 
 function teleportDimension() {
@@ -11786,20 +12339,50 @@ function teleportDimension() {
   if (!inNether) {
     // 主世界 → 下界
     overworldPortalPos = { x: player.pos.x, y: player.pos.y, z: player.pos.z };
-    inNether = true;
-    const nx = Math.floor(player.pos.x * 0.25) + 320;
-    const nz = Math.floor(player.pos.z * 0.25) + 320;
-    const ny = 35;
+    const nx = Math.floor(player.pos.x * 0.125);
+    const nz = Math.floor(player.pos.z * 0.125);
+    const ny = NETHER_SEA + 8; // 安全高于岩浆海平面 (y = 36)
 
+    switchDimension(true);
+    // 预生成抵达点周围 5x5 下界区块，保证传送门平台与周边地狱岩/岩浆海立刻成形
+    const ncx = Math.floor(nx / CHUNK), ncz = Math.floor(nz / CHUNK);
+    for (let dz = -2; dz <= 2; dz++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        world.ensureChunk(ncx + dx, ncz + dz);
+      }
+    }
     buildNetherStructure(nx, ny, nz);
-    player.pos.set(nx - 0.5, ny + 1.05, nz + 0.5);
+    // 立刻构建落地核心 3x3 区块网格，避免脚下一瞬透明
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const cc = world.chunks.get(key(ncx + dx, ncz + dz));
+        if (cc) buildChunkMeshes(cc);
+      }
+    }
+
+    player.pos.set(nx - 0.5, ny + 1.05, nz + 1.5);
     player.vel.set(0, 0, 0);
     spawnParticles(player.pos.x, player.pos.y + 1, player.pos.z, 0xa855f7, 42);
-    toast('🌋 穿越维度裂隙，抵达炽烈神秘的【下界】！');
+    toast('🔥 穿越维度裂隙，抵达熔岩翻涌的【下界】！');
   } else {
     // 下界 → 主世界
-    inNether = false;
     const target = overworldPortalPos || { x: 0, y: 70, z: 0 };
+    switchDimension(false);
+    const ocx = Math.floor(target.x / CHUNK), ocz = Math.floor(target.z / CHUNK);
+    for (let dz = -2; dz <= 2; dz++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        world.ensureChunk(ocx + dx, ocz + dz);
+      }
+    }
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const cc = world.chunks.get(key(ocx + dx, ocz + dz));
+        if (cc) {
+          restoreTorchLights(cc);
+          buildChunkMeshes(cc);
+        }
+      }
+    }
     player.pos.set(target.x, target.y + 0.05, target.z);
     player.vel.set(0, 0, 0);
     spawnParticles(player.pos.x, player.pos.y + 1, player.pos.z, 0x5fd184, 42);
@@ -13033,7 +13616,7 @@ function isPlaceable(id) {
   if (isFood(id)) return false;   // 食物不可放置
   return true;
 }
-function isOre(id) { return id === B.COAL || id === B.IRON || id === B.GOLD || id === B.DIAMOND || id === B.EMERALD_ORE || id === B.LAPIS_ORE || id === B.REDSTONE_ORE || id === B.COPPER_ORE; }
+function isOre(id) { return id === B.COAL || id === B.IRON || id === B.GOLD || id === B.DIAMOND || id === B.EMERALD_ORE || id === B.LAPIS_ORE || id === B.REDSTONE_ORE || id === B.COPPER_ORE || id === B.NETHER_QUARTZ_ORE || id === B.NETHER_GOLD_ORE; }
 
 /* ---------- 热路径查表 ----------
    网格构建时 isSeeThrough / isSolid 等谓词会被调用数百万次：
@@ -13274,7 +13857,13 @@ function updatePlayer(dt) {
   }
   if (player.blocking) speed *= 0.6; // 举盾格挡时稳步防守减速
   if (keys['ShiftLeft'] || keys['ShiftRight']) speed = player.fly ? 10 : 2.2;
-  if (water) speed *= 0.6;
+  const inLava = inNether && water;
+  if (inLava) speed *= 0.42;         // 下界熔岩黏稠阻力更大
+  else if (water) speed *= 0.6;
+  if (player.onGround && !player.fly) {
+    const underFoot = world.getBlock(Math.floor(player.pos.x), Math.floor(player.pos.y - 0.1), Math.floor(player.pos.z));
+    if (underFoot === B.SOUL_SAND) speed *= 0.72; // 灵魂沙轻微滞缓脚步
+  }
   const web = inCobweb();
   if (web) speed *= 0.2; // 陷入粘性蜘蛛网减速
   const accel = player.onGround || player.fly ? 14 : 4;
@@ -13351,15 +13940,37 @@ function updatePlayer(dt) {
       }
       maxFallY = null;
     } else {
-      const g = water ? -8 : -25;
+      const g = inLava ? -5.5 : (water ? -8 : -25);
       player.vel.y += g * dt;
       player.vel.y = Math.max(player.vel.y, -50);
       if (keys['Space']) {
         if (player.onGround) { player.vel.y = 8.5; player.onGround = false; playJump(); }
+        else if (inLava) player.vel.y = 3.2;  // 岩浆黏稠上浮
         else if (water) player.vel.y = 4.2;   // 游泳上浮，可跃上岸但不至于水面连跳
       }
     }
-    if (water) player.vel.y = Math.max(player.vel.y, -3.5);
+    if (inLava) player.vel.y = Math.max(player.vel.y, -2.2);
+    else if (water) player.vel.y = Math.max(player.vel.y, -3.5);
+    // 下界岩浆流体灼烧伤害（抗火药水或创造模式免疫）
+    if (inNether && (water || inWater())) {
+      maxFallY = null;
+      if (Math.random() < 0.35) {
+        spawnParticles(player.pos.x + (Math.random() - 0.5) * 0.7, player.pos.y + 0.5 + Math.random() * 0.8, player.pos.z + (Math.random() - 0.5) * 0.7, Math.random() < 0.5 ? 0xff6b1a : 0xffd32a, 2);
+      }
+      if (!player.fireResistanceTimer || player.fireResistanceTimer <= 0) {
+        player._lavaBurnT = (player._lavaBurnT || 0) + dt;
+        if (player._lavaBurnT >= 0.75) {
+          player._lavaBurnT = 0;
+          damagePlayer(2);
+          playSizzle();
+          toast('🔥 滚烫熔岩正在灼烧！快上岸或饮用抗火药水！');
+        }
+      } else {
+        player._lavaBurnT = 0;
+      }
+    } else {
+      player._lavaBurnT = 0;
+    }
 
     const px = collideAxis(0, player.vel.x * dt) ? 0 : 1;
     const pz = collideAxis(2, player.vel.z * dt) ? 0 : 1;
@@ -13705,7 +14316,8 @@ function isStoneMat(id) {
   return id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK ||
          id === B.SANDSTONE || id === B.QUARTZ || id === B.FURNACE || isOre(id) || id === B.BASALT || id === B.MAGMA ||
          id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.BEDROCK ||
-         id === B.DEEPSLATE || id === B.TERRACOTTA || id === B.RED_TERRACOTTA || id === B.ORANGE_TERRACOTTA || id === B.YELLOW_TERRACOTTA;
+         id === B.DEEPSLATE || id === B.TERRACOTTA || id === B.RED_TERRACOTTA || id === B.ORANGE_TERRACOTTA || id === B.YELLOW_TERRACOTTA ||
+         id === B.NETHERRACK || id === B.NETHER_BRICKS || id === B.BLACKSTONE || id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM;
 }
 function isWoodMat(id) {
   return isLog(id) || id === B.PLANKS || id === B.BOOKSHELF || id === B.CHEST || id === B.DOOR || id === B.LADDER;
@@ -13715,7 +14327,8 @@ function isPlantMat(id) {
 }
 function isEarthMat(id) {
   return id === B.DIRT || id === B.GRASS || id === B.SAND || id === B.GRAVEL || id === B.SNOW ||
-         id === B.RED_SAND || id === B.WHITE_SAND || id === B.MYCELIUM || id === B.PODZOL || id === B.MUD || id === B.FARMLAND || id === B.DIRT_PATH;
+         id === B.RED_SAND || id === B.WHITE_SAND || id === B.MYCELIUM || id === B.PODZOL || id === B.MUD || id === B.FARMLAND || id === B.DIRT_PATH ||
+         id === B.SOUL_SAND;
 }
 // 金属：清脆带余韵的金属声（铁块/金块/铜块/磁石/钟/锁链/铁砧/避雷针/信标/标靶）
 function isMetalMat(id) {
@@ -14069,6 +14682,17 @@ function updateAmbience(dt) {
   ambTimer = 4.5 + Math.random() * 8.5;
 
   const px = player.pos.x, py = player.pos.y, pz = player.pos.z;
+  if (inNether) {
+    // 下界专属环境音：熔岩气泡咕嘟爆裂与深沉火山洞穴回响
+    if (Math.random() < 0.58) {
+      tone(110 + Math.random() * 65, 240 + Math.random() * 120, 0.14, 'sine', 0.045);
+      burst(0.06, 0.024, 650 + Math.random() * 300, 'bandpass', 0.06);
+    } else {
+      tone(58 + Math.random() * 18, 38 + Math.random() * 12, 1.6, 'triangle', 0.04);
+      burst(0.9, 0.016, 220, 'lowpass');
+    }
+    return;
+  }
   const surf = surfaceHeight(Math.floor(px), Math.floor(pz));
   const underground = py < surf - 3 && !inWater();
 
@@ -14301,6 +14925,9 @@ const NAMES = {
   [B.RED_TERRACOTTA]: '红陶瓦', [B.ORANGE_TERRACOTTA]: '橙陶瓦', [B.YELLOW_TERRACOTTA]: '黄陶瓦', [B.TERRACOTTA]: '陶瓦',
   [B.MYCELIUM]: '菌丝', [B.WHITE_SAND]: '白沙', [B.PODZOL]: '灰化土',
   [B.DEEPSLATE]: '深板岩', [B.MUD]: '泥巴', [B.FARMLAND]: '耕地', [B.DIRT_PATH]: '草径',
+  [B.NETHERRACK]: '地狱岩', [B.SOUL_SAND]: '灵魂沙', [B.NETHER_BRICKS]: '下界砖',
+  [B.NETHER_QUARTZ_ORE]: '下界石英矿', [B.NETHER_GOLD_ORE]: '下界金矿', [B.BLACKSTONE]: '黑石',
+  [B.CRIMSON_NYLIUM]: '绯红菌岩', [B.WARPED_NYLIUM]: '诡异菌岩',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 function isHelmet(id) { return id === B.IRON_HELMET || id === B.DIAMOND_HELMET || id === B.NETHERITE_HELMET || id === B.TURTLE_HELMET; }
@@ -14351,7 +14978,7 @@ let hadLowAir = false;
 
 function updateAir(dt) {
   const bar = document.getElementById('airBar');
-  if (player.fly) {
+  if (player.fly || inNether) {
     player.air = 20;
     if (bar) bar.style.display = 'none';
     return;
@@ -14555,6 +15182,7 @@ const RECIPES = [
   { out: B.GOAT_HORN, n: 1, need: [[B.BONE, 3], [B.COPPER_BLOCK, 1]] },
   { out: B.QUARTZ, n: 2, need: [[B.WHITE_SAND, 4], [B.STONE, 1]] },
   { out: B.BLUE_ICE, n: 1, need: [[B.PACKED_ICE, 4]] },
+  { out: B.NETHER_BRICKS, n: 4, need: [[B.NETHERRACK, 4]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -14569,11 +15197,12 @@ const SMELT_TIME = 2.0;                    // 每炉耗时（秒）
 const furnace = { input: null, fuel: null, output: null, progress: 0, burn: 0 };
 function smeltOut(id) {
   if (id === B.IRON) return B.IRON_INGOT;
-  if (id === B.GOLD) return B.GOLD_INGOT;
+  if (id === B.GOLD || id === B.NETHER_GOLD_ORE) return B.GOLD_INGOT;
   if (id === B.EMERALD_ORE) return B.EMERALD;
   if (isLog(id)) return B.CHARCOAL;
   if (id === B.SAND) return B.GLASS;
   if (id === B.COBBLE) return B.STONE;
+  if (id === B.NETHERRACK) return B.NETHER_BRICKS;
   if (id === B.RAW_MEAT) return B.COOKED_MEAT;
   if (id === B.RAW_FISH) return B.COOKED_FISH;
   if (id === B.WET_SPONGE) return B.SPONGE;
@@ -15593,6 +16222,7 @@ const chestSlotsGrid = document.getElementById('chestSlotsGrid');
 const chestInvGrid = document.getElementById('chestInvGrid');
 const chestHotbar = document.getElementById('chestHotbar');
 const underwaterEl = document.getElementById('underwater');
+const lavaOverlayEl = document.getElementById('lavaOverlay');
 const hudMeta = document.getElementById('hudMeta');
 
 function refreshOverlays() {
@@ -16164,7 +16794,7 @@ function armWorldBtn(btn, confirmText, warnText, run) {
 }
 function clearSavedWorld() {
   discardSave = true;
-  try { localStorage.removeItem('mc_world_v1'); localStorage.removeItem('mc_inv_v1'); } catch (e) { /* 忽略 */ }
+  try { localStorage.removeItem('mc_world_v1'); localStorage.removeItem('mc_nether_v1'); localStorage.removeItem('mc_nether_v2'); localStorage.removeItem('mc_inv_v1'); } catch (e) { /* 忽略 */ }
 }
 document.getElementById('resetWorldBtn').addEventListener('click', (e) => {
   playClick();
@@ -16231,6 +16861,9 @@ const HARDNESS = {
   [B.RED_TERRACOTTA]: 1.25, [B.ORANGE_TERRACOTTA]: 1.25, [B.YELLOW_TERRACOTTA]: 1.25, [B.TERRACOTTA]: 1.25,
   [B.MYCELIUM]: 0.55, [B.WHITE_SAND]: 0.4, [B.PODZOL]: 0.5,
   [B.DEEPSLATE]: 2.2, [B.MUD]: 0.45, [B.FARMLAND]: 0.5, [B.DIRT_PATH]: 0.55,
+  [B.NETHERRACK]: 0.45, [B.SOUL_SAND]: 0.5, [B.NETHER_BRICKS]: 2.0,
+  [B.NETHER_QUARTZ_ORE]: 1.6, [B.NETHER_GOLD_ORE]: 1.6, [B.BLACKSTONE]: 1.8,
+  [B.CRIMSON_NYLIUM]: 0.55, [B.WARPED_NYLIUM]: 0.55,
 };
 function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
 // 破坏掉落物
@@ -16286,6 +16919,8 @@ function dropOf(id) {
   if (id === B.BELL) return B.BELL;
   if (id === B.GRINDSTONE) return B.GRINDSTONE;
   if (id === B.FARMLAND || id === B.DIRT_PATH) return B.DIRT;
+  if (id === B.NETHER_QUARTZ_ORE) return B.QUARTZ;
+  if (id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM) return B.NETHERRACK;
   if (isLeaf(id)) return null;               // 树叶不掉落（苹果单独判定）
   if (isTool(id) || id === B.STICK || id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.EGG || id === B.SNOWBALL || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.EMERALD || id === B.HONEYCOMB || id === B.BONE_MEAL || id === B.GOAT_HORN) return null;
   return id;
@@ -16307,7 +16942,7 @@ function effSpeed(id) {
   if (isPickaxe(t)) {
     if (id === B.OBSIDIAN || id === B.ENDER_CHEST || id === B.CRYING_OBSIDIAN || id === B.RESPAWN_ANCHOR) return isNetheriteTier(t) ? 22 : (isDiamondTier(t) ? 14 : (isIronTier(t) ? 4.0 : 1.5));
     if (id === B.ENCHANTING_TABLE || id === B.BEACON) return tierOf(t);
-    if (id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK || id === B.SANDSTONE || id === B.QUARTZ || isOre(id) || id === B.FURNACE || id === B.BASALT || id === B.MAGMA || id === B.ICE || id === B.PACKED_ICE || id === B.BLUE_ICE || id === B.DEEPSLATE || id === B.TERRACOTTA || id === B.RED_TERRACOTTA || id === B.ORANGE_TERRACOTTA || id === B.YELLOW_TERRACOTTA || id === B.GLOWSTONE || id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.AMETHYST_BLOCK || id === B.LIGHTNING_ROD || id === B.COPPER_BLOCK || id === B.SEA_LANTERN || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.BUTTON || id === B.CHAIN || id === B.SCULK_SENSOR || id === B.SCULK_BLOCK || id === B.DRIPSTONE_BLOCK || id === B.POINTED_DRIPSTONE || id === B.BLAST_FURNACE || id === B.SMOKER || id === B.LODESTONE || id === B.BELL || id === B.GRINDSTONE) return tierOf(t);
+    if (id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK || id === B.SANDSTONE || id === B.QUARTZ || isOre(id) || id === B.FURNACE || id === B.BASALT || id === B.MAGMA || id === B.ICE || id === B.PACKED_ICE || id === B.BLUE_ICE || id === B.DEEPSLATE || id === B.TERRACOTTA || id === B.RED_TERRACOTTA || id === B.ORANGE_TERRACOTTA || id === B.YELLOW_TERRACOTTA || id === B.NETHERRACK || id === B.NETHER_BRICKS || id === B.BLACKSTONE || id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM || id === B.GLOWSTONE || id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.AMETHYST_BLOCK || id === B.LIGHTNING_ROD || id === B.COPPER_BLOCK || id === B.SEA_LANTERN || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.BUTTON || id === B.CHAIN || id === B.SCULK_SENSOR || id === B.SCULK_BLOCK || id === B.DRIPSTONE_BLOCK || id === B.POINTED_DRIPSTONE || id === B.BLAST_FURNACE || id === B.SMOKER || id === B.LODESTONE || id === B.BELL || id === B.GRINDSTONE) return tierOf(t);
     return 1.15;
   }
   if (isAxe(t)) {
@@ -16315,7 +16950,7 @@ function effSpeed(id) {
     return 1.15;
   }
   if (isShovel(t)) {
-    if (id === B.DIRT || id === B.GRASS || id === B.SAND || id === B.RED_SAND || id === B.WHITE_SAND || id === B.GRAVEL || id === B.SNOW || id === B.MYCELIUM || id === B.PODZOL || id === B.MUD || id === B.FARMLAND || id === B.DIRT_PATH || id === B.HAY_BALE) return tierOf(t);
+    if (id === B.DIRT || id === B.GRASS || id === B.SAND || id === B.RED_SAND || id === B.WHITE_SAND || id === B.GRAVEL || id === B.SNOW || id === B.MYCELIUM || id === B.PODZOL || id === B.MUD || id === B.FARMLAND || id === B.DIRT_PATH || id === B.SOUL_SAND || id === B.HAY_BALE) return tierOf(t);
     return 1.15;
   }
   if (isSword(t)) {
@@ -16614,51 +17249,90 @@ function onMousedown(btn) {
         toast('🪣 舀取了一桶滚烫岩浆！获得【岩浆桶】！');
         return;
       }
+      if (inNether && hit) {
+        const [nx, ny, nz] = hit.normal;
+        const ax = hit.x + nx, ay = hit.y + ny, az = hit.z + nz;
+        if (world.getWater(ax, ay, az) >= 8 || feetInWater()) {
+          if (world.getWater(ax, ay, az) >= 8) {
+            world.setWater(ax, ay, az, 0);
+            enqueueAround(ax, ay, az);
+          }
+          hotbar[selected] = { id: B.LAVA_BUCKET, count: 1 };
+          refreshHotbar();
+          playSizzle();
+          spawnParticles(ax + 0.5, ay + 0.5, az + 0.5, 0xff6b1a, 16);
+          toast('🪣 舀取了一桶下界熔岩！获得【岩浆桶】！');
+          return;
+        }
+      }
       if (feetInWater()) {
-        hotbar[selected] = { id: B.WATER_BUCKET, count: 1 };
+        hotbar[selected] = { id: inNether ? B.LAVA_BUCKET : B.WATER_BUCKET, count: 1 };
         refreshHotbar();
-        tone(450, 300, 0.15, 'sine', 0.25);
-        toast('🪣 装了一桶清澈水源！获得【水桶】');
+        if (inNether) {
+          playSizzle();
+          toast('🪣 舀取了一桶下界熔岩！获得【岩浆桶】！');
+        } else {
+          tone(450, 300, 0.15, 'sine', 0.25);
+          toast('🪣 装了一桶清澈水源！获得【水桶】');
+        }
         return;
       }
     }
-    // 水桶倾倒水源
+    // 水桶倾倒水源（下界瞬间蒸发）
     if (sel && sel.id === B.WATER_BUCKET && hit) {
       const [nx, ny, nz] = hit.normal;
       const px = hit.x + nx, py = hit.y + ny, pz = hit.z + nz;
       if (py >= 0 && py < HEIGHT && world.getBlock(px, py, pz) === B.AIR) {
-        world.setBlock(px, py, pz, B.WATER);
-        enqueueAround(px, py, pz);
-        enqueueWater(px, py, pz);
         hotbar[selected] = { id: B.BUCKET, count: 1 };
         refreshHotbar();
+        if (inNether) {
+          playSizzle();
+          spawnParticles(px + 0.5, py + 0.5, pz + 0.5, 0xdddddd, 22);
+          toast('💨 水在下界酷热空气中瞬间蒸发成了白雾！');
+          return;
+        }
+        world.setWater(px, py, pz, 8);
+        enqueueAround(px, py, pz);
+        enqueueWater(px, py, pz);
         tone(300, 500, 0.18, 'sine', 0.25);
         toast('💧 倾倒了水桶，形成了奔腾的水流源头！');
         return;
       }
     }
-    // 岩浆桶倾倒岩浆
+    // 岩浆桶倾倒岩浆（下界倾倒真实流动熔岩流体，主世界保持与水反应凝黑曜石或放置岩浆块）
     if (sel && sel.id === B.LAVA_BUCKET && hit) {
       const [nx, ny, nz] = hit.normal;
       const px = hit.x + nx, py = hit.y + ny, pz = hit.z + nz;
       if (py >= 0 && py < HEIGHT && (world.getBlock(px, py, pz) === B.AIR || world.getBlock(px, py, pz) === B.WATER)) {
-        const isTargetWater = world.getBlock(px, py, pz) === B.WATER;
-        const adjWater = isTargetWater ||
-          world.getBlock(px + 1, py, pz) === B.WATER || world.getBlock(px - 1, py, pz) === B.WATER ||
-          world.getBlock(px, py + 1, pz) === B.WATER || world.getBlock(px, py - 1, pz) === B.WATER ||
-          world.getBlock(px, py, pz + 1) === B.WATER || world.getBlock(px, py, pz - 1) === B.WATER;
-        if (adjWater) {
-          world.setBlock(px, py, pz, B.OBSIDIAN);
+        if (inNether) {
+          world.setWater(px, py, pz, 8);
+          enqueueAround(px, py, pz);
+          enqueueWater(px, py, pz);
           playSizzle();
-          spawnParticles(px + 0.5, py + 0.5, pz + 0.5, 0x888888, 20);
-          toast('🌋 岩浆与水交融瞬间蒸腾冷凝，诞生了坚不可摧的【黑曜石】！');
+          spawnParticles(px + 0.5, py + 0.5, pz + 0.5, 0xff6b1a, 18);
+          toast('🌋 倾倒了岩浆桶，炽烈熔岩奔涌而出！');
         } else {
-          world.setBlock(px, py, pz, B.MAGMA);
-          tone(220, 180, 0.25, 'sawtooth', 0.3);
-          spawnParticles(px + 0.5, py + 0.5, pz + 0.5, 0xe67e22, 16);
-          toast('🔥 倾倒了岩浆桶，安置了炽烈翻滚的岩浆块！');
+          const isTargetWater = world.getBlock(px, py, pz) === B.WATER || world.getWater(px, py, pz) > 0;
+          const adjWater = isTargetWater ||
+            world.getWater(px + 1, py, pz) > 0 || world.getWater(px - 1, py, pz) > 0 ||
+            world.getWater(px, py + 1, pz) > 0 || world.getWater(px, py - 1, pz) > 0 ||
+            world.getWater(px, py, pz + 1) > 0 || world.getWater(px, py, pz - 1) > 0 ||
+            world.getBlock(px + 1, py, pz) === B.WATER || world.getBlock(px - 1, py, pz) === B.WATER ||
+            world.getBlock(px, py + 1, pz) === B.WATER || world.getBlock(px, py - 1, pz) === B.WATER ||
+            world.getBlock(px, py, pz + 1) === B.WATER || world.getBlock(px, py, pz - 1) === B.WATER;
+          if (adjWater) {
+            world.setBlock(px, py, pz, B.OBSIDIAN);
+            playSizzle();
+            spawnParticles(px + 0.5, py + 0.5, pz + 0.5, 0x888888, 20);
+            toast('🌋 岩浆与水交融瞬间蒸腾冷凝，诞生了坚不可摧的【黑曜石】！');
+          } else {
+            world.setBlock(px, py, pz, B.MAGMA);
+            tone(220, 180, 0.25, 'sawtooth', 0.3);
+            spawnParticles(px + 0.5, py + 0.5, pz + 0.5, 0xe67e22, 16);
+            toast('🔥 倾倒了岩浆桶，安置了炽烈翻滚的岩浆块！');
+          }
+          enqueueAround(px, py, pz);
         }
-        enqueueAround(px, py, pz);
         hotbar[selected] = { id: B.BUCKET, count: 1 };
         refreshHotbar();
         return;
@@ -18034,14 +18708,16 @@ function updateStreaming() {
      植树预算用尽后不再逐个区块调用 plantTrees。 */
   let trees = 0;
   let treeBudgetDone = trees >= MAXTREE;
-  for (const c of world.chunks.values()) {
-    if (c.villageChunk === undefined) c.villageChunk = isVillageChunk(c.cx, c.cz);
-    if (c.villageChunk && !c.villageBuilt) buildVillage(c);
-    if (!treeBudgetDone && !c.treesPlanted) {
-      plantTrees(c);
-      if (c.treesPlanted) {
-        trees++;
-        if (trees >= MAXTREE) treeBudgetDone = true;
+  if (!inNether) {
+    for (const c of world.chunks.values()) {
+      if (c.villageChunk === undefined) c.villageChunk = isVillageChunk(c.cx, c.cz);
+      if (c.villageChunk && !c.villageBuilt) buildVillage(c);
+      if (!treeBudgetDone && !c.treesPlanted) {
+        plantTrees(c);
+        if (c.treesPlanted) {
+          trees++;
+          if (trees >= MAXTREE) treeBudgetDone = true;
+        }
       }
     }
   }
@@ -18165,25 +18841,27 @@ function animate() {
     updateItems(dt);
     updateWeather(dt);
     updateSensorsAndEnvironment(dt);
-    updateAnimals(dt);
-    updateAnimalSpawning(dt);
-    updateZombies(dt);
-    updateCreepers(dt);
-    updateSkeletons(dt);
-    updateEndermen(dt);
-    updateSpiders(dt);
-    updateIronGolems(dt);
-    updateSnowGolems(dt);
-    updateVillagers(dt);
-    updatePillagers(dt);
-    updateRavagers(dt);
-    updateHorses(dt);
-    updateWolves(dt);
+    if (!inNether) {
+      updateAnimals(dt);
+      updateAnimalSpawning(dt);
+      updateZombies(dt);
+      updateCreepers(dt);
+      updateSkeletons(dt);
+      updateEndermen(dt);
+      updateSpiders(dt);
+      updateIronGolems(dt);
+      updateSnowGolems(dt);
+      updateVillagers(dt);
+      updatePillagers(dt);
+      updateRavagers(dt);
+      updateHorses(dt);
+      updateWolves(dt);
+      updateRaids(dt);
+      updateWanderingTrader(dt);
+      updateCats(dt);
+    }
     updateXpOrbs(dt);
     updateGlowingSystem(dt);
-    updateRaids(dt);
-    updateWanderingTrader(dt);
-    updateCats(dt);
     updatePrimedTnt(dt);
     updateSnowballs(dt);
     updateFireCharges(dt);
@@ -18236,11 +18914,12 @@ function animate() {
     }
   }
 
-  // 水体/水下氛围 + 地下氛围
+  // 水体/熔岩流体沉浸氛围 + 地下氛围
   const submerged = inWater();
-  underwaterEl.style.opacity = submerged ? '1' : '0';
-  const surfHere = surfaceHeight(Math.floor(player.pos.x), Math.floor(player.pos.z));
-  const underground = !submerged && player.pos.y < surfHere - 2;
+  underwaterEl.style.opacity = (!inNether && submerged) ? '1' : '0';
+  if (lavaOverlayEl) lavaOverlayEl.style.opacity = (inNether && submerged) ? '1' : '0';
+  const surfHere = inNether ? HEIGHT : surfaceHeight(Math.floor(player.pos.x), Math.floor(player.pos.z));
+  const underground = !inNether && !submerged && player.pos.y < surfHere - 2;
 
   // 幽邃洞穴神秘回响氛围音
   if (locked && underground && player.pos.y < 32) {
@@ -18251,14 +18930,20 @@ function animate() {
       setTimeout(() => tone(96, 52, 2.0, 'sine', 0.04), 320);
     }
   }
-  updateAmbience(dt);   // 昼夜/群系/水体/村庄的环境音景
-  const targetFogColor = submerged ? FOG_UNDERWATER : (underground ? _caveFogTarget.copy(FOG_COLOR).lerp(FOG_CAVE, 0.78) : FOG_COLOR);
+  updateAmbience(dt);   // 昼夜/群系/水体/下界/村庄的环境音景
+  const targetFogColor = submerged
+    ? (inNether ? FOG_LAVA : FOG_UNDERWATER)
+    : (underground ? _caveFogTarget.copy(FOG_COLOR).lerp(FOG_CAVE, 0.78) : FOG_COLOR);
   scene.fog.color.lerp(targetFogColor, Math.min(1, 4 * dt));
-  const targetFogNear = submerged ? 8 : (underground ? 4 : FOG_NEAR);
-  const targetFogFar = submerged ? 80 : (underground ? 62 : FOG_FAR); // 水下大幅提高能见度至 80 格，清亮通透
+  const targetFogNear = submerged ? (inNether ? 1.2 : 8) : (inNether ? 18 : (underground ? 4 : FOG_NEAR));
+  const targetFogFar = submerged ? (inNether ? 14 : 80) : (inNether ? 96 : (underground ? 62 : FOG_FAR));
   scene.fog.near += (targetFogNear - scene.fog.near) * Math.min(1, 4 * dt);
   scene.fog.far += (targetFogFar - scene.fog.far) * Math.min(1, 4 * dt);
   waterMat.uniforms.uTime.value = clock.elapsedTime;
+  lavaMat.uniforms.uTime.value = clock.elapsedTime;
+  lavaMat.uniforms.uFogColor.value.copy(scene.fog.color);
+  lavaMat.uniforms.uFogNear.value = scene.fog.near;
+  lavaMat.uniforms.uFogFar.value = scene.fog.far;
   portalMat.uniforms.uTime.value = clock.elapsedTime;
   waterMat.uniforms.uSunDir.value.copy(sunDir);
   waterMat.uniforms.uMoonDir.value.copy(moonDir);
@@ -18320,16 +19005,19 @@ function animate() {
     const hour = (timeOfDay * 24 + 6) % 24;
     const hh = Math.floor(hour), mm = Math.floor((hour - hh) * 60);
     const clockStr = String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
-    const biomeName = BIOME_NAMES[biomeOf(Math.floor(player.pos.x), Math.floor(player.pos.z))] || '';
+    const biomeName = inNether
+      ? (NETHER_BIOME_NAMES[netherBiomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z))] || '🔥 下界荒地')
+      : (BIOME_NAMES[biomeOf(Math.floor(player.pos.x), Math.floor(player.pos.z))] || '');
     const facingNames = ['南', '西南', '西', '西北', '北', '东北', '东', '东南'];
     const facingIdx = Math.floor((((player.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4) + 0.5) % 8;
     const facingStr = facingNames[facingIdx];
+    const subTag = submerged ? (inNether ? ' · 🔥 岩浆中' : ' · 🫧 水下') : '';
     hudMeta.innerHTML =
       `<span class="hud-chip">⚡ ${fps} FPS</span>` +
       `<span class="hud-chip">📍 ${Math.round(player.pos.x)}, ${Math.round(player.pos.y)}, ${Math.round(player.pos.z)} · ${facingStr}</span>` +
       `<span class="hud-chip biome">${biomeName}</span>` +
-      `<span class="hud-chip">🕒 ${clockStr}</span>` +
-      `<span class="hud-chip mode">${player.fly ? '✨ 创造' : '🚶 生存'}${submerged ? ' · 🫧 水下' : ''}</span>`;
+      `<span class="hud-chip">${inNether ? '🔥 下界维度' : '🕒 ' + clockStr}</span>` +
+      `<span class="hud-chip mode">${player.fly ? '✨ 创造' : '🚶 生存'}${subTag}</span>`;
     adaptiveResolution(fps);
     fpsAcc = 0; fpsFrames = 0;
   }
@@ -18381,13 +19069,14 @@ if (location.search.includes('debug')) {
     world, player, furnace, crops, hotbar, inv, animals, zombies, items, torchLights, editedChunks,
     saveWorld, loadWorld, damagePlayer, giveStarter, buildHotbar, refreshHotbar,
     dropItem, spawnParticles, enqueueWater, rain, snow, addTorchLight,
-    sun, moon, hemi, ambient, skyMat, cloudMat, clouds, scene, renderer, FOG_COLOR, waterMat,
+    sun, moon, hemi, ambient, skyMat, cloudMat, cloudMesh, cloudMeshHigh, scene, renderer, FOG_COLOR, waterMat, lavaMat,
     snapShadowToTexel, snapTexel,
-    biomeOf, BIOME_NAMES, surfaceHeight, getWorldOffset, currentSeed, applySeedOffset, B,
+    biomeOf, BIOME_NAMES, netherBiomeAt, NETHER_BIOME_NAMES, surfaceHeight, getWorldOffset, currentSeed, applySeedOffset, B,
     tileOf, atlas, isPetals, RECIPES, FOOD,
-    isCave, handLight, spawnAnimal, FOG_CAVE, select, rainChance, stopBreaking, findGround, matTone,
-    updateEnvironment,
+    isCave, handLight, spawnAnimal, FOG_CAVE, select, rainChance, stopBreaking, findGround,
+    updateEnvironment, teleportDimension, switchDimension,
     playPop, playPlace, playStep, playJump, playLand,
+    get inNether() { return inNether; },
     get locked() { return locked; },
     get selected() { return selected; },
     get timeOfDay() { return timeOfDay; },
@@ -18422,6 +19111,12 @@ if (location.search.includes('debug')) {
       };
     },
   };
+  if (location.search.includes('nether=1')) {
+    window.__mc.setLocked(true);
+    teleportDimension();
+    player.yaw = 0.72;
+    player.pitch = -0.16;
+  }
 }
 </script>
 </body>
