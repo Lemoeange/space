@@ -277,6 +277,93 @@
   #pause .world-seed b { color: var(--gold); font-family: ui-monospace, Consolas, monospace; }
   #pause .world-hint { margin-top: 14px; color: #8aa6b8; font-size: 11.5px; line-height: 1.75; max-width: 440px; }
 
+  /* ---- 主菜单模式切换 & 多人联机面板 ---- */
+  .mp-tabs {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+    margin: 0 auto 14px; max-width: 490px; width: 100%;
+    background: rgba(0, 0, 0, 0.34); padding: 5px; border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+  .mp-tab {
+    padding: 8px 6px; border-radius: 9px; border: 1px solid transparent;
+    background: transparent; color: #9fc3d8; font-size: 12.5px; font-weight: 800;
+    cursor: pointer; font-family: inherit; transition: all 0.16s ease;
+  }
+  .mp-tab:hover { color: #eaf4fb; background: rgba(255,255,255,0.06); }
+  .mp-tab.active {
+    background: linear-gradient(135deg, rgba(95, 209, 132, 0.28), rgba(48, 160, 92, 0.22));
+    border-color: rgba(120, 232, 158, 0.48); color: #eafff2;
+    box-shadow: 0 3px 12px rgba(64, 192, 108, 0.22);
+  }
+  .mp-panel {
+    margin: 0 auto 16px; max-width: 490px; width: 100%; box-sizing: border-box;
+    padding: 12px 14px; border-radius: 12px; text-align: left;
+    background: rgba(10, 18, 28, 0.52); border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+  .mp-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .mp-row:last-child { margin-bottom: 0; }
+  .mp-label { font-size: 12px; color: #9fc3d8; font-weight: 700; min-width: 56px; }
+  .mp-input {
+    flex: 1; min-width: 120px; padding: 7px 10px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.16); background: rgba(0,0,0,0.42);
+    color: #fff; font-size: 13px; font-weight: 700; font-family: inherit; outline: none;
+  }
+  .mp-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(95, 209, 132, 0.2); }
+  .mp-code-input { text-transform: uppercase; letter-spacing: 3px; font-family: ui-monospace, Consolas, monospace; font-size: 15px; text-align: center; }
+  .mp-code-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 5px 12px; border-radius: 8px;
+    background: rgba(255, 212, 121, 0.13); border: 1px solid rgba(255, 212, 121, 0.36);
+    color: #ffe39b; font-family: ui-monospace, Consolas, monospace; font-size: 15px; font-weight: 900; letter-spacing: 2.5px;
+  }
+  .mp-mini-btn {
+    padding: 6px 10px; border-radius: 7px; border: 1px solid rgba(255,255,255,0.16);
+    background: rgba(255,255,255,0.08); color: #e2eff8; font-size: 11.5px; font-weight: 700;
+    cursor: pointer; font-family: inherit; transition: background 0.15s ease;
+  }
+  .mp-mini-btn:hover { background: rgba(255,255,255,0.18); }
+  .mp-note { font-size: 11.5px; color: #93b4c8; line-height: 1.6; }
+  .mp-note b { color: #ffd479; }
+  .mp-status { margin-top: 8px; font-size: 12px; color: #8de6b0; min-height: 16px; }
+  .mp-status.err { color: #ff9a9a; }
+
+  /* 暂停页多人房间卡片 */
+  #pauseMpBox {
+    display: none; margin: 12px auto 4px; padding: 11px 14px; border-radius: 12px;
+    background: rgba(26, 56, 82, 0.36); border: 1px solid rgba(110, 200, 255, 0.28);
+    text-align: center; max-width: 430px;
+  }
+  #pauseMpBox .mp-pause-title { font-size: 12.5px; color: #a7e4ff; font-weight: 800; margin-bottom: 8px; }
+
+  /* 多人联机左下角聊天框 */
+  #mpChatWrap {
+    position: fixed; left: 16px; bottom: 116px; z-index: 15; width: min(360px, 84vw);
+    pointer-events: none; display: none; flex-direction: column; gap: 6px;
+  }
+  #mpChatLog {
+    display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow: hidden;
+  }
+  .mp-chat-msg {
+    background: rgba(8, 14, 22, 0.72); border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 8px; padding: 5px 10px; font-size: 12.5px; color: #eef5fa;
+    line-height: 1.45; word-break: break-word; text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    backdrop-filter: blur(6px); transition: opacity 0.6s ease;
+  }
+  .mp-chat-msg .who { color: #7ef0a8; font-weight: 800; margin-right: 6px; }
+  .mp-chat-msg.sys { color: #ffd479; border-color: rgba(255, 212, 121, 0.24); }
+  #mpChatInputRow {
+    display: none; pointer-events: auto; gap: 6px; align-items: center;
+    background: rgba(8, 14, 22, 0.88); border: 1px solid rgba(95, 209, 132, 0.5);
+    border-radius: 10px; padding: 6px 8px; backdrop-filter: blur(8px);
+  }
+  #mpChatInput {
+    flex: 1; background: transparent; border: none; color: #fff; font-size: 13px;
+    outline: none; font-family: inherit;
+  }
+  .hud-chip.mp {
+    background: rgba(24, 96, 138, 0.56); border-color: rgba(114, 214, 255, 0.42); color: #d6f4ff;
+  }
+
   /* ---- 背包 ---- */
   #inventory {
     position: fixed; inset: 0; z-index: 22; display: none; align-items: center; justify-content: center;
@@ -464,46 +551,118 @@
   <div id="hotbar" style="position:static; transform:none; margin:0; pointer-events:auto;"></div>
 </div>
 
+<div id="mpChatWrap">
+  <div id="mpChatLog"></div>
+  <div id="mpChatInputRow">
+    <input id="mpChatInput" type="text" maxlength="120" placeholder="输入聊天内容，按 Enter 发送，Esc 取消…" />
+    <button class="mp-mini-btn" id="mpChatSendBtn" type="button">发送</button>
+  </div>
+</div>
+
 <div id="menu">
   <div class="box">
-    <div class="menu-kicker">✨ 电影级光影 · 23 生态群系 · 完整村庄与突袭</div>
+    <div class="menu-kicker">✨ 电影级光影 · 23 生态群系 · 单机 &amp; P2P 联机双世界</div>
     <h1>⛏️ 我的世界 <span class="tag">Web 复刻</span></h1>
-    <div class="keys">
+
+    <!-- 模式选择：单机世界 / 创建多人联机世界 / 房间码加入 -->
+    <div class="mp-tabs" role="tablist">
+      <button type="button" class="mp-tab active" id="tabSp" data-mode="sp">🚶 单机世界</button>
+      <button type="button" class="mp-tab" id="tabHost" data-mode="host">🌐 联机世界(建房)</button>
+      <button type="button" class="mp-tab" id="tabJoin" data-mode="join">🔗 加入房间</button>
+    </div>
+
+    <div class="mp-panel" id="panelSp">
+      <div class="mp-note">
+        使用专属的<b>单机存档</b>（与联机世界完全隔离，互不影响）。支持生存探险与 <b>F 键创造飞行</b>，退出时自动保存地形、背包与游戏时间。
+      </div>
+    </div>
+
+    <div class="mp-panel" id="panelHost" style="display:none;">
+      <div class="mp-row">
+        <span class="mp-label">玩家昵称</span>
+        <input id="mpHostName" class="mp-input" type="text" maxlength="16" placeholder="输入你的昵称" />
+      </div>
+      <div class="mp-row">
+        <span class="mp-label">房间码</span>
+        <span class="mp-code-badge" id="mpHostCodeBadge">------</span>
+        <button type="button" class="mp-mini-btn" id="mpCopyCodeBtn">📋 复制码</button>
+        <button type="button" class="mp-mini-btn" id="mpCopyLinkBtn">🔗 复制链接</button>
+        <button type="button" class="mp-mini-btn" id="mpRollCodeBtn" title="更换一个新的房间码（保留联机世界存档）">🎲 换码</button>
+      </div>
+      <div class="mp-note">
+        使用独立的<b>联机世界存档</b>。<b>🔒 联机模式禁止进入创造模式</b>；所有玩家退出时自动保存当前游戏时间，下次进入继续同步。
+      </div>
+    </div>
+
+    <div class="mp-panel" id="panelJoin" style="display:none;">
+      <div class="mp-row">
+        <span class="mp-label">玩家昵称</span>
+        <input id="mpJoinName" class="mp-input" type="text" maxlength="16" placeholder="输入你的昵称" />
+      </div>
+      <div class="mp-row">
+        <span class="mp-label">房间码</span>
+        <input id="mpJoinCode" class="mp-input mp-code-input" type="text" maxlength="8" placeholder="输入 6 位房间码" />
+      </div>
+      <div class="mp-note">
+        输入房主的 6 位房间码（或直接打开邀请链接）即可进入同一世界。<b>🔒 联机模式锁定生存</b>，自动同步房主世界与游戏时间，不会覆盖你的本地单机存档。
+      </div>
+    </div>
+
+    <div class="play" id="playBtn" style="cursor:pointer;">▶ 进入单机世界</div>
+    <div class="mp-status" id="mpStatus"></div>
+    <div class="loading" id="loading">正在加载引擎…</div>
+    <div class="pbar"><div class="pfill" id="pfill"></div></div>
+
+    <div class="keys" style="margin-top:16px; margin-bottom:0;">
       <span><b>W A S D</b> 移动 / 骑马</span>
       <span><b>鼠标</b> 旋转视角</span>
-      <span><b>空格</b> 跳跃 / 腾跃</span>
+      <span><b>空格</b> 跳跃 / 攀爬</span>
       <span><b>Shift</b> 潜行 / 下马</span>
       <span><b>E</b> 背包与合成</span>
-      <span><b>F</b> 创造飞行模式</span>
+      <span><b>F</b> 创造(仅单机)</span>
+      <span><b>T</b> 联机聊天</span>
       <span><b>F5</b> 切换人称视角</span>
-      <span><b>1-9</b> 快捷栏切换</span>
       <span><b>左键</b> 挖掘 / 攻击</span>
       <span><b>右键</b> 放置 / 交互</span>
       <span><b>V</b> 望远镜长焦</span>
-      <span><b>中键</b> 选取目标方块</span>
-      <span><b>0</b> 一键切换昼夜</span>
-      <span><b>Esc</b> 暂停 / 关闭</span>
+      <span><b>Esc</b> 暂停 / 菜单</span>
     </div>
-    <div class="play">▶ 点击进入世界</div>
-    <div class="loading" id="loading">正在加载引擎…</div>
-    <div class="pbar"><div class="pfill" id="pfill"></div></div>
   </div>
 </div>
 
 <div id="pause">
   <div class="box">
-    <h1>⏸ 已暂停</h1>
+    <h1 id="pauseTitle">⏸ 已暂停</h1>
     <div class="sub">按 Esc 或点击下方按钮继续冒险</div>
     <div>
       <button class="pbtn primary" id="resumeBtn">▶ 回到游戏</button>
       <button class="pbtn" id="homeBtn">🏠 回到主页</button>
     </div>
-    <div class="world-seed">世界种子 <b id="seedNum">0</b></div>
-    <div>
-      <button class="pbtn danger" id="resetWorldBtn">🔄 重置世界</button>
+
+    <!-- 多人联机状态卡（联机时显示） -->
+    <div id="pauseMpBox">
+      <div class="mp-pause-title" id="pauseMpInfo">🌐 联机房间 · 在线 1 人（生存锁定）</div>
+      <div style="display:flex; justify-content:center; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+        <span class="mp-code-badge" id="pauseRoomCode">------</span>
+        <button type="button" class="mp-mini-btn" id="pauseCopyCodeBtn">📋 复制房间码</button>
+        <button type="button" class="mp-mini-btn" id="pauseCopyLinkBtn">🔗 复制邀请链接</button>
+      </div>
+      <div>
+        <button type="button" class="pbtn danger" id="leaveMpBtn" style="padding:7px 16px; font-size:12.5px;">🔌 退出联机并切回单机世界</button>
+      </div>
+    </div>
+
+    <!-- 单机时可一键切去联机菜单 -->
+    <div id="pauseSpSwitchRow" style="margin-top:8px;">
+      <button type="button" class="pbtn" id="openMpMenuBtn" style="padding:7px 16px; font-size:12.5px;">🌐 切换单机 / 多人联机世界</button>
+    </div>
+
+    <div class="world-seed"><span id="worldProfileLabel">单机世界</span>种子 <b id="seedNum">0</b></div>
+    <div id="worldDangerBtns">
+      <button class="pbtn danger" id="resetWorldBtn">🔄 重置当前世界</button>
       <button class="pbtn danger" id="newWorldBtn">🎲 生成新世界</button>
     </div>
-    <div class="world-hint" id="worldHint">快捷键：<b>F</b> 创造飞行 · <b>F5</b> 第一 / 第三人称视角 · <b>E</b> 背包 · <b>V</b> 望远镜 · <b>Q</b> 丢弃 · <b>0</b> 昼夜切换<br>重置世界会清空存档（地形改动 + 背包 + 熔炉）后从同一片地形重新开始；生成新世界会换一片全新的地形。两个操作都需要点两次确认。</div>
+    <div class="world-hint" id="worldHint">快捷键：<b>F</b> 创造飞行(仅单机) · <b>T</b> 联机聊天 · <b>F5</b> 视角切换 · <b>E</b> 背包 · <b>V</b> 望远镜 · <b>Q</b> 丢弃<br>单机世界与联机世界拥有完全独立的存档与种子；重置或生成新世界仅影响当前所处的世界，需要点两次确认。</div>
   </div>
 </div>
 
@@ -4471,6 +4630,7 @@ class World {
     if (isNetherDim) this._fillNether(c);
     else this._fill(c);
     applyEditedChunk(c);   // 有存档/卸载快照就把改动盖回去（离出生点很远的地方也能恢复）
+    if (mpActive && typeof applyMpDiffsToChunk === 'function') applyMpDiffsToChunk(c);
   }
   _fillNether(c) {
     const baseX = c.cx * CHUNK, baseZ = c.cz * CHUNK;
@@ -5176,6 +5336,7 @@ class World {
     else if (id === B.AIR && y === c.topY) c.topY = this._recalcTop(c);
     c.edited = true;
     markDirtyBlock(x, y, z);
+    if (mpActive && mpSuppressBroadcast === 0) mpRecordAndSendBlock(c.dim, x, y, z, c.blocks[idx], c.water[idx]);
   }
   _recalcTop(c) {
     for (let yy = c.topY; yy >= 0; yy--) {
@@ -5189,11 +5350,14 @@ class World {
     const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
     this.ensureChunk(cx, cz);
     const c = this.chunks.get(key(cx, cz));
-    c.water[y * 256 + (z - cz * 16) * 16 + (x - cx * 16)] = l;
+    const idx = y * 256 + (z - cz * 16) * 16 + (x - cx * 16);
+    if (c.water[idx] === l) return;
+    c.water[idx] = l;
     if (l > 0 && y > c.topY) c.topY = y;
     else if (l === 0 && y === c.topY) c.topY = this._recalcTop(c);
     c.edited = true;
     markDirtyBlock(x, y, z);
+    if (mpActive && mpSuppressBroadcast === 0) mpRecordAndSendBlock(c.dim, x, y, z, c.blocks[idx], c.water[idx]);
   }
   setRaw(x, y, z, id) { // 用于种树（不触发生成）
     const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
@@ -5309,19 +5473,44 @@ function saveDimChunks(storageKey, chunkMap, editedMap) {
     if (!ok) console.warn(`[save] localStorage 配额不足，跳过写入 ${storageKey}`);
   }
 }
+/* ============================ 双世界隔离（单机 / 联机）与多人状态 ============================ */
+let worldProfile = 'sp';        // 'sp' 单机世界 | 'mp' 我的联机世界(房主) | 'mp_guest' 加入好友房间(客机)
+let mpActive = false;           // 是否处于多人联机模式（锁定生存、启用同步）
+let mpRole = null;              // 'host' | 'guest' | null
+let mpRoomCode = '';            // 6位房间码
+let mpPlayerName = '';          // 当前玩家昵称
+let mpSuppressBroadcast = 0;    // 区块生成/读档/应用远端同步时抑制回传广播
+const mpBlockDiffs = new Map(); // "${dim}:${x},${y},${z}" -> [dimCode(0/1), x, y, z, blockId, waterLevel]
+const MP_DIFF_MAX = 12000;
+
+function storageKeysFor(profile) {
+  if (profile === 'mp') {
+    return { world: 'mc_mp_world_v1', nether: 'mc_mp_nether_v2', inv: 'mc_mp_inv_v1', seed: 'mc_mp_seed_v1', meta: 'mc_mp_meta_v1' };
+  }
+  if (profile === 'mp_guest') {
+    const code = mpRoomCode || 'GUEST';
+    return { world: null, nether: null, inv: 'mc_mp_guest_inv_' + code, seed: null, meta: null };
+  }
+  return { world: 'mc_world_v1', nether: 'mc_nether_v2', inv: 'mc_inv_v1', seed: 'mc_seed_v1', meta: null };
+}
+
 function saveWorld() {
   if (discardSave) return;   // 刚清过档：别让 beforeunload 把旧世界又写回去
+  const keys = storageKeysFor(worldProfile);
   try {
-    saveDimChunks('mc_world_v1', world.overworldChunks, overworldEdited);
-    saveDimChunks('mc_nether_v2', world.netherChunks, netherEdited);
-    // 背包存档（含工具耐久）
+    // 客机加入别人房间时不覆盖本地单机或自己的联机世界，仅保存本房间的个人背包
+    if (keys.world) saveDimChunks(keys.world, world.overworldChunks, overworldEdited);
+    if (keys.nether) saveDimChunks(keys.nether, world.netherChunks, netherEdited);
+    // 背包、农作物、熔炉、箱子与当前精确游戏时间存档
     const invData = {
       hotbar: hotbar.map((s) => (s ? [s.id, s.count, s.dur || 0] : null)),
       inv: inv.map((s) => (s ? [s.id, s.count, s.dur || 0] : null)),
       selected,
       hunger: player.hunger,
-      crops: Array.from(crops.entries()),
-      /* 熔炉内容也要存，否则放进去的矿石/燃料一刷新就没了 */
+      timeOfDay,
+      weather,
+      weatherTimer,
+      crops: keys.world ? Array.from(crops.entries()) : [],
       furnace: {
         input: furnace.input ? [furnace.input.id, furnace.input.count, furnace.input.dur || 0] : null,
         fuel: furnace.fuel ? [furnace.fuel.id, furnace.fuel.count, furnace.fuel.dur || 0] : null,
@@ -5329,23 +5518,40 @@ function saveWorld() {
         progress: furnace.progress,
         burn: furnace.burn,
       },
-      chests: Array.from(chestStorages.entries()).map(([k, slots]) => [
+      chests: keys.world ? Array.from(chestStorages.entries()).map(([k, slots]) => [
         k,
         slots.map((s) => (s ? [s.id, s.count, s.dur || 0] : null))
-      ]),
-      doors: Array.from(openDoors),
-      /* 已建成的村庄清单：不存的话每次重进地图 villageCenters 都是空的，
-         村庄会被判定为"未建造"而在已有建筑上再盖一遍 —— 干草堆和路灯就是这样
-         一层层越堆越高的。 */
-      villages: Array.from(villageCenters),
+      ]) : [],
+      doors: keys.world ? Array.from(openDoors) : [],
+      villages: keys.world ? Array.from(villageCenters) : [],
     };
-    localStorage.setItem('mc_inv_v1', JSON.stringify(invData));
+    if (keys.inv) localStorage.setItem(keys.inv, JSON.stringify(invData));
+    if (keys.meta) {
+      const meta = {
+        roomCode: mpRoomCode || getSavedMpRoomCode(),
+        timeOfDay,
+        weather,
+        weatherTimer,
+        savedAt: Date.now(),
+        diffs: Array.from(mpBlockDiffs.values()),
+      };
+      try {
+        localStorage.setItem(keys.meta, JSON.stringify(meta));
+      } catch (eMeta) {
+        // 配额紧张时裁剪旧 diff 保留最新改动与精确时间
+        meta.diffs = meta.diffs.slice(-2500);
+        try { localStorage.setItem(keys.meta, JSON.stringify(meta)); } catch (e2) { /* 忽略 */ }
+      }
+    }
   } catch (e) { console.warn('[save] 存档失败:', e && e.message); }
 }
-function loadWorld() {
+function loadWorld(profileOverride) {
+  const profile = profileOverride || worldProfile;
+  const keys = storageKeysFor(profile);
   let restoredInv = false;
   try {
     const loadDimMap = (storageKey, targetMap) => {
+      if (!storageKey) return;
       const raw = localStorage.getItem(storageKey);
       if (!raw) return;
       const saved = JSON.parse(raw);
@@ -5361,11 +5567,33 @@ function loadWorld() {
         });
       }
     };
-    loadDimMap('mc_world_v1', overworldEdited);
-    loadDimMap('mc_nether_v2', netherEdited);
-    // 已经加载过的区块（开局的 7×7）立刻盖回去；其余的等 ensureChunk 时再盖
-    for (const c of [...world.overworldChunks.values()]) applyEditedChunk(c);
-    const invRaw = localStorage.getItem('mc_inv_v1');
+    mpSuppressBroadcast++;
+    try {
+      loadDimMap(keys.world, overworldEdited);
+      loadDimMap(keys.nether, netherEdited);
+      // 已经加载过的区块（开局的 7×7）立刻盖回去；其余的等 ensureChunk 时再盖
+      for (const c of [...world.overworldChunks.values()]) applyEditedChunk(c);
+    } finally {
+      mpSuppressBroadcast = Math.max(0, mpSuppressBroadcast - 1);
+    }
+    if (keys.meta) {
+      const mRaw = localStorage.getItem(keys.meta);
+      if (mRaw) {
+        const m = JSON.parse(mRaw);
+        if (typeof m.timeOfDay === 'number' && isFinite(m.timeOfDay)) timeOfDay = ((m.timeOfDay % 1) + 1) % 1;
+        if (typeof m.weather === 'string') weather = m.weather;
+        if (typeof m.weatherTimer === 'number') weatherTimer = m.weatherTimer;
+        mpBlockDiffs.clear();
+        if (Array.isArray(m.diffs)) {
+          for (const d of m.diffs) {
+            if (!Array.isArray(d) || d.length < 6) continue;
+            const dimName = d[0] === 1 ? 'nether' : 'overworld';
+            mpBlockDiffs.set(`${dimName}:${d[1]},${d[2]},${d[3]}`, d);
+          }
+        }
+      }
+    }
+    const invRaw = keys.inv ? localStorage.getItem(keys.inv) : null;
     if (invRaw) {
       const d = JSON.parse(invRaw);
       const restore = (s) => (s ? { id: s[0], count: s[1], dur: isTool(s[0]) ? (s[2] || TOOL_DURABILITY[s[0]]) : undefined } : null);
@@ -5373,7 +5601,10 @@ function loadWorld() {
       if (Array.isArray(d.inv)) d.inv.forEach((s, i) => { inv[i] = restore(s); });
       if (typeof d.selected === 'number' && d.selected >= 0 && d.selected < HOTBAR_SIZE) selected = d.selected;
       if (typeof d.hunger === 'number') player.hunger = Math.max(0, Math.min(20, d.hunger));
-      if (Array.isArray(d.crops)) { crops.clear(); d.crops.forEach(([k, v]) => crops.set(k, v)); }
+      if (keys.world && typeof d.timeOfDay === 'number' && isFinite(d.timeOfDay)) timeOfDay = ((d.timeOfDay % 1) + 1) % 1;
+      if (keys.world && typeof d.weather === 'string') weather = d.weather;
+      if (keys.world && typeof d.weatherTimer === 'number') weatherTimer = d.weatherTimer;
+      if (keys.world && Array.isArray(d.crops)) { crops.clear(); d.crops.forEach(([k, v]) => crops.set(k, v)); }
       if (d.furnace) {
         furnace.input = restore(d.furnace.input);
         furnace.fuel = restore(d.furnace.fuel);
@@ -5381,22 +5612,23 @@ function loadWorld() {
         if (typeof d.furnace.progress === 'number') furnace.progress = d.furnace.progress;
         if (typeof d.furnace.burn === 'number') furnace.burn = d.furnace.burn;
       }
-      if (Array.isArray(d.chests)) {
+      if (keys.world && Array.isArray(d.chests)) {
         chestStorages.clear();
         d.chests.forEach(([k, slots]) => {
           chestStorages.set(k, slots.map((s) => restore(s)));
         });
       }
-      if (Array.isArray(d.doors)) {
+      if (keys.world && Array.isArray(d.doors)) {
         openDoors.clear();
         d.doors.forEach((k) => openDoors.add(k));
       }
-      if (Array.isArray(d.villages)) {
+      if (keys.world && Array.isArray(d.villages)) {
         villageCenters.clear();
         d.villages.forEach((k) => villageCenters.add(k));
       }
       restoredInv = true;
     }
+    updateEnvironment(timeOfDay);
   } catch (e) { console.warn('[load] 读取存档失败:', e && e.message); }
   return restoredInv;
 }
@@ -5412,6 +5644,10 @@ function giveStarter() {
 }
 setInterval(saveWorld, 30000);                 // 每 30 秒自动存档
 addEventListener('beforeunload', () => saveWorld());
+addEventListener('pagehide', () => saveWorld());
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') saveWorld();
+});
 
 // 主世界大型红/棕蘑菇生成（用于沼泽、蘑菇岛、黑森林，冠幅半径 <= 2 绝不越界）
 function placeGiantMushroomWorld(wx, surf, wz, isRed, rnd) {
@@ -15176,6 +15412,7 @@ function toggleDoor(x, y, z) {
   const cx = Math.floor(x / 16), cz = Math.floor(z / 16);
   const ck = world.chunks.get(key(cx, cz));
   if (ck) ck.dirty = true;
+  if (mpActive && mpSuppressBroadcast === 0) mpSendDoor(x, baseY, z, !isOpen);
 }
 function isDoorOpen(x, y, z) {
   return openDoors.has(`${x},${y},${z}`) || openDoors.has(`${x},${y - 1},${z}`) || openDoors.has(`${x},${y + 1},${z}`);
@@ -16631,13 +16868,15 @@ const underwaterEl = document.getElementById('underwater');
 const lavaOverlayEl = document.getElementById('lavaOverlay');
 const hudMeta = document.getElementById('hudMeta');
 
+let mpChatOpen = false;
 function refreshOverlays() {
-  const uiOpen = inventoryOpen || furnaceOpen || chestOpen;
+  const uiOpen = inventoryOpen || furnaceOpen || chestOpen || mpChatOpen;
   menuEl.style.display = (!locked && !started && !uiOpen) ? 'flex' : 'none';
   pauseEl.style.display = (!locked && started && !uiOpen) ? 'flex' : 'none';
   inventoryEl.style.display = inventoryOpen ? 'flex' : 'none';
   furnaceEl.style.display = furnaceOpen ? 'flex' : 'none';
   chestEl.style.display = chestOpen ? 'flex' : 'none';
+  if (typeof syncPauseMpUI === 'function') syncPauseMpUI();
 }
 function buildInventory() {
   // 装备防具槽交互处理
@@ -17132,7 +17371,13 @@ function closeChest() {
   }
   requestLock();
 }
-function toggleDayNight() { timeOfDay = (timeOfDay < 0.5) ? 0.74 : 0.24; }   // 0 键快速切换昼夜
+function toggleDayNight() {
+  if (mpActive) {
+    toast('🕒 多人联机模式下时间由世界统一同步，无法手动跳昼夜');
+    return;
+  }
+  timeOfDay = (timeOfDay < 0.5) ? 0.74 : 0.24;
+}   // 0 键快速切换昼夜
 
 /* 申请指针锁定。它返回的 Promise 被拒绝时必须吃掉：
    例如刚按过 Esc 的 ~1.25 秒内浏览器会拒绝重新锁定，不处理就是一个未捕获的 rejection，
@@ -17154,20 +17399,33 @@ document.addEventListener('pointerlockchange', () => {
     furnaceOpen = false;
     chestOpen = false;
     tradeOpen = false;
+    if (typeof closeMpChat === 'function') closeMpChat(false);
     const tui = document.getElementById('tradeUI');
     if (tui) tui.style.display = 'none';
   }
   refreshOverlays();
 });
-menuEl.addEventListener('click', () => { playClick(); requestLock(); });
 document.getElementById('resumeBtn').addEventListener('click', () => { playClick(); requestLock(); });
-document.getElementById('homeBtn').addEventListener('click', () => { playClick(); location.href = './index.html'; });
+document.getElementById('homeBtn').addEventListener('click', () => { playClick(); saveWorld(); location.href = './index.html'; });
 
-/* —— 重置世界 / 生成新世界 —— */
+/* —— 重置世界 / 生成新世界（单机与联机世界严格隔离，互不影响） —— */
 const SEED_KEY = 'mc_seed_v1';
+const MP_SEED_KEY = 'mc_mp_seed_v1';
 let discardSave = false;              // 清档后阻止 beforeunload 把旧世界写回 localStorage
-function currentSeed() {
-  try { return parseInt(localStorage.getItem(SEED_KEY) || '0', 10) || 0; } catch (e) { return 0; }
+function currentSeed(profileOverride) {
+  const p = profileOverride || worldProfile;
+  const k = (p === 'mp') ? MP_SEED_KEY : SEED_KEY;
+  try {
+    const raw = localStorage.getItem(k);
+    if (raw !== null && raw !== '') return parseInt(raw, 10) || 0;
+    if (p === 'mp') {
+      // 首次创建联机世界时生成独立于单机的专属种子，保证单机与联机是两片不同世界
+      const s = ((Math.random() * 9e8) | 0) + 100001;
+      localStorage.setItem(MP_SEED_KEY, String(s));
+      return s;
+    }
+    return 0;
+  } catch (e) { return 0; }
 }
 /* 种子只用来生成噪声场的一个偏移：0 表示原始世界（与旧存档兼容） */
 function applySeedOffset(seed) {
@@ -17178,7 +17436,7 @@ function applySeedOffset(seed) {
 const worldHintEl = document.getElementById('worldHint');
 const WORLD_HINT_DEFAULT = worldHintEl ? worldHintEl.textContent : '';
 const seedNumEl = document.getElementById('seedNum');
-if (seedNumEl) seedNumEl.textContent = String(currentSeed());
+if (seedNumEl) seedNumEl.textContent = String(currentSeed('sp'));
 let armedBtn = null, armTimer = 0;
 function disarmWorldBtn() {
   if (!armedBtn) return;
@@ -17198,24 +17456,64 @@ function armWorldBtn(btn, confirmText, warnText, run) {
   if (worldHintEl) worldHintEl.textContent = warnText;
   armTimer = setTimeout(disarmWorldBtn, 4000);   // 4 秒没再点就撤销
 }
-function clearSavedWorld() {
+function clearSavedWorld(profileOverride) {
+  const p = profileOverride || worldProfile;
   discardSave = true;
-  try { localStorage.removeItem('mc_world_v1'); localStorage.removeItem('mc_nether_v1'); localStorage.removeItem('mc_nether_v2'); localStorage.removeItem('mc_inv_v1'); } catch (e) { /* 忽略 */ }
+  try {
+    if (p === 'mp') {
+      const code = getSavedMpRoomCode();
+      localStorage.removeItem('mc_mp_world_v1');
+      localStorage.removeItem('mc_mp_nether_v2');
+      localStorage.removeItem('mc_mp_inv_v1');
+      // 保留房间码，仅清空联机世界地形/背包/时间/差异记录
+      localStorage.setItem('mc_mp_meta_v1', JSON.stringify({ roomCode: code, timeOfDay: 0.5 / 24, weather: 'clear', weatherTimer: 120, diffs: [] }));
+      mpBlockDiffs.clear();
+    } else if (p === 'sp') {
+      localStorage.removeItem('mc_world_v1');
+      localStorage.removeItem('mc_nether_v1');
+      localStorage.removeItem('mc_nether_v2');
+      localStorage.removeItem('mc_inv_v1');
+    }
+  } catch (e) { /* 忽略 */ }
 }
 document.getElementById('resetWorldBtn').addEventListener('click', (e) => {
   playClick();
-  armWorldBtn(e.currentTarget, '再点一次确认重置',
-    '确认后：清空存档（地形改动 + 背包 + 熔炉），保留同一片地形与种子，从出生点重新开始。',
-    () => { clearSavedWorld(); location.reload(); });
+  if (worldProfile === 'mp_guest') { toast('⚠️ 只有房主可以重置联机世界'); return; }
+  const label = (worldProfile === 'mp') ? '联机世界' : '单机世界';
+  armWorldBtn(e.currentTarget, `再点一次重置${label}`,
+    `确认后：仅清空【${label}】存档（地形 + 背包 + 熔炉 + 时间），另一世界完全不受影响。`,
+    () => {
+      clearSavedWorld(worldProfile);
+      if (worldProfile === 'mp') {
+        discardSave = false;
+        timeOfDay = 0.5 / 24;
+        reloadActiveWorld(currentSeed('mp'), { profile: 'mp', skipLoad: true });
+        mpBroadcastReset();
+        toast('🔄 已重置联机世界，重新从早晨 06:30 开始！');
+      } else {
+        location.reload();
+      }
+    });
 });
 document.getElementById('newWorldBtn').addEventListener('click', (e) => {
   playClick();
-  armWorldBtn(e.currentTarget, '再点一次生成新世界',
-    '确认后：丢弃当前存档，并换一片全新的地形（随机种子），无法撤销。',
+  if (worldProfile === 'mp_guest') { toast('⚠️ 只有房主可以更换联机世界种子'); return; }
+  const label = (worldProfile === 'mp') ? '联机世界' : '单机世界';
+  armWorldBtn(e.currentTarget, `再点一次生成新${label}`,
+    `确认后：丢弃当前【${label}】存档并更换随机种子，另一世界完全不受影响。`,
     () => {
-      clearSavedWorld();
-      try { localStorage.setItem(SEED_KEY, String(((Math.random() * 1e9) | 0) || 1)); } catch (err) { /* 忽略 */ }
-      location.reload();
+      const nextSeed = ((Math.random() * 1e9) | 0) || 1;
+      clearSavedWorld(worldProfile);
+      try { localStorage.setItem(worldProfile === 'mp' ? MP_SEED_KEY : SEED_KEY, String(nextSeed)); } catch (err) { /* 忽略 */ }
+      if (worldProfile === 'mp') {
+        discardSave = false;
+        timeOfDay = 0.5 / 24;
+        reloadActiveWorld(nextSeed, { profile: 'mp', skipLoad: true });
+        mpBroadcastReset();
+        toast('🎲 已生成全新的联机世界（种子 ' + nextSeed + '）！');
+      } else {
+        location.reload();
+      }
     });
 });
 
@@ -17517,18 +17815,40 @@ function setSpyglassZoom(active) {
   tone(isZooming ? 400 : 750, isZooming ? 750 : 400, 0.08, 'triangle', 0.18);
 }
 document.addEventListener('keydown', (e) => {
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') {
+    if (e.code === 'Escape' && typeof closeMpChat === 'function' && mpChatOpen) {
+      e.preventDefault();
+      closeMpChat(true);
+    }
+    return;
+  }
   keys[e.code] = true;
   if (e.code === 'KeyF') {
+    if (mpActive) {
+      player.fly = false;
+      playClick();
+      toast('🚫 多人联机模式下已锁定生存模式，无法开启创造模式！');
+      return;
+    }
     player.fly = !player.fly;
     player.vel.y = 0;
     toast(player.fly ? '✨ 已开启创造模式（自由翱翔，无伤害）' : '🚶 已切换为生存模式');
+  }
+  if (e.code === 'KeyT' && locked && mpActive) {
+    e.preventDefault();
+    if (typeof openMpChat === 'function') openMpChat();
+    return;
   }
   if (e.code === 'F5') {
     e.preventDefault();          // 拦掉浏览器的刷新
     cycleCameraMode();
     return;
   }
-  if (e.code === 'KeyN') { timeOfDay = 0.24; }                 // 跳到白天
+  if (e.code === 'KeyN') {
+    if (mpActive) { toast('🕒 多人联机模式下时间由世界统一同步，无法手动跳昼夜'); return; }
+    timeOfDay = 0.24;
+  }                 // 跳到白天
   if (e.code === 'KeyE' || e.key === 'e' || e.key === 'E') {
     e.preventDefault();
     if (tradeOpen) { closeTradeUI(); return; }
@@ -19121,7 +19441,10 @@ function updateStreaming() {
   if (!inNether) {
     for (const c of world.chunks.values()) {
       if (c.villageChunk === undefined) c.villageChunk = isVillageChunk(c.cx, c.cz);
-      if (c.villageChunk && !c.villageBuilt) buildVillage(c);
+      if (c.villageChunk && !c.villageBuilt) {
+        mpSuppressBroadcast++;
+        try { buildVillage(c); } finally { mpSuppressBroadcast = Math.max(0, mpSuppressBroadcast - 1); }
+      }
       if (!treeBudgetDone && !c.treesPlanted) {
         plantTrees(c);
         if (c.treesPlanted) {
@@ -19289,9 +19612,19 @@ function animate() {
     if (bowCharging) bowChargeTime += dt;
     updateCrops(dt);
     updatePlantedSaplings();
-    // 昼夜推进（未进入游戏/暂停时冻结）
+    // 昼夜推进（单机暂停时冻结；联机房主有任意玩家在线时持续流逝，全员退出则冻结并存档）
+    if (!mpActive || mpRole === 'host') {
+      timeOfDay = (timeOfDay + dt / DAY_LENGTH) % 1;
+    } else if (mpActive && mpRole === 'guest') {
+      timeOfDay = (timeOfDay + dt / DAY_LENGTH) % 1;
+    }
+  } else if (mpActive && mpRole === 'host' && typeof mpPeers !== 'undefined' && mpPeers.size > 0) {
+    // 房主切出暂停界面但仍有好友在房内游玩时，时间照常流逝并定时同步
     timeOfDay = (timeOfDay + dt / DAY_LENGTH) % 1;
   }
+  // 多人联机安全锁：杜绝任何途径开启创造飞行
+  if (mpActive && player.fly) { player.fly = false; player.gliding = false; }
+  if (typeof updateMultiplayer === 'function') updateMultiplayer(dt);
   if (hurtCooldown > 0) hurtCooldown = Math.max(0, hurtCooldown - dt);
   updateStreaming();
   if (locked) updateFurnace(dt);   // 暂停 / 未进入游戏时熔炉一并冻住（原来暂停也在偷偷烧）
@@ -19422,12 +19755,17 @@ function animate() {
     const facingIdx = Math.floor((((player.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4) + 0.5) % 8;
     const facingStr = facingNames[facingIdx];
     const subTag = submerged ? (inNether ? ' · 🔥 岩浆中' : ' · 🫧 水下') : '';
+    const mpChip = mpActive
+      ? `<span class="hud-chip mp">🌐 房间 ${mpRoomCode} · ${mpOnlineCount()}人</span>`
+      : '';
+    const modeLabel = mpActive ? '🚶 生存(联机)' : (player.fly ? '✨ 创造' : '🚶 生存');
     hudMeta.innerHTML =
       `<span class="hud-chip">⚡ ${fps} FPS</span>` +
+      mpChip +
       `<span class="hud-chip">📍 ${Math.round(player.pos.x)}, ${Math.round(player.pos.y)}, ${Math.round(player.pos.z)} · ${facingStr}</span>` +
       `<span class="hud-chip biome">${biomeName}</span>` +
       `<span class="hud-chip">${inNether ? '🔥 下界维度' : '🕒 ' + clockStr}</span>` +
-      `<span class="hud-chip mode">${player.fly ? '✨ 创造' : '🚶 生存'}${subTag}</span>`;
+      `<span class="hud-chip mode">${modeLabel}${subTag}</span>`;
     adaptiveResolution(fps);
     fpsAcc = 0; fpsFrames = 0;
   }
@@ -19446,6 +19784,990 @@ function animate() {
   }
 }
 
+/* ============================ 🌐 纯前端 P2P 多人联机系统（PeerJS WebRTC · 独立双世界 · 生存锁定 · 时间同步） ============================ */
+const MP_PEER_PREFIX = 'lemorange-mc-room-v1-';
+const MP_ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const MP_PEERJS_CDNS = [
+  'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js',
+  'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js',
+  'https://unpkg.zhimg.com/peerjs@1.5.4/dist/peerjs.min.js',
+];
+const MP_ICE_SERVERS = [
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: 'stun:stun.miwifi.com:3478' },
+  { urls: 'stun:stun.qq.com:3478' },
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+];
+
+let mpPeer = null;               // 本地 PeerJS 实例
+let mpHostConn = null;           // 客机连接到房主的 DataConnection
+const mpPeers = new Map();       // 房主维护：peerId -> { conn, id, name, x, y, z, yaw, pitch, dim }
+const mpRemotePlayers = new Map(); // 场景远端玩家：id -> { id, name, tx, ty, tz, tyaw, tpitch, dim, moving, swing, walkPhase, group, head, arms, legs }
+const mpChunkDiffIndex = new Map(); // "${dim}:${cx},${cz}" -> Map<coordKey, diffTuple>（区块加载时 O(1) 找回该块联机改动）
+let mpMenuMode = 'sp';           // 'sp' | 'host' | 'join'
+let mpConnecting = false;
+let mpStateSendAcc = 0;
+let mpTimeSyncAcc = 0;
+let mpMyId = 'local';
+
+function generateRoomCode() {
+  let code = '';
+  for (let i = 0; i < 6; i++) code += MP_ROOM_ALPHABET[(Math.random() * MP_ROOM_ALPHABET.length) | 0];
+  return code;
+}
+function sanitizeRoomCode(raw) {
+  return String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+}
+function getSavedMpRoomCode() {
+  try {
+    const mRaw = localStorage.getItem('mc_mp_meta_v1');
+    if (mRaw) {
+      const m = JSON.parse(mRaw);
+      if (m && m.roomCode && m.roomCode.length >= 4) return sanitizeRoomCode(m.roomCode);
+    }
+    const old = localStorage.getItem('mc_mp_room_v1');
+    if (old && old.length >= 4) return sanitizeRoomCode(old);
+    const code = generateRoomCode();
+    localStorage.setItem('mc_mp_room_v1', code);
+    return code;
+  } catch (e) { return generateRoomCode(); }
+}
+function saveMpRoomCode(code) {
+  try {
+    localStorage.setItem('mc_mp_room_v1', code);
+    const mRaw = localStorage.getItem('mc_mp_meta_v1');
+    const m = mRaw ? JSON.parse(mRaw) : { timeOfDay: 0.5 / 24, weather: 'clear', weatherTimer: 120, diffs: [] };
+    m.roomCode = code;
+    localStorage.setItem('mc_mp_meta_v1', JSON.stringify(m));
+  } catch (e) { /* 忽略 */ }
+}
+function getSavedPlayerName() {
+  try {
+    const n = (localStorage.getItem('mc_player_name_v1') || '').trim();
+    if (n) return n.slice(0, 16);
+    const def = '冒险家' + (100 + ((Math.random() * 900) | 0));
+    localStorage.setItem('mc_player_name_v1', def);
+    return def;
+  } catch (e) { return '冒险家'; }
+}
+function savePlayerName(name) {
+  const clean = String(name || '').trim().slice(0, 16) || getSavedPlayerName();
+  mpPlayerName = clean;
+  try { localStorage.setItem('mc_player_name_v1', clean); } catch (e) { /* 忽略 */ }
+  return clean;
+}
+function mpOnlineCount() {
+  if (!mpActive) return 1;
+  return (mpRole === 'host') ? (1 + mpPeers.size) : (1 + mpRemotePlayers.size);
+}
+function setMpStatus(msg, isErr) {
+  const el = document.getElementById('mpStatus');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.classList.toggle('err', !!isErr);
+}
+
+// —— 按需懒加载 PeerJS（单机与离线游玩零网络请求）——
+let _peerJsPromise = null;
+function loadPeerJS() {
+  if (typeof window.Peer === 'function') return Promise.resolve(window.Peer);
+  if (_peerJsPromise) return _peerJsPromise;
+  _peerJsPromise = new Promise(async (resolve, reject) => {
+    for (const url of MP_PEERJS_CDNS) {
+      try {
+        await new Promise((res, rej) => {
+          const s = document.createElement('script');
+          s.src = url;
+          s.async = true;
+          const timer = setTimeout(() => { s.remove(); rej(new Error('timeout')); }, 4500);
+          s.onload = () => { clearTimeout(timer); if (typeof window.Peer === 'function') res(); else rej(new Error('no Peer')); };
+          s.onerror = () => { clearTimeout(timer); s.remove(); rej(new Error('load error')); };
+          document.head.appendChild(s);
+        });
+        if (typeof window.Peer === 'function') { resolve(window.Peer); return; }
+      } catch (e) {
+        console.warn('[mp] PeerJS 镜像跳过:', url, e && e.message);
+      }
+    }
+    _peerJsPromise = null;
+    reject(new Error('无法加载 P2P 联机组件，请检查网络连接'));
+  });
+  return _peerJsPromise;
+}
+
+// —— 联机方块差异索引（支持跨主世界 / 下界及未加载远方区块）——
+function indexMpDiff(tuple) {
+  const dimName = tuple[0] === 1 ? 'nether' : 'overworld';
+  const x = tuple[1], y = tuple[2], z = tuple[3];
+  const coordKey = `${dimName}:${x},${y},${z}`;
+  if (mpBlockDiffs.size >= MP_DIFF_MAX && !mpBlockDiffs.has(coordKey)) {
+    const oldest = mpBlockDiffs.keys().next().value;
+    if (oldest !== undefined) mpBlockDiffs.delete(oldest);
+  }
+  mpBlockDiffs.set(coordKey, tuple);
+  const ck = `${dimName}:${x >> 4},${z >> 4}`;
+  let bucket = mpChunkDiffIndex.get(ck);
+  if (!bucket) { bucket = new Map(); mpChunkDiffIndex.set(ck, bucket); }
+  bucket.set(coordKey, tuple);
+}
+function rebuildMpDiffIndex() {
+  mpChunkDiffIndex.clear();
+  for (const [k, tuple] of mpBlockDiffs) {
+    const dimName = tuple[0] === 1 ? 'nether' : 'overworld';
+    const ck = `${dimName}:${tuple[1] >> 4},${tuple[3] >> 4}`;
+    let bucket = mpChunkDiffIndex.get(ck);
+    if (!bucket) { bucket = new Map(); mpChunkDiffIndex.set(ck, bucket); }
+    bucket.set(k, tuple);
+  }
+}
+function applyMpDiffsToChunk(c) {
+  const ck = `${c.dim}:${c.cx},${c.cz}`;
+  const bucket = mpChunkDiffIndex.get(ck);
+  if (!bucket || bucket.size === 0) return;
+  const baseX = c.cx * 16, baseZ = c.cz * 16;
+  for (const tuple of bucket.values()) {
+    const lx = tuple[1] - baseX, y = tuple[2], lz = tuple[3] - baseZ;
+    if (lx < 0 || lx >= 16 || lz < 0 || lz >= 16 || y < 0 || y >= HEIGHT) continue;
+    const idx = y * 256 + lz * 16 + lx;
+    c.blocks[idx] = tuple[4];
+    c.water[idx] = tuple[5];
+    if ((tuple[4] !== B.AIR || tuple[5] > 0) && y > c.topY) c.topY = y;
+    c.edited = true;
+    c.dirty = true;
+  }
+}
+function mpApplyRemoteBlock(dimName, x, y, z, b, w) {
+  if (y < 0 || y >= HEIGHT) return;
+  const dimCode = dimName === 'nether' ? 1 : 0;
+  indexMpDiff([dimCode, x, y, z, b, w]);
+  const targetMap = (dimName === 'nether') ? world.netherChunks : world.overworldChunks;
+  const cx = x >> 4, cz = z >> 4;
+  const c = targetMap.get(key(cx, cz));
+  if (!c) return;
+  const lx = x - (cx << 4), lz = z - (cz << 4);
+  const idx = y * 256 + lz * 16 + lx;
+  c.blocks[idx] = b;
+  c.water[idx] = w;
+  if ((b !== B.AIR || w > 0) && y > c.topY) c.topY = y;
+  else if (b === B.AIR && w === 0 && y === c.topY) c.topY = world._recalcTop(c);
+  c.edited = true;
+  if (world.dim === dimName) markDirtyBlock(x, y, z);
+  else c.dirty = true;
+}
+function mpRecordAndSendBlock(dimName, x, y, z, b, w) {
+  const dimCode = dimName === 'nether' ? 1 : 0;
+  const tuple = [dimCode, x, y, z, b, w];
+  indexMpDiff(tuple);
+  const pkt = { t: 'block', d: tuple };
+  if (mpRole === 'host') mpBroadcast(pkt);
+  else if (mpRole === 'guest' && mpHostConn && mpHostConn.open) mpHostConn.send(pkt);
+}
+function mpSendDoor(x, y, z, open) {
+  const pkt = { t: 'door', x, y, z, open: !!open };
+  if (mpRole === 'host') mpBroadcast(pkt);
+  else if (mpRole === 'guest' && mpHostConn && mpHostConn.open) mpHostConn.send(pkt);
+}
+function mpBroadcast(pkt, exceptId) {
+  for (const [pid, info] of mpPeers) {
+    if (exceptId && pid === exceptId) continue;
+    if (info.conn && info.conn.open) {
+      try { info.conn.send(pkt); } catch (e) { /* 忽略断连瞬间错误 */ }
+    }
+  }
+}
+function mpBroadcastReset() {
+  if (mpRole !== 'host') return;
+  mpBroadcast({ t: 'reset', seed: currentSeed('mp'), timeOfDay, weather });
+}
+
+// —— 远端玩家 3D 骨骼模型 + 头顶昵称牌 ——
+function makeNameplateSprite(name) {
+  const cv = document.createElement('canvas');
+  cv.width = 256; cv.height = 56;
+  const ctx = cv.getContext('2d');
+  ctx.font = 'bold 26px "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif';
+  const tw = Math.min(232, Math.max(80, ctx.measureText(name).width + 28));
+  const rx = (256 - tw) / 2;
+  ctx.fillStyle = 'rgba(8, 14, 22, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect ? ctx.roundRect(rx, 8, tw, 40, 10) : ctx.fillRect(rx, 8, tw, 40);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(126, 240, 168, 0.65)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#f2fff6';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(name, 128, 29, 220);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  const sp = new THREE.Sprite(mat);
+  sp.scale.set(1.9, 0.42, 1);
+  sp.position.set(0, 2.22, 0);
+  sp.renderOrder = 20;
+  return sp;
+}
+function createRemotePlayer(id, name) {
+  const g = new THREE.Group();
+  let hash = 0;
+  for (let i = 0; i < (name || id).length; i++) hash = ((hash * 31) + (name || id).charCodeAt(i)) | 0;
+  const palette = [
+    [46, 174, 174], [218, 92, 92], [92, 142, 228], [224, 168, 56],
+    [156, 104, 218], [86, 188, 114], [226, 122, 64]
+  ];
+  const shirtRgb = palette[Math.abs(hash) % palette.length];
+  const shirtHex = (shirtRgb[0] << 16) | (shirtRgb[1] << 8) | shirtRgb[2];
+  const bodyMat = new THREE.MeshLambertMaterial({ color: shirtHex });
+  const armSideMat = new THREE.MeshLambertMaterial({ map: makeMobTex(16, shirtRgb, 9100 + (Math.abs(hash) % 97), (p, rng) => {
+    for (let y = 6; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const j = (rng() - 0.5) * 14;
+      p(x, y, Math.min(255, Math.max(0, 206 + j)), Math.min(255, Math.max(0, 159 + j)), Math.min(255, Math.max(0, 127 + j)));
+    }
+  }) });
+  const armTopMat = new THREE.MeshLambertMaterial({ color: shirtHex });
+  const armMats = [armSideMat, armSideMat, armTopMat, playerHeadMat, armSideMat, armSideMat];
+
+  const head = new THREE.Mesh(partGeo(0.5, 0.5, 0.5), playerHeadMats);
+  head.position.set(0, 1.55, 0);
+  head.castShadow = true;
+  g.add(head);
+
+  const torso = new THREE.Mesh(partGeo(0.5, 0.6, 0.25), bodyMat);
+  torso.position.set(0, 1.0, 0);
+  torso.castShadow = true;
+  g.add(torso);
+
+  const arms = [], legs = [];
+  for (const sx of [-1, 1]) {
+    const pv = new THREE.Group();
+    pv.position.set(sx * 0.375, 1.3, 0);
+    const arm = new THREE.Mesh(partGeo(0.25, 0.6, 0.25), armMats);
+    arm.position.y = -0.3;
+    arm.castShadow = true;
+    pv.add(arm);
+    g.add(pv);
+    arms.push(pv);
+  }
+  for (const sx of [-1, 1]) {
+    const pv = new THREE.Group();
+    pv.position.set(sx * 0.125, 0.7, 0);
+    const leg = new THREE.Mesh(partGeo(0.25, 0.7, 0.25), playerLegMats);
+    leg.position.y = -0.35;
+    leg.castShadow = true;
+    pv.add(leg);
+    g.add(pv);
+    legs.push(pv);
+  }
+  const nameplate = makeNameplateSprite(name || '玩家');
+  g.add(nameplate);
+  scene.add(g);
+
+  const rp = {
+    id, name: name || '玩家',
+    x: player.pos.x, y: player.pos.y, z: player.pos.z,
+    tx: player.pos.x, ty: player.pos.y, tz: player.pos.z,
+    yaw: 0, tyaw: 0, pitch: 0, tpitch: 0,
+    dim: 'overworld', moving: false, swing: 0, walkPhase: 0,
+    group: g, head, arms, legs, nameplate,
+    disposables: [bodyMat, armSideMat, armTopMat, nameplate.material.map, nameplate.material],
+  };
+  mpRemotePlayers.set(id, rp);
+  return rp;
+}
+function removeRemotePlayer(id) {
+  const rp = mpRemotePlayers.get(id);
+  if (!rp) return;
+  scene.remove(rp.group);
+  for (const d of rp.disposables) { try { d.dispose(); } catch (e) {} }
+  mpRemotePlayers.delete(id);
+}
+function clearAllRemotePlayers() {
+  for (const id of [...mpRemotePlayers.keys()]) removeRemotePlayer(id);
+}
+
+// —— 联机左下角聊天系统（T 键开启）——
+function pushMpChat(who, text, isSys) {
+  const wrap = document.getElementById('mpChatWrap');
+  const log = document.getElementById('mpChatLog');
+  if (!wrap || !log) return;
+  wrap.style.display = 'flex';
+  const row = document.createElement('div');
+  row.className = 'mp-chat-msg' + (isSys ? ' sys' : '');
+  if (isSys) {
+    row.textContent = text;
+  } else {
+    const sp = document.createElement('span');
+    sp.className = 'who';
+    sp.textContent = who + ':';
+    row.appendChild(sp);
+    row.appendChild(document.createTextNode(text));
+  }
+  log.appendChild(row);
+  while (log.children.length > 7) log.removeChild(log.firstChild);
+  setTimeout(() => {
+    row.style.opacity = '0.35';
+  }, 9000);
+}
+function openMpChat() {
+  if (!mpActive) return;
+  mpChatOpen = true;
+  const wrap = document.getElementById('mpChatWrap');
+  const row = document.getElementById('mpChatInputRow');
+  const inp = document.getElementById('mpChatInput');
+  if (wrap) wrap.style.display = 'flex';
+  if (row) row.style.display = 'flex';
+  document.exitPointerLock?.();
+  refreshOverlays();
+  if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 30); }
+}
+function closeMpChat(relock) {
+  if (!mpChatOpen) return;
+  mpChatOpen = false;
+  const row = document.getElementById('mpChatInputRow');
+  const inp = document.getElementById('mpChatInput');
+  if (inp) inp.blur();
+  if (row) row.style.display = 'none';
+  refreshOverlays();
+  if (relock) requestLock();
+}
+function sendMpChatText() {
+  const inp = document.getElementById('mpChatInput');
+  const text = inp ? inp.value.trim().slice(0, 120) : '';
+  closeMpChat(true);
+  if (!text || !mpActive) return;
+  pushMpChat(mpPlayerName, text, false);
+  const pkt = { t: 'chat', id: mpMyId, name: mpPlayerName, text };
+  if (mpRole === 'host') mpBroadcast(pkt);
+  else if (mpRole === 'guest' && mpHostConn && mpHostConn.open) mpHostConn.send(pkt);
+}
+
+// —— 双世界无缝热切换（单机世界 <-> 联机世界 <-> 加入好友世界）——
+function clearAllOverworldMobs() {
+  const lists = [animals, zombies, creepers, skeletons, endermen, spiders, villagers, horses, wolves, cats, ironGolems, snowGolems, pillagers, ravagers, traderLlamas];
+  for (const arr of lists) {
+    for (let i = arr.length - 1; i >= 0; i--) {
+      if (arr[i] && arr[i].g) scene.remove(arr[i].g);
+    }
+    arr.length = 0;
+  }
+  if (wanderingTrader && wanderingTrader.g) { scene.remove(wanderingTrader.g); wanderingTrader = null; }
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (items[i] && items[i].mesh) scene.remove(items[i].mesh);
+  }
+  items.length = 0;
+}
+function reloadActiveWorld(seed, opts = {}) {
+  const nextProfile = opts.profile || 'sp';
+  if (player.ridingHorse) player.ridingHorse = null;
+  stopBreaking();
+
+  mpSuppressBroadcast++;
+  try {
+    // 1. 卸载当前主世界与下界全部已挂载网格
+    for (const c of world.overworldChunks.values()) {
+      if (c.group) { scene.remove(c.group); disposeGroup(c.group); c.group = null; }
+    }
+    for (const c of world.netherChunks.values()) {
+      if (c.group) { scene.remove(c.group); disposeGroup(c.group); c.group = null; }
+    }
+    world.overworldChunks.clear();
+    world.netherChunks.clear();
+    overworldEdited.clear();
+    netherEdited.clear();
+    for (const l of torchLights.values()) scene.remove(l);
+    torchLights.clear();
+    waterQ.length = 0; waterHead = 0; waterSet.clear();
+    groundCache.clear();
+    villageCenters.clear();
+    villagePositions.length = 0;
+    openDoors.clear();
+    crops.clear();
+    chestStorages.clear();
+    clearAllOverworldMobs();
+
+    // 2. 重置维度与存档槽位
+    inNether = false;
+    world.dim = 'overworld';
+    world.chunks = world.overworldChunks;
+    editedChunks = overworldEdited;
+    worldProfile = nextProfile;
+    mpBlockDiffs.clear();
+    mpChunkDiffIndex.clear();
+
+    // 3. 切换种子与出生点
+    applySeedOffset(seed);
+    if (seedNumEl) seedNumEl.textContent = String(seed);
+    const labelEl = document.getElementById('worldProfileLabel');
+    if (labelEl) labelEl.textContent = (nextProfile === 'mp') ? '联机世界(房主)' : (nextProfile === 'mp_guest' ? '好友联机房间' : '单机世界');
+
+    // 4. 重置时间默认值（稍后由 loadWorld 或房主同步覆盖）
+    timeOfDay = 0.5 / 24;
+    weather = 'clear';
+    weatherTimer = 120;
+
+    // 5. 若为客机带入房主同步的差异，先建索引再生成出生点 7x7 区块
+    if (Array.isArray(opts.remoteDiffs)) {
+      for (const d of opts.remoteDiffs) indexMpDiff(d);
+    }
+
+    const spawn = findSpawn();
+    player.pos.set(spawn.x, spawn.y, spawn.z);
+    player.vel.set(0, 0, 0);
+    player.yaw = Math.PI * 0.25;
+    player.pitch = 0;
+    player.hp = 20;
+    player.hunger = 20;
+    if (mpActive) { player.fly = false; player.gliding = false; }
+
+    // 6. 重置背包并发放初始物资，然后读取当前世界的独立存档
+    for (let i = 0; i < HOTBAR_SIZE; i++) hotbar[i] = null;
+    for (let i = 0; i < inv.length; i++) inv[i] = null;
+    furnace.input = furnace.fuel = furnace.output = null;
+    furnace.progress = furnace.burn = 0;
+    giveStarter();
+
+    const scx = Math.floor(spawn.x / 16), scz = Math.floor(spawn.z / 16);
+    for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) world.ensureChunk(scx + dx, scz + dz);
+
+    if (!opts.skipLoad) loadWorld(nextProfile);
+    if (nextProfile === 'mp') rebuildMpDiffIndex();
+
+    if (typeof opts.remoteTime === 'number' && isFinite(opts.remoteTime)) {
+      timeOfDay = ((opts.remoteTime % 1) + 1) % 1;
+    }
+    if (typeof opts.remoteWeather === 'string') weather = opts.remoteWeather;
+
+    // 立即把出生点核心 3x3 区块网格化，无缝呈现新世界
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const cc = world.chunks.get(key(scx + dx, scz + dz));
+      if (cc) buildChunkMeshes(cc);
+    }
+
+    spawnAnimalsNear(spawn.x, spawn.z, MAX_ANIMALS);
+    buildHotbar();
+    refreshHotbar();
+    updateHearts();
+    updateHungerBar();
+    updateEnvironment(timeOfDay);
+    camera.position.set(spawn.x, spawn.y + player.eye, spawn.z);
+    camera.rotation.set(0, player.yaw, 0);
+  } finally {
+    mpSuppressBroadcast = Math.max(0, mpSuppressBroadcast - 1);
+  }
+}
+
+// —— 联机网络消息分发与帧循环 ——
+function handleMpPacket(senderId, msg, conn) {
+  if (!msg || typeof msg !== 'object') return;
+  if (mpRole === 'host') {
+    if (msg.t === 'hello') {
+      const guestName = String(msg.name || '好友').trim().slice(0, 16) || '好友';
+      const info = { conn, id: senderId, name: guestName, x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: 0, pitch: 0, dim: 'overworld' };
+      mpPeers.set(senderId, info);
+      createRemotePlayer(senderId, guestName);
+      // 发送欢迎握手（种子 + 当前游戏时间 + 天气 + 在线玩家列表）
+      const playersList = [{ id: mpMyId, name: mpPlayerName, x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch, dim: inNether ? 'nether' : 'overworld' }];
+      for (const [pid, p] of mpPeers) {
+        if (pid !== senderId) playersList.push({ id: pid, name: p.name, x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch, dim: p.dim });
+      }
+      conn.send({
+        t: 'welcome',
+        id: senderId,
+        roomCode: mpRoomCode,
+        seed: currentSeed('mp'),
+        timeOfDay,
+        weather,
+        players: playersList,
+        doors: Array.from(openDoors),
+      });
+      // 分片下发联机世界全部方块改动，避免单包超限
+      const allDiffs = Array.from(mpBlockDiffs.values());
+      const BATCH = 600;
+      for (let i = 0; i < allDiffs.length; i += BATCH) {
+        conn.send({ t: 'diffs', list: allDiffs.slice(i, i + BATCH) });
+      }
+      mpBroadcast({ t: 'join', id: senderId, name: guestName }, senderId);
+      pushMpChat('', `🌐 ${guestName} 加入了联机房间（当前 ${mpOnlineCount()} 人）`, true);
+      toast(`👋 好友【${guestName}】已加入房间！`);
+      syncPauseMpUI();
+    } else if (msg.t === 'state') {
+      const info = mpPeers.get(senderId);
+      if (!info) return;
+      info.x = msg.x; info.y = msg.y; info.z = msg.z;
+      info.yaw = msg.yaw; info.pitch = msg.pitch; info.dim = msg.dim || 'overworld';
+      const rp = mpRemotePlayers.get(senderId) || createRemotePlayer(senderId, info.name);
+      rp.tx = msg.x; rp.ty = msg.y; rp.tz = msg.z;
+      rp.tyaw = msg.yaw; rp.tpitch = msg.pitch;
+      rp.dim = info.dim; rp.moving = !!msg.moving; rp.swing = msg.swing ? 1 : 0;
+      mpBroadcast({ t: 'state', id: senderId, name: info.name, x: msg.x, y: msg.y, z: msg.z, yaw: msg.yaw, pitch: msg.pitch, dim: info.dim, moving: !!msg.moving, swing: !!msg.swing }, senderId);
+    } else if (msg.t === 'block' && Array.isArray(msg.d) && msg.d.length >= 6) {
+      const [dimCode, x, y, z, b, w] = msg.d;
+      const dimName = dimCode === 1 ? 'nether' : 'overworld';
+      mpSuppressBroadcast++;
+      try { mpApplyRemoteBlock(dimName, x, y, z, b, w); } finally { mpSuppressBroadcast = Math.max(0, mpSuppressBroadcast - 1); }
+      mpBroadcast(msg, senderId);
+    } else if (msg.t === 'door') {
+      const kB = `${msg.x},${msg.y},${msg.z}`, kT = `${msg.x},${msg.y + 1},${msg.z}`;
+      if (msg.open) { openDoors.add(kB); openDoors.add(kT); }
+      else { openDoors.delete(kB); openDoors.delete(kT); }
+      markChunk(msg.x >> 4, msg.z >> 4);
+      mpBroadcast(msg, senderId);
+    } else if (msg.t === 'chat' && msg.text) {
+      const info = mpPeers.get(senderId);
+      const who = (info && info.name) || msg.name || '好友';
+      const txt = String(msg.text).slice(0, 120);
+      pushMpChat(who, txt, false);
+      mpBroadcast({ t: 'chat', id: senderId, name: who, text: txt }, senderId);
+    }
+  } else if (mpRole === 'guest') {
+    if (msg.t === 'join') {
+      if (msg.id && msg.id !== mpMyId && !mpRemotePlayers.has(msg.id)) createRemotePlayer(msg.id, msg.name);
+      pushMpChat('', `🌐 ${msg.name} 加入了联机房间`, true);
+      syncPauseMpUI();
+    } else if (msg.t === 'leave') {
+      removeRemotePlayer(msg.id);
+      pushMpChat('', `👋 ${msg.name || '一名玩家'} 离开了房间`, true);
+      syncPauseMpUI();
+    } else if (msg.t === 'state') {
+      if (!msg.id || msg.id === mpMyId) return;
+      const rp = mpRemotePlayers.get(msg.id) || createRemotePlayer(msg.id, msg.name);
+      rp.tx = msg.x; rp.ty = msg.y; rp.tz = msg.z;
+      rp.tyaw = msg.yaw; rp.tpitch = msg.pitch;
+      rp.dim = msg.dim || 'overworld'; rp.moving = !!msg.moving; rp.swing = msg.swing ? 1 : 0;
+    } else if (msg.t === 'diffs' && Array.isArray(msg.list)) {
+      mpSuppressBroadcast++;
+      try {
+        for (const d of msg.list) {
+          if (Array.isArray(d) && d.length >= 6) {
+            mpApplyRemoteBlock(d[0] === 1 ? 'nether' : 'overworld', d[1], d[2], d[3], d[4], d[5]);
+          }
+        }
+      } finally {
+        mpSuppressBroadcast = Math.max(0, mpSuppressBroadcast - 1);
+      }
+    } else if (msg.t === 'block' && Array.isArray(msg.d) && msg.d.length >= 6) {
+      const [dimCode, x, y, z, b, w] = msg.d;
+      mpSuppressBroadcast++;
+      try { mpApplyRemoteBlock(dimCode === 1 ? 'nether' : 'overworld', x, y, z, b, w); } finally { mpSuppressBroadcast = Math.max(0, mpSuppressBroadcast - 1); }
+    } else if (msg.t === 'door') {
+      const kB = `${msg.x},${msg.y},${msg.z}`, kT = `${msg.x},${msg.y + 1},${msg.z}`;
+      if (msg.open) { openDoors.add(kB); openDoors.add(kT); }
+      else { openDoors.delete(kB); openDoors.delete(kT); }
+      markChunk(msg.x >> 4, msg.z >> 4);
+    } else if (msg.t === 'time') {
+      if (typeof msg.timeOfDay === 'number' && isFinite(msg.timeOfDay)) timeOfDay = ((msg.timeOfDay % 1) + 1) % 1;
+      if (typeof msg.weather === 'string') weather = msg.weather;
+    } else if (msg.t === 'reset') {
+      reloadActiveWorld(msg.seed, { profile: 'mp_guest', remoteTime: msg.timeOfDay, remoteWeather: msg.weather });
+      pushMpChat('', '🔄 房主重置了联机世界！', true);
+      toast('🔄 房主已重置联机世界');
+    } else if (msg.t === 'chat' && msg.text) {
+      pushMpChat(msg.name || '好友', String(msg.text).slice(0, 120), false);
+    }
+  }
+}
+
+function updateMultiplayer(dt) {
+  if (!mpActive) return;
+
+  // 1. 平滑插值渲染所有远端玩家（同维度可见、跨维度自动隐藏）
+  const myDim = inNether ? 'nether' : 'overworld';
+  for (const rp of mpRemotePlayers.values()) {
+    rp.group.visible = (rp.dim === myDim);
+    const k = Math.min(1, dt * 12);
+    rp.x += (rp.tx - rp.x) * k;
+    rp.y += (rp.ty - rp.y) * k;
+    rp.z += (rp.tz - rp.z) * k;
+    let dYaw = rp.tyaw - rp.yaw;
+    while (dYaw > Math.PI) dYaw -= Math.PI * 2;
+    while (dYaw < -Math.PI) dYaw += Math.PI * 2;
+    rp.yaw += dYaw * k;
+    rp.pitch += (rp.tpitch - rp.pitch) * k;
+
+    rp.group.position.set(rp.x, rp.y, rp.z);
+    rp.group.rotation.y = rp.yaw;
+    rp.head.rotation.x = Math.max(-0.8, Math.min(0.8, rp.pitch * 0.75));
+    if (rp.moving) rp.walkPhase += dt * 9.5;
+    const sw = rp.moving ? Math.sin(rp.walkPhase) * 0.55 : 0;
+    rp.legs[0].rotation.x = sw;
+    rp.legs[1].rotation.x = -sw;
+    rp.arms[0].rotation.x = -sw * 0.85;
+    rp.arms[1].rotation.x = rp.swing ? (-1.1 + Math.sin(clock.elapsedTime * 18) * 0.45) : (sw * 0.85);
+  }
+
+  // 2. 以 12Hz 频率同步自身位置/朝向/挥手/维度
+  mpStateSendAcc += dt;
+  if (mpStateSendAcc >= 0.083) {
+    mpStateSendAcc = 0;
+    const spd = Math.hypot(player.vel.x, player.vel.z);
+    const pkt = {
+      t: 'state',
+      id: mpMyId,
+      name: mpPlayerName,
+      x: Math.round(player.pos.x * 100) / 100,
+      y: Math.round(player.pos.y * 100) / 100,
+      z: Math.round(player.pos.z * 100) / 100,
+      yaw: Math.round(player.yaw * 1000) / 1000,
+      pitch: Math.round(player.pitch * 1000) / 1000,
+      dim: myDim,
+      moving: spd > 0.35,
+      swing: !!breaking || !!mouse.down[0],
+    };
+    if (mpRole === 'host' && mpPeers.size > 0) mpBroadcast(pkt);
+    else if (mpRole === 'guest' && mpHostConn && mpHostConn.open) mpHostConn.send(pkt);
+  }
+
+  // 3. 房主每 5 秒广播权威游戏时间与天气，保证所有玩家昼夜严格同步
+  if (mpRole === 'host' && mpPeers.size > 0) {
+    mpTimeSyncAcc += dt;
+    if (mpTimeSyncAcc >= 5.0) {
+      mpTimeSyncAcc = 0;
+      mpBroadcast({ t: 'time', timeOfDay, weather });
+    }
+  }
+}
+
+// —— 开启联机世界（房主） / 房间码加入（客机） / 断开返回单机 ——
+async function startMultiplayerHost() {
+  if (mpConnecting) return;
+  mpConnecting = true;
+  const nameInput = document.getElementById('mpHostName');
+  savePlayerName(nameInput ? nameInput.value : mpPlayerName);
+  const code = getSavedMpRoomCode();
+  setMpStatus('⏳ 正在连接 P2P 信令并加载你的联机世界…');
+
+  try {
+    // 切换前先保存当前单机世界
+    if (worldProfile === 'sp') saveWorld();
+    const PeerCtor = await loadPeerJS();
+    if (mpPeer) { try { mpPeer.destroy(); } catch (e) {} mpPeer = null; }
+    mpPeers.clear();
+    clearAllRemotePlayers();
+
+    mpRoomCode = code;
+    mpRole = 'host';
+    mpActive = true;
+    player.fly = false;
+    player.gliding = false;
+
+    await new Promise((resolve, reject) => {
+      const peer = new PeerCtor(MP_PEER_PREFIX + code, { config: { iceServers: MP_ICE_SERVERS } });
+      mpPeer = peer;
+      const timer = setTimeout(() => {
+        try { peer.destroy(); } catch (e) {}
+        reject(new Error('连接 P2P 服务器超时，请检查网络或重试'));
+      }, 12000);
+      peer.on('open', (id) => {
+        clearTimeout(timer);
+        mpMyId = id;
+        resolve(id);
+      });
+      peer.on('error', (err) => {
+        clearTimeout(timer);
+        if (err && err.type === 'unavailable-id') {
+          reject(new Error(`房间码 ${code} 正被占用，请点“🎲 换码”后重试`));
+        } else {
+          reject(new Error((err && err.message) || 'P2P 建房失败'));
+        }
+      });
+      peer.on('connection', (conn) => {
+        conn.on('data', (msg) => handleMpPacket(conn.peer, msg, conn));
+        conn.on('close', () => {
+          const info = mpPeers.get(conn.peer);
+          mpPeers.delete(conn.peer);
+          removeRemotePlayer(conn.peer);
+          if (info) {
+            mpBroadcast({ t: 'leave', id: conn.peer, name: info.name });
+            pushMpChat('', `👋 ${info.name} 离开了房间（当前 ${mpOnlineCount()} 人）`, true);
+          }
+          // 当其他玩家全部退出时，立即存档保存当前精确游戏时间与世界进度
+          if (mpPeers.size === 0) saveWorld();
+          syncPauseMpUI();
+        });
+      });
+    });
+
+    // 加载独立的联机世界与上次退出保存的游戏时间
+    reloadActiveWorld(currentSeed('mp'), { profile: 'mp' });
+    saveMpRoomCode(code);
+    saveWorld();
+
+    const chatWrap = document.getElementById('mpChatWrap');
+    if (chatWrap) chatWrap.style.display = 'flex';
+    pushMpChat('', `🌐 已开启联机世界！房间码：${code}（生存锁定，按 T 聊天）`, true);
+    setMpStatus(`✓ 联机世界已就绪！房间码 ${code}`);
+    syncPauseMpUI();
+    mpConnecting = false;
+    started = true;
+    refreshOverlays();
+    requestLock();
+  } catch (err) {
+    mpActive = false;
+    mpRole = null;
+    mpConnecting = false;
+    setMpStatus('❌ ' + (err && err.message ? err.message : '无法开启联机'), true);
+    toast('❌ 建房失败：' + (err && err.message ? err.message : '网络异常'));
+  }
+}
+
+async function joinMultiplayerRoom(rawCode) {
+  if (mpConnecting) return;
+  const code = sanitizeRoomCode(rawCode);
+  if (code.length < 4) {
+    setMpStatus('❌ 请输入正确的 6 位房间码', true);
+    return;
+  }
+  mpConnecting = true;
+  const nameInput = document.getElementById('mpJoinName');
+  savePlayerName(nameInput ? nameInput.value : mpPlayerName);
+  setMpStatus(`⏳ 正在连接房间 ${code}…`);
+
+  try {
+    if (worldProfile === 'sp') saveWorld();
+    const PeerCtor = await loadPeerJS();
+    if (mpPeer) { try { mpPeer.destroy(); } catch (e) {} mpPeer = null; }
+    mpPeers.clear();
+    clearAllRemotePlayers();
+
+    mpRoomCode = code;
+    mpRole = 'guest';
+    mpActive = true;
+    player.fly = false;
+    player.gliding = false;
+
+    const welcomeData = await new Promise((resolve, reject) => {
+      const peer = new PeerCtor({ config: { iceServers: MP_ICE_SERVERS } });
+      mpPeer = peer;
+      let resolved = false;
+      const timer = setTimeout(() => {
+        if (!resolved) {
+          try { peer.destroy(); } catch (e) {}
+          reject(new Error(`连接房间 ${code} 超时，请确认房主在线且房间码正确`));
+        }
+      }, 12000);
+
+      peer.on('open', (id) => {
+        mpMyId = id;
+        const conn = peer.connect(MP_PEER_PREFIX + code, { reliable: true });
+        mpHostConn = conn;
+        conn.on('open', () => {
+          conn.send({ t: 'hello', name: mpPlayerName });
+        });
+        conn.on('data', (msg) => {
+          if (!resolved && msg && msg.t === 'welcome') {
+            resolved = true;
+            clearTimeout(timer);
+            resolve(msg);
+          } else {
+            handleMpPacket(conn.peer, msg, conn);
+          }
+        });
+        conn.on('close', () => {
+          if (mpActive && mpRole === 'guest') {
+            saveWorld();
+            pushMpChat('', '⚠️ 房主已离开，房间连接断开', true);
+            toast('⚠️ 房主已关闭房间，正在保留背包并切回单机世界');
+            leaveMultiplayerToSingleplayer(true);
+          }
+        });
+        conn.on('error', (err) => {
+          if (!resolved) { clearTimeout(timer); reject(new Error((err && err.message) || '无法连接到房主')); }
+        });
+      });
+      peer.on('error', (err) => {
+        if (!resolved) {
+          clearTimeout(timer);
+          reject(new Error(err && err.type === 'peer-unavailable' ? `未找到房间 ${code}（房主未在线）` : ((err && err.message) || '联机连接失败')));
+        }
+      });
+    });
+
+    // 按房主下发的种子、精确游戏时间与天气载入客机世界（不覆盖本地单机世界！）
+    reloadActiveWorld(welcomeData.seed, {
+      profile: 'mp_guest',
+      remoteTime: welcomeData.timeOfDay,
+      remoteWeather: welcomeData.weather,
+    });
+    if (Array.isArray(welcomeData.doors)) {
+      for (const dk of welcomeData.doors) openDoors.add(dk);
+    }
+    if (Array.isArray(welcomeData.players)) {
+      for (const p of welcomeData.players) {
+        if (p.id && p.id !== mpMyId) {
+          const rp = createRemotePlayer(p.id, p.name);
+          rp.x = rp.tx = p.x; rp.y = rp.ty = p.y; rp.z = rp.tz = p.z;
+          rp.yaw = rp.tyaw = p.yaw || 0; rp.pitch = rp.tpitch = p.pitch || 0;
+          rp.dim = p.dim || 'overworld';
+        }
+      }
+    }
+
+    const chatWrap = document.getElementById('mpChatWrap');
+    if (chatWrap) chatWrap.style.display = 'flex';
+    pushMpChat('', `🔗 已加入房间 ${code}（已同步房主世界与游戏时间，生存锁定，按 T 聊天）`, true);
+    setMpStatus(`✓ 已加入房间 ${code}`);
+    syncPauseMpUI();
+    mpConnecting = false;
+    started = true;
+    refreshOverlays();
+    requestLock();
+  } catch (err) {
+    mpActive = false;
+    mpRole = null;
+    mpHostConn = null;
+    mpConnecting = false;
+    setMpStatus('❌ ' + (err && err.message ? err.message : '加入房间失败'), true);
+    toast('❌ ' + (err && err.message ? err.message : '加入房间失败'));
+  }
+}
+
+function leaveMultiplayerToSingleplayer(fromDisconnect) {
+  // 退出联机前立刻存档保存精确游戏时间与联机世界改动
+  if (mpActive) saveWorld();
+  if (mpHostConn) { try { mpHostConn.close(); } catch (e) {} mpHostConn = null; }
+  for (const info of mpPeers.values()) { try { info.conn.close(); } catch (e) {} }
+  mpPeers.clear();
+  if (mpPeer) { try { mpPeer.destroy(); } catch (e) {} mpPeer = null; }
+  clearAllRemotePlayers();
+  mpActive = false;
+  mpRole = null;
+  mpRoomCode = '';
+  closeMpChat(false);
+  const chatWrap = document.getElementById('mpChatWrap');
+  if (chatWrap) chatWrap.style.display = 'none';
+
+  // 切回独立的单机世界
+  reloadActiveWorld(currentSeed('sp'), { profile: 'sp' });
+  syncPauseMpUI();
+  if (!fromDisconnect) {
+    toast('🚶 已保存联机世界时间与进度，切回你的独立单机世界！');
+    refreshOverlays();
+  }
+}
+
+// —— 主菜单 / 暂停页多人 UI 绑定 ——
+function copyTextWithFeedback(text, msg) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => toast(msg)).catch(() => toast('📋 ' + text));
+  } else {
+    toast('📋 ' + text);
+  }
+}
+function inviteUrlFor(code) {
+  const u = new URL(location.href);
+  u.searchParams.set('room', code);
+  u.searchParams.delete('debug');
+  u.searchParams.delete('nether');
+  return u.toString();
+}
+function syncPauseMpUI() {
+  const mpBox = document.getElementById('pauseMpBox');
+  const spSwitch = document.getElementById('pauseSpSwitchRow');
+  const dangerRow = document.getElementById('worldDangerBtns');
+  const codeEl = document.getElementById('pauseRoomCode');
+  const infoEl = document.getElementById('pauseMpInfo');
+  if (mpBox) mpBox.style.display = mpActive ? 'block' : 'none';
+  if (spSwitch) spSwitch.style.display = mpActive ? 'none' : 'block';
+  if (dangerRow) dangerRow.style.display = (worldProfile === 'mp_guest') ? 'none' : 'block';
+  if (codeEl && mpRoomCode) codeEl.textContent = mpRoomCode;
+  if (infoEl && mpActive) {
+    infoEl.textContent = `🌐 ${mpRole === 'host' ? '房主 · 我的联机世界' : '已加入好友房间'} · 在线 ${mpOnlineCount()} 人（生存锁定）`;
+  }
+}
+function setMpMenuMode(mode) {
+  mpMenuMode = mode;
+  for (const [id, m] of [['tabSp', 'sp'], ['tabHost', 'host'], ['tabJoin', 'join']]) {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('active', m === mode);
+  }
+  const pSp = document.getElementById('panelSp');
+  const pHost = document.getElementById('panelHost');
+  const pJoin = document.getElementById('panelJoin');
+  if (pSp) pSp.style.display = mode === 'sp' ? 'block' : 'none';
+  if (pHost) pHost.style.display = mode === 'host' ? 'block' : 'none';
+  if (pJoin) pJoin.style.display = mode === 'join' ? 'block' : 'none';
+  const btn = document.getElementById('playBtn');
+  if (btn) {
+    if (mode === 'sp') btn.textContent = '▶ 进入单机世界';
+    else if (mode === 'host') btn.textContent = '🌐 开启并进入联机世界';
+    else btn.textContent = '🔗 连接房间并进入';
+  }
+  setMpStatus('');
+}
+function initMultiplayerUI() {
+  const savedName = getSavedPlayerName();
+  mpPlayerName = savedName;
+  const savedCode = getSavedMpRoomCode();
+  const hName = document.getElementById('mpHostName');
+  const jName = document.getElementById('mpJoinName');
+  const hCode = document.getElementById('mpHostCodeBadge');
+  const jCode = document.getElementById('mpJoinCode');
+  if (hName) hName.value = savedName;
+  if (jName) jName.value = savedName;
+  if (hCode) hCode.textContent = savedCode;
+
+  for (const id of ['tabSp', 'tabHost', 'tabJoin']) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', (e) => { e.stopPropagation(); playClick(); setMpMenuMode(el.dataset.mode); });
+  }
+  const copyCode = () => copyTextWithFeedback(mpRoomCode || getSavedMpRoomCode(), '📋 已复制房间码：' + (mpRoomCode || getSavedMpRoomCode()));
+  const copyLink = () => copyTextWithFeedback(inviteUrlFor(mpRoomCode || getSavedMpRoomCode()), '🔗 已复制联机邀请链接！发给好友即可直接加入');
+  document.getElementById('mpCopyCodeBtn')?.addEventListener('click', (e) => { e.stopPropagation(); playClick(); copyCode(); });
+  document.getElementById('mpCopyLinkBtn')?.addEventListener('click', (e) => { e.stopPropagation(); playClick(); copyLink(); });
+  document.getElementById('mpRollCodeBtn')?.addEventListener('click', (e) => {
+    e.stopPropagation(); playClick();
+    const next = generateRoomCode();
+    saveMpRoomCode(next);
+    if (hCode) hCode.textContent = next;
+    toast('🎲 已更换新房间码：' + next + '（联机世界存档已保留）');
+  });
+  document.getElementById('pauseCopyCodeBtn')?.addEventListener('click', () => { playClick(); copyCode(); });
+  document.getElementById('pauseCopyLinkBtn')?.addEventListener('click', () => { playClick(); copyLink(); });
+  document.getElementById('leaveMpBtn')?.addEventListener('click', () => { playClick(); leaveMultiplayerToSingleplayer(false); });
+  document.getElementById('openMpMenuBtn')?.addEventListener('click', () => {
+    playClick();
+    saveWorld();
+    started = false;
+    setMpMenuMode('host');
+    refreshOverlays();
+  });
+
+  // 聊天框发送事件
+  document.getElementById('mpChatSendBtn')?.addEventListener('click', () => sendMpChatText());
+  document.getElementById('mpChatInput')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); sendMpChatText(); }
+    else if (e.key === 'Escape') { e.preventDefault(); closeMpChat(true); }
+  });
+
+  // 主进入按钮：按所选模式进入单机 / 建房联机 / 房间码加入
+  document.getElementById('playBtn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    playClick();
+    if (mpMenuMode === 'sp') {
+      if (worldProfile !== 'sp') reloadActiveWorld(currentSeed('sp'), { profile: 'sp' });
+      requestLock();
+    } else if (mpMenuMode === 'host') {
+      startMultiplayerHost();
+    } else {
+      joinMultiplayerRoom(jCode ? jCode.value : '');
+    }
+  });
+
+  // 若 URL 带有 ?room=XXXXXX 邀请参数，自动切换至“加入房间”并填入房间码
+  try {
+    const urlRoom = sanitizeRoomCode(new URLSearchParams(location.search).get('room') || '');
+    if (urlRoom.length >= 4) {
+      if (jCode) jCode.value = urlRoom;
+      setMpMenuMode('join');
+      setMpStatus(`🔗 检测到邀请房间码 ${urlRoom}，点击下方按钮即可加入！`);
+    }
+  } catch (e) { /* 忽略 */ }
+  syncPauseMpUI();
+}
+
 /* ============================ 启动 ============================ */
 try {
   (function boot() {
@@ -19457,12 +20779,13 @@ try {
     const scx = Math.floor(spawn.x / 16), scz = Math.floor(spawn.z / 16);
     for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) world.ensureChunk(scx + dx, scz + dz);
     giveStarter();                       // 先发初始补给，随后被存档覆盖（若有）
-    loadWorld();
+    loadWorld('sp');
     spawnAnimalsNear(spawn.x, spawn.z, MAX_ANIMALS);
     buildHotbar();
     refreshHotbar();
     updateHearts();
     updateHungerBar();
+    initMultiplayerUI();
     camera.position.set(spawn.x, spawn.y + player.eye, spawn.z);
     camera.rotation.set(0, player.yaw, 0);
     animate();
