@@ -364,18 +364,48 @@
     background: rgba(24, 96, 138, 0.56); border-color: rgba(114, 214, 255, 0.42); color: #d6f4ff;
   }
 
-  /* ---- 背包 ---- */
+  /* ---- 背包与侧边合成/创造物品库切换 ---- */
   #inventory {
     position: fixed; inset: 0; z-index: 22; display: none; align-items: center; justify-content: center;
     background: rgba(6, 10, 16, 0.76); color: #e8f0f6; text-align: center;
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   }
   #inventory .box {
-    padding: 18px 24px; max-width: 700px; width: 93vw; max-height: 90vh;
+    padding: 18px 22px; max-width: 780px; width: 94vw; max-height: 90vh;
     display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box;
   }
   #inventory h1 { font-size: 20px; letter-spacing: 1px; margin-bottom: 3px; font-weight: 800; }
   #inventory .sub { color: #9fc3d8; font-size: 12px; margin-bottom: 12px; flex-shrink: 0; }
+  .inv-shell {
+    display: flex; gap: 14px; align-items: stretch; flex: 1; min-height: 0; width: 100%;
+  }
+  .inv-side-rail {
+    display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; width: 94px;
+    padding: 8px; border-radius: 12px;
+    background: rgba(0, 0, 0, 0.32); border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+  .inv-side-btn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    padding: 12px 6px; border-radius: 10px; border: 1.5px solid rgba(255, 255, 255, 0.10);
+    background: rgba(255, 255, 255, 0.04); color: #a7c5da; cursor: pointer;
+    font-family: inherit; font-size: 12px; font-weight: 800; position: relative;
+    transition: all 0.15s ease;
+  }
+  .inv-side-btn:hover { background: rgba(255, 255, 255, 0.10); color: #eef7ff; }
+  .inv-side-btn.active {
+    background: linear-gradient(135deg, rgba(95, 209, 132, 0.28), rgba(48, 160, 92, 0.20));
+    border-color: rgba(120, 232, 158, 0.55); color: #eafff2;
+    box-shadow: 0 4px 14px rgba(64, 192, 108, 0.24);
+  }
+  .inv-side-btn .ico { font-size: 20px; line-height: 1; }
+  .inv-side-badge {
+    font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px;
+    background: rgba(255, 212, 121, 0.18); color: #ffe299; border: 1px solid rgba(255, 212, 121, 0.35);
+  }
+  .inv-main {
+    flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0;
+  }
+  .inv-view { flex: 1; min-height: 256px; display: flex; flex-direction: column; min-width: 0; }
   #invGrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; justify-items: center; flex-shrink: 0; }
   .inv-slot {
     width: 48px; height: 48px; border-radius: 9px; position: relative;
@@ -394,19 +424,60 @@
     position: absolute; right: 3px; bottom: 2px; font-size: 11.5px; font-weight: 800;
     color: #fff; text-shadow: 0 1px 2px #000; pointer-events: none;
   }
-  .craft-title { margin-top: 14px; margin-bottom: 6px; font-size: 12.5px; font-weight: 800; color: var(--gold); letter-spacing: 1.8px; flex-shrink: 0; }
+  .craft-toolbar {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; flex-shrink: 0;
+  }
+  .craft-cat-btn {
+    padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.05); color: #9fc3d8; font-size: 11.5px; font-weight: 700;
+    cursor: pointer; font-family: inherit; transition: all 0.14s ease;
+  }
+  .craft-cat-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+  .craft-cat-btn.active {
+    background: rgba(95, 209, 132, 0.24); border-color: rgba(120, 232, 158, 0.55); color: #eafff2;
+  }
+  #creativeSearch {
+    flex: 1; min-width: 110px; padding: 5px 10px; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.16); background: rgba(0,0,0,0.42);
+    color: #fff; font-size: 12px; font-family: inherit; outline: none;
+  }
+  #creativeSearch:focus { border-color: var(--accent); }
   #craftPanel {
-    display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
-    max-height: 170px; overflow-y: auto; padding: 8px; border-radius: 10px;
+    display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-start; align-content: flex-start;
+    max-height: 310px; min-height: 210px; overflow-y: auto; padding: 10px; border-radius: 10px;
     background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.09);
   }
-  .recipe {
-    display: flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 9px;
-    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.13); cursor: pointer;
+  #craftPanel.creative-mode {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 7px;
+    justify-items: center; align-content: start;
+  }
+  .creative-item {
+    width: 56px; height: 62px; border-radius: 9px; padding: 4px 2px; box-sizing: border-box;
+    background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(0,0,0,0.22));
+    border: 1.5px solid rgba(255,255,255,0.12); cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     transition: transform .12s ease, border-color .12s ease, background .12s ease;
   }
-  .recipe:hover { border-color: var(--accent); background: rgba(95,209,132,0.14); transform: translateY(-1px); }
-  .recipe.cant { opacity: 0.36; }
+  .creative-item:hover {
+    border-color: var(--accent); background: rgba(95,209,132,0.18); transform: translateY(-2px);
+  }
+  .creative-item canvas { image-rendering: pixelated; width: 34px; height: 34px; flex-shrink: 0; }
+  .creative-item .cname {
+    font-size: 10px; color: #cfe2ef; max-width: 52px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; line-height: 1.1;
+  }
+  .craft-empty {
+    width: 100%; padding: 48px 16px; color: #95b6cb; font-size: 13px; line-height: 1.8; text-align: center;
+  }
+  .craft-empty span {
+    display: block; font-size: 11.5px; color: #7ca0b8; margin-top: 4px;
+  }
+  .recipe {
+    display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 9px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); cursor: pointer;
+    transition: transform .12s ease, border-color .12s ease, background .12s ease;
+  }
+  .recipe:hover { border-color: var(--accent); background: rgba(95,209,132,0.16); transform: translateY(-1px); }
   .recipe canvas { image-rendering: pixelated; width: 30px; height: 30px; }
   .recipe .out { font-weight: 800; color: var(--gold); font-size: 12.5px; }
   .recipe .arrow { color: #9fc3d8; }
@@ -668,33 +739,63 @@
 
 <div id="inventory">
   <div class="box">
-    <h1>🎒 背包与装备</h1>
-    <div class="sub">点击背包物品与快捷栏交换 · 点击防具槽穿脱盔甲 · 按 E 或 Esc 关闭</div>
-    <div style="display:flex; gap:16px; align-items:flex-start; margin-bottom:10px; width:100%;">
-      <div style="display:flex; flex-direction:column; gap:8px; background:rgba(0,0,0,0.32); padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,0.11); flex-shrink:0;">
-        <div style="font-size:12px; color:#a7c5da; font-weight:800; margin-bottom:2px;">🛡️ 装备栏</div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <div id="slotHelmet" class="slot" style="width:40px; height:40px; cursor:pointer;" title="头部防具（点击穿脱）"></div>
-          <span style="font-size:12px; color:#ddd;">头盔</span>
-        </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <div id="slotChestplate" class="slot" style="width:40px; height:40px; cursor:pointer;" title="胸部防具（点击穿脱）"></div>
-          <span style="font-size:12px; color:#ddd;">胸甲</span>
-        </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <div id="slotLeggings" class="slot" style="width:40px; height:40px; cursor:pointer;" title="腿部防具（点击穿脱）"></div>
-          <span style="font-size:12px; color:#ddd;">护腿</span>
-        </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <div id="slotBoots" class="slot" style="width:40px; height:40px; cursor:pointer;" title="足部防具（点击穿脱）"></div>
-          <span style="font-size:12px; color:#ddd;">靴子</span>
-        </div>
+    <h1 id="invHeaderTitle">🎒 背包与装备</h1>
+    <div class="sub" id="invHeaderSub">点击背包物品与快捷栏交换 · 点击防具槽穿脱盔甲 · 左侧可切换合成台 · 按 E 或 Esc 关闭</div>
+    <div class="inv-shell">
+      <div class="inv-side-rail">
+        <button type="button" class="inv-side-btn active" id="invTabBag">
+          <span class="ico">🎒</span>
+          <span>背包</span>
+        </button>
+        <button type="button" class="inv-side-btn" id="invTabCraft">
+          <span class="ico" id="invTabCraftIco">⚒️</span>
+          <span id="invTabCraftLabel">合成表</span>
+          <span class="inv-side-badge" id="invTabCraftCount">0</span>
+        </button>
       </div>
-      <div id="invGrid" style="flex:1;"></div>
+      <div class="inv-main">
+        <!-- 视图 1：背包与防具槽 -->
+        <div class="inv-view" id="invBagView">
+          <div style="display:flex; gap:14px; align-items:flex-start; width:100%;">
+            <div style="display:flex; flex-direction:column; gap:8px; background:rgba(0,0,0,0.32); padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,0.11); flex-shrink:0;">
+              <div style="font-size:12px; color:#a7c5da; font-weight:800; margin-bottom:2px;">🛡️ 装备栏</div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div id="slotHelmet" class="slot" style="width:40px; height:40px; cursor:pointer;" title="头部防具（点击穿脱）"></div>
+                <span style="font-size:12px; color:#ddd;">头盔</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div id="slotChestplate" class="slot" style="width:40px; height:40px; cursor:pointer;" title="胸部防具（点击穿脱）"></div>
+                <span style="font-size:12px; color:#ddd;">胸甲</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div id="slotLeggings" class="slot" style="width:40px; height:40px; cursor:pointer;" title="腿部防具（点击穿脱）"></div>
+                <span style="font-size:12px; color:#ddd;">护腿</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div id="slotBoots" class="slot" style="width:40px; height:40px; cursor:pointer;" title="足部防具（点击穿脱）"></div>
+                <span style="font-size:12px; color:#ddd;">靴子</span>
+              </div>
+            </div>
+            <div id="invGrid" style="flex:1;"></div>
+          </div>
+        </div>
+
+        <!-- 视图 2：生存仅可合成配方 / 创造全物品库（无配方） -->
+        <div class="inv-view" id="invCraftView" style="display:none;">
+          <div class="craft-toolbar" id="creativeToolbar" style="display:none;">
+            <button type="button" class="craft-cat-btn active" data-cat="all">全部</button>
+            <button type="button" class="craft-cat-btn" data-cat="blocks">🧱 方块</button>
+            <button type="button" class="craft-cat-btn" data-cat="tools">⛏️ 工具装备</button>
+            <button type="button" class="craft-cat-btn" data-cat="nature">🌿 自然下界</button>
+            <button type="button" class="craft-cat-btn" data-cat="items">🍖 道具食物</button>
+            <input id="creativeSearch" type="text" placeholder="🔍 搜索物品名…" />
+          </div>
+          <div id="craftPanel"></div>
+        </div>
+
+        <div id="invHotbar"></div>
+      </div>
     </div>
-    <div class="craft-title">⚒ 合成台</div>
-    <div id="craftPanel"></div>
-    <div id="invHotbar"></div>
   </div>
 </div>
 
@@ -16202,82 +16303,195 @@ function makeIconCanvas(id) {
   const ctx = cv.getContext('2d');
   ctx.imageSmoothingEnabled = false;
   const t = tileOf(id);
-  if (isCrossPlant(id) || isTorch(id) || isLilyPad(id) || isPetals(id) || id === B.WATER) {
-    // 花草/火把/睡莲/花瓣/水等平面物：直接贴图
+  if (isCrossPlant(id) || isTorch(id) || isLilyPad(id) || isPetals(id) || id === B.WATER || id === B.VINE) {
+    // 花草/火把/睡莲/花瓣/藤蔓/水等平面物：直接贴图
     ctx.drawImage(atlas.cv, t.top * TILE, 0, TILE, TILE, 4, 4, S - 8, S - 8);
   } else {
     drawIsometricBlock(ctx, t.top, t.side);   // 立体方块图标
   }
   return cv;
 }
-// 工具/剑/木棍：像素画图标（按材质等级配色）
+// 工具/武器/木棍：高辨识度 16×16 像素网格精绘（带深色描边、三阶金属/木石高光与经典轮廓）
 function makeToolIcon(id) {
   const S = 32;
   const cv = document.createElement('canvas');
   cv.width = cv.height = S;
   const ctx = cv.getContext('2d');
   ctx.imageSmoothingEnabled = false;
-  const handle = '#9a6b3a', handleLight = '#c8a273';
-  let head, headDark;
-  if (isWoodTier(id)) { head = '#c89a5e'; headDark = '#96692f'; }
-  else if (isStoneTier(id)) { head = '#9a9a9a'; headDark = '#6a6a6a'; }
-  else if (isIronTier(id)) { head = '#d8dde4'; headDark = '#9aa2ac'; }
-  else if (isDiamondTier(id)) { head = '#4dedf4'; headDark = '#1b7b85'; }
-  else { head = '#443e42'; headDark = '#231f22'; }
-  function line(x0, y0, x1, y1, w, color) {
-    ctx.fillStyle = color;
-    const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
-    for (let s = 0; s <= steps; s++) {
-      const x = Math.round(x0 + (x1 - x0) * s / steps);
-      const y = Math.round(y0 + (y1 - y0) * s / steps);
-      ctx.fillRect(x - (w >> 1), y - (w >> 1), w, w);
+
+  // 五大材质高对比度四阶配色（主色 / 高光刃口 / 暗面 / 深色外描边）
+  let pal;
+  if (isWoodTier(id)) {
+    pal = { m: '#ce9548', h: '#f0c47a', d: '#8d5d24', o: '#3b2109', g: '#b87d32' };
+  } else if (isStoneTier(id)) {
+    pal = { m: '#8e949d', h: '#bcc2cb', d: '#5b616a', o: '#22262c', g: '#747a84' };
+  } else if (isIronTier(id)) {
+    pal = { m: '#e2eaf4', h: '#ffffff', d: '#9ba9bb', o: '#364150', g: '#c0ccd9' };
+  } else if (isDiamondTier(id)) {
+    pal = { m: '#36ece2', h: '#c4fffc', d: '#129898', o: '#08414b', g: '#1ec4be' };
+  } else {
+    // 下界合金：高对比炭紫钢色 + 鎏金镶边，暗底槽位中依然锐利醒目
+    pal = { m: '#685d66', h: '#b29fb0', d: '#393238', o: '#161216', g: '#e2a33a' };
+  }
+  const colorMap = {
+    'o': pal.o, 'm': pal.m, 'h': pal.h, 'd': pal.d, 'g': pal.g,
+    'k': '#3c220c', // 木柄深描边
+    'w': '#9b6732', // 木柄主色
+    'l': '#cf9b5a', // 木柄受光亮边
+    's': '#e8edf4', // 弓弦亮白
+    'b': '#5e3818', // 弓握把深棕
+  };
+  function drawSprite16(rows) {
+    for (let y = 0; y < rows.length; y++) {
+      const row = rows[y];
+      for (let x = 0; x < row.length; x++) {
+        const ch = row[x];
+        if (ch === '.' || ch === ' ') continue;
+        const col = colorMap[ch];
+        if (!col) continue;
+        ctx.fillStyle = col;
+        ctx.fillRect(x * 2, y * 2, 2, 2);
+      }
     }
   }
+
   if (id === B.STICK) {
-    line(8, 24, 24, 8, 3, handle);
-    line(8, 24, 24, 8, 1, handleLight);
+    drawSprite16([
+      '................',
+      '................',
+      '...........kk...',
+      '..........klk...',
+      '.........klwk...',
+      '........klwk....',
+      '.......klwk.....',
+      '......klwk......',
+      '.....klwk.......',
+      '....klwk........',
+      '...klwk.........',
+      '..klwk..........',
+      '..kwk...........',
+      '..kk............',
+      '................',
+      '................',
+    ]);
     return cv;
   }
-  line(8, 24, 24, 8, 3, handle);             // 斜向手柄
-  line(8, 24, 24, 8, 1, handleLight);
+
   if (isSword(id)) {
-    line(21, 11, 29, 3, 5, head);            // 剑刃（沿手柄方向延伸）
-    line(21, 11, 29, 3, 2, isNetheriteTier(id) ? '#746870' : '#ffffff');
-    ctx.fillStyle = headDark;
-    ctx.fillRect(19, 13, 9, 4);              // 护手
-    ctx.fillStyle = handle;
-    ctx.fillRect(18, 12, 10, 3);
+    // 经典 MC 对角长剑：锐利双刃高光 + 闭合深色描边 + 立体护手 + 握柄 + 剑首
+    drawSprite16([
+      '............oooo',
+      '...........ohhho',
+      '..........ohhhdo',
+      '.........ohhmmdo',
+      '........ohhmmdo.',
+      '.......ohhmmdo..',
+      '...oo.ohhmmdo...',
+      '..oggohhmmdo....',
+      '...ogohmdoo.....',
+      '....ogggo.......',
+      '...klwoggo......',
+      '..klwk.oggo.....',
+      '.oowk...oo......',
+      'oggo............',
+      'ooo.............',
+      '................',
+    ]);
     return cv;
   }
+
   if (isPickaxe(id)) {
-    ctx.fillStyle = head;
-    ctx.fillRect(16, 2, 12, 4); ctx.fillRect(19, 2, 4, 10);   // 直角镐头
-    ctx.fillStyle = headDark;
-    ctx.fillRect(16, 4, 12, 2); ctx.fillRect(21, 5, 2, 7);
-  } else if (isAxe(id)) {
-    ctx.fillStyle = head;
-    ctx.fillRect(13, 2, 14, 7); ctx.fillRect(10, 3, 4, 5);    // 梯形斧刃
-    ctx.fillStyle = headDark;
-    ctx.fillRect(13, 6, 14, 3);
-  } else if (isShovel(id)) {
-    ctx.fillStyle = head;
-    ctx.fillRect(5, 19, 9, 9); ctx.fillRect(6, 16, 7, 4);     // 方形铲头
-    ctx.fillStyle = headDark;
-    ctx.fillRect(5, 25, 9, 3);
-  } else if (id === B.BOW) {
-    // 弯曲长弓木臂
-    ctx.strokeStyle = '#8a5228'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(8, 25);
-    ctx.quadraticCurveTo(24, 16, 8, 7);
-    ctx.stroke();
-    // 弓握把缠带
-    ctx.strokeStyle = '#4a2810'; ctx.lineWidth = 3.5;
-    ctx.beginPath(); ctx.moveTo(16, 15); ctx.lineTo(16, 17); ctx.stroke();
-    // 紧绷银白弓弦
-    ctx.strokeStyle = '#e8edf2'; ctx.lineWidth = 1.0;
-    ctx.beginPath(); ctx.moveTo(8, 25); ctx.lineTo(8, 7); ctx.stroke();
+    // 经典 MC 弧形双尖矿镐：闭合深色描边 + 宽大拱形镐头 + 醒目高光刃脊 + 斜向木柄
+    drawSprite16([
+      '................',
+      '....ooooooo.....',
+      '...ohhhhhmmo....',
+      '..ohmmddomhmo...',
+      '..ooo...ogmhmo..',
+      '........klomhmo.',
+      '.......klwkomho.',
+      '......klwk.omdo.',
+      '.....klwk..omdo.',
+      '....klwk...omdo.',
+      '...klwk....ooo..',
+      '..klwk..........',
+      '.klwk...........',
+      '.kwk............',
+      '.kk.............',
+      '................',
+    ]);
+    return cv;
   }
+
+  if (isAxe(id)) {
+    // 经典 MC 厚重单刃战斧：左上方弧形钩刃 + 闭合深描边 + 亮白刃口 + 立体斧背
+    drawSprite16([
+      '................',
+      '.....oooooo.....',
+      '....ohhhmmmo....',
+      '...ohhhmmmmmo...',
+      '...ohhmmmmmmdo..',
+      '...ohmmddglooo..',
+      '...ohmdoklwk....',
+      '....ooookwk.....',
+      '.......klwk.....',
+      '......klwk......',
+      '.....klwk.......',
+      '....klwk........',
+      '...klwk.........',
+      '..klwk..........',
+      '..kwk...........',
+      '..kk............',
+    ]);
+    return cv;
+  }
+
+  if (isShovel(id)) {
+    // 经典 MC 圆头铲锹：右上方闭合描边铲斗 + 亮脊 + 斜木柄
+    drawSprite16([
+      '................',
+      '.........oooo...',
+      '........ohhmmo..',
+      '.......ohhhmmmo.',
+      '.......ohhmmmdo.',
+      '.......ogmmddo..',
+      '.......kloddo...',
+      '......klwkoo....',
+      '.....klwk.......',
+      '....klwk........',
+      '...klwk.........',
+      '..klwk..........',
+      '.klwk...........',
+      '.kwk............',
+      '.kk.............',
+      '................',
+    ]);
+    return cv;
+  }
+
+  if (id === B.BOW) {
+    // 经典 MC 像素斜角长弓：优雅木弓弧 + 绷紧斜向银白弓弦 + 深色缠带握把
+    drawSprite16([
+      '................',
+      '........kkkk....',
+      '......kkllwwk...',
+      '.....klwkkkkwk..',
+      '....klk....kwk..',
+      '....ksk.....kbk.',
+      '.....ks.....kbk.',
+      '......ks....klk.',
+      '.......ks...kwk.',
+      '........ks.kwk..',
+      '.........kskwk..',
+      '..........kkwk..',
+      '..........klk...',
+      '..........kk....',
+      '................',
+      '................',
+    ]);
+    return cv;
+  }
+
   return cv;
 }
 // 锭 / 木炭：物品图标
@@ -17165,6 +17379,111 @@ const invGrid = document.getElementById('invGrid');
 const invSlotNum = document.getElementById('invSlotNum');
 const craftPanel = document.getElementById('craftPanel');
 const invHotbar = document.getElementById('invHotbar');
+const invBagView = document.getElementById('invBagView');
+const invCraftView = document.getElementById('invCraftView');
+const invTabBag = document.getElementById('invTabBag');
+const invTabCraft = document.getElementById('invTabCraft');
+const invTabCraftIco = document.getElementById('invTabCraftIco');
+const invTabCraftLabel = document.getElementById('invTabCraftLabel');
+const invTabCraftCount = document.getElementById('invTabCraftCount');
+const invHeaderTitle = document.getElementById('invHeaderTitle');
+const invHeaderSub = document.getElementById('invHeaderSub');
+const creativeToolbar = document.getElementById('creativeToolbar');
+const creativeSearchEl = document.getElementById('creativeSearch');
+
+let invActiveTab = 'bag';              // 'bag' 背包 / 'craft' 合成表或创造物品库
+let creativeCat = 'all';               // 创造物品库分类
+let creativeQuery = '';                // 创造物品库搜索关键词
+let _creativeCatalogCache = null;
+const CREATIVE_EXCLUDE = new Set([
+  B.AIR, B.WATER, B.WHEAT_CROP, B.WHEAT_CROP_MATURE,
+  B.NETHER_PORTAL, B.REDSTONE_LAMP_ON, B.CAMPFIRE_OFF,
+]);
+function creativeCategoryOf(id) {
+  if (
+    isTool(id) || isArmor(id) ||
+    id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL ||
+    id === B.TRIDENT || id === B.ELYTRA || id === B.SPYGLASS ||
+    id === B.COMPASS || id === B.CLOCK || id === B.SADDLE ||
+    id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.MILK_BUCKET ||
+    id === B.ARROW || id === B.SPECTRAL_ARROW || id === B.TOTEM_OF_UNDYING || id === B.GOAT_HORN
+  ) return 'tools';
+  if (
+    id === B.GRASS || id === B.DIRT || id === B.SAND || id === B.RED_SAND || id === B.WHITE_SAND ||
+    id === B.GRAVEL || id === B.SNOW || id === B.ICE || id === B.PACKED_ICE || id === B.BLUE_ICE ||
+    id === B.MYCELIUM || id === B.PODZOL || id === B.MUD || id === B.FARMLAND || id === B.DIRT_PATH ||
+    isLog(id) || isLeaf(id) || isCrossPlant(id) || isSapling(id) ||
+    id === B.CACTUS || id === B.PUMPKIN || id === B.MELON || id === B.LILY_PAD || id === B.CHERRY_PETALS ||
+    id === B.VINE || id === B.WEEPING_VINES || id === B.TWISTING_VINES ||
+    id === B.MUSHROOM_STEM || id === B.RED_MUSHROOM_BLOCK || id === B.BROWN_MUSHROOM_BLOCK ||
+    id === B.NETHERRACK || id === B.SOUL_SAND || id === B.NETHER_BRICKS ||
+    id === B.NETHER_QUARTZ_ORE || id === B.NETHER_GOLD_ORE || id === B.BLACKSTONE ||
+    id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM || id === B.CRIMSON_STEM ||
+    id === B.NETHER_WART_BLOCK || id === B.WARPED_STEM || id === B.WARPED_WART_BLOCK ||
+    id === B.SHROOMLIGHT || id === B.BASALT || id === B.MAGMA || id === B.GLOWSTONE ||
+    id === B.OBSIDIAN || id === B.CRYING_OBSIDIAN || id === B.SCULK_BLOCK || id === B.SCULK_SENSOR ||
+    id === B.DRIPSTONE_BLOCK || id === B.AMETHYST_BLOCK
+  ) return 'nature';
+  if (!isPlaceable(id)) return 'items';
+  return 'blocks';
+}
+function creativeGiveCount(id) {
+  if (
+    isTool(id) || isArmor(id) || isPotion(id) ||
+    id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL ||
+    id === B.TRIDENT || id === B.ELYTRA || id === B.SPYGLASS || id === B.SADDLE ||
+    id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.MILK_BUCKET ||
+    id === B.MUSIC_DISC || id === B.GOAT_HORN || id === B.TOTEM_OF_UNDYING || id === B.BED
+  ) return 1;
+  return MAX_STACK;
+}
+function getCreativeCatalog() {
+  if (_creativeCatalogCache) return _creativeCatalogCache;
+  const seen = new Set();
+  const list = [];
+  for (const id of Object.values(B)) {
+    if (seen.has(id) || CREATIVE_EXCLUDE.has(id) || !NAMES[id]) continue;
+    seen.add(id);
+    list.push({ id, name: NAMES[id], cat: creativeCategoryOf(id) });
+  }
+  _creativeCatalogCache = list;
+  return list;
+}
+
+if (invTabBag) {
+  invTabBag.addEventListener('click', () => {
+    if (invActiveTab === 'bag') return;
+    invActiveTab = 'bag';
+    playClick();
+    buildInventory();
+  });
+}
+if (invTabCraft) {
+  invTabCraft.addEventListener('click', () => {
+    if (invActiveTab === 'craft') return;
+    invActiveTab = 'craft';
+    playClick();
+    buildInventory();
+  });
+}
+if (creativeToolbar) {
+  creativeToolbar.querySelectorAll('.craft-cat-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      creativeCat = btn.dataset.cat || 'all';
+      playClick();
+      creativeToolbar.querySelectorAll('.craft-cat-btn').forEach((b) => {
+        b.classList.toggle('active', b === btn);
+      });
+      renderCraftPanel();
+    });
+  });
+}
+if (creativeSearchEl) {
+  creativeSearchEl.addEventListener('input', () => {
+    creativeQuery = creativeSearchEl.value.trim().toLowerCase();
+    renderCraftPanel();
+  });
+}
 const furnaceEl = document.getElementById('furnaceUI');
 const furnaceSlots = document.getElementById('furnaceSlots');
 const furnaceBar = document.getElementById('furnaceBar');
@@ -17333,62 +17652,21 @@ function buildInventory() {
         slot.appendChild(c);
       }
       slot.title = s.count + '× ' + itemName(s.id);
-      slot.addEventListener('click', () => {
-        const tmp = hotbar[selected];      // 与当前物品栏格交换
-        hotbar[selected] = inv[i];
-        inv[i] = tmp;
-        refreshHotbar();
-        buildInventory();
-      });
+    } else {
+      slot.title = '空背包格（点击与当前快捷栏交换）';
     }
+    slot.addEventListener('click', () => {
+      if (!inv[i] && !hotbar[selected]) return;
+      const tmp = hotbar[selected];      // 与当前物品栏格交换
+      hotbar[selected] = inv[i];
+      inv[i] = tmp;
+      refreshHotbar();
+      buildInventory();
+    });
     invGrid.appendChild(slot);
   }
-  // 合成面板
-  craftPanel.innerHTML = '';
-  const isCreative = !!player.fly;
-  RECIPES.forEach((r) => {
-    const can = isCreative || canCraft(r);
-    const el = document.createElement('div');
-    el.className = 'recipe' + (can ? '' : ' cant');
-    el.title = (isCreative ? '【创造模式：点击直接获取】' : '') + r.need.map(([id, n]) => n + '× ' + itemName(id)).join(' + ') + ' → ' + r.n + '× ' + itemName(r.out);
-    r.need.forEach(([id, n], idx) => {
-      if (idx > 0) {
-        const plus = document.createElement('span');
-        plus.className = 'need';
-        plus.style.opacity = '0.6';
-        plus.textContent = '+';
-        el.appendChild(plus);
-      }
-      const ic = makeIcon(id);
-      const lab = document.createElement('span');
-      lab.className = 'need';
-      lab.textContent = n + '×';
-      el.appendChild(lab);
-      el.appendChild(ic);
-    });
-    const arrow = document.createElement('span');
-    arrow.className = 'arrow';
-    arrow.textContent = '→';
-    el.appendChild(arrow);
-    el.appendChild(makeIcon(r.out));
-    const out = document.createElement('span');
-    out.className = 'out';
-    out.textContent = '×' + r.n;
-    el.appendChild(out);
-    el.addEventListener('click', () => {
-      if (player.fly) {
-        addItem(r.out, r.n);
-        refreshHotbar();
-        buildInventory();
-        playPop();
-      } else if (craft(r)) {
-        refreshHotbar();
-        buildInventory();
-        playPop();
-      }
-    });
-    craftPanel.appendChild(el);
-  });
+  // 侧边栏切换状态 + 标题同步 + 合成表 / 创造物品库面板
+  renderCraftPanel();
   // 背包界面内的物品栏行
   invHotbar.innerHTML = '';
   for (let i = 0; i < HOTBAR_SIZE; i++) {
@@ -17403,11 +17681,142 @@ function buildInventory() {
         c.textContent = s.count;
         slot.appendChild(c);
       }
+      slot.title = s.count + '× ' + itemName(s.id);
     }
     slot.addEventListener('click', () => { select(i); buildInventory(); });
     invHotbar.appendChild(slot);
   }
   if (invSlotNum) invSlotNum.textContent = selected + 1;
+}
+function renderCraftPanel() {
+  const isCreative = !!player.fly;
+  const craftableRecipes = isCreative ? [] : RECIPES.filter((r) => canCraft(r));
+  const fullCatalog = isCreative ? getCreativeCatalog() : [];
+
+  // 侧边按钮激活态与角标
+  if (invTabBag) invTabBag.classList.toggle('active', invActiveTab === 'bag');
+  if (invTabCraft) invTabCraft.classList.toggle('active', invActiveTab === 'craft');
+  if (invBagView) invBagView.style.display = (invActiveTab === 'bag') ? 'block' : 'none';
+  if (invCraftView) invCraftView.style.display = (invActiveTab === 'craft') ? 'flex' : 'none';
+
+  if (invTabCraftIco) invTabCraftIco.textContent = isCreative ? '✨' : '⚒️';
+  if (invTabCraftLabel) invTabCraftLabel.textContent = isCreative ? '物品库' : '合成表';
+  if (invTabCraftCount) {
+    const cnt = isCreative ? fullCatalog.length : craftableRecipes.length;
+    invTabCraftCount.textContent = String(cnt);
+    invTabCraftCount.style.opacity = cnt > 0 ? '1' : '0.45';
+  }
+  if (invHeaderTitle && invHeaderSub) {
+    if (invActiveTab === 'bag') {
+      invHeaderTitle.textContent = '🎒 背包与装备';
+      invHeaderSub.textContent = isCreative
+        ? '点击背包物品与快捷栏交换 · 点击防具槽穿脱盔甲 · 左侧切换「物品库」自由拿取全物品 · 按 E 或 Esc 关闭'
+        : '点击背包物品与快捷栏交换 · 点击防具槽穿脱盔甲 · 左侧切换「合成表」查看当前可合成配方 · 按 E 或 Esc 关闭';
+    } else if (isCreative) {
+      invHeaderTitle.textContent = '✨ 创造模式 · 全物品库';
+      invHeaderSub.textContent = '已隐藏合成配方 · 点击任意物品直接获取（方块/材料 ×64，工具/装备 ×1） · 按 E 或 Esc 关闭';
+    } else {
+      invHeaderTitle.textContent = '⚒️ 合成表（仅可合成）';
+      invHeaderSub.textContent = '仅显示当前背包材料可制作的配方 · 点击直接合成 · 左侧切回「背包」 · 按 E 或 Esc 关闭';
+    }
+  }
+
+  // 若当前停留在背包页，不必重建隐藏的合成面板 DOM，切换时再即时构建
+  if (invActiveTab !== 'craft') return;
+
+  const prevScroll = craftPanel.scrollTop;
+  craftPanel.innerHTML = '';
+
+  if (isCreative) {
+    // 创造模式：显示所有物品，不显示配方
+    if (creativeToolbar) creativeToolbar.style.display = 'flex';
+    craftPanel.classList.add('creative-mode');
+    const filtered = fullCatalog.filter((item) => {
+      if (creativeCat !== 'all' && item.cat !== creativeCat) return false;
+      if (creativeQuery && !item.name.toLowerCase().includes(creativeQuery)) return false;
+      return true;
+    });
+    if (filtered.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'craft-empty';
+      empty.style.gridColumn = '1 / -1';
+      empty.innerHTML = '🔍 没有找到匹配的物品<span>试试清空搜索关键词或切换到「全部」分类</span>';
+      craftPanel.appendChild(empty);
+    } else {
+      const frag = document.createDocumentFragment();
+      for (const item of filtered) {
+        const giveN = creativeGiveCount(item.id);
+        const card = document.createElement('div');
+        card.className = 'creative-item';
+        card.title = `${item.name}（点击获取 ×${giveN}）`;
+        card.appendChild(makeIcon(item.id));
+        const nameEl = document.createElement('span');
+        nameEl.className = 'cname';
+        nameEl.textContent = item.name;
+        card.appendChild(nameEl);
+        card.addEventListener('click', () => {
+          addItem(item.id, giveN);
+          refreshHotbar();
+          buildInventory();
+          playPop();
+          toast(`✨ 已获取 ${item.name}${giveN > 1 ? ' ×' + giveN : ''}`);
+        });
+        frag.appendChild(card);
+      }
+      craftPanel.appendChild(frag);
+    }
+  } else {
+    // 生存模式：仅显示当前材料可合成的配方
+    if (creativeToolbar) creativeToolbar.style.display = 'none';
+    craftPanel.classList.remove('creative-mode');
+    if (craftableRecipes.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'craft-empty';
+      empty.innerHTML = '🧺 当前背包材料暂无可合成的配方<span>去砍树、挖矿或采集食材，材料足够时可合成的配方会自动出现在这里</span>';
+      craftPanel.appendChild(empty);
+    } else {
+      const frag = document.createDocumentFragment();
+      for (const r of craftableRecipes) {
+        const el = document.createElement('div');
+        el.className = 'recipe';
+        el.title = r.need.map(([id, n]) => n + '× ' + itemName(id)).join(' + ') + ' → ' + r.n + '× ' + itemName(r.out);
+        r.need.forEach(([id, n], idx) => {
+          if (idx > 0) {
+            const plus = document.createElement('span');
+            plus.className = 'need';
+            plus.style.opacity = '0.6';
+            plus.textContent = '+';
+            el.appendChild(plus);
+          }
+          const ic = makeIcon(id);
+          const lab = document.createElement('span');
+          lab.className = 'need';
+          lab.textContent = n + '×';
+          el.appendChild(lab);
+          el.appendChild(ic);
+        });
+        const arrow = document.createElement('span');
+        arrow.className = 'arrow';
+        arrow.textContent = '→';
+        el.appendChild(arrow);
+        el.appendChild(makeIcon(r.out));
+        const out = document.createElement('span');
+        out.className = 'out';
+        out.textContent = '×' + r.n;
+        el.appendChild(out);
+        el.addEventListener('click', () => {
+          if (craft(r)) {
+            refreshHotbar();
+            buildInventory();
+            playPop();
+          }
+        });
+        frag.appendChild(el);
+      }
+      craftPanel.appendChild(frag);
+    }
+  }
+  craftPanel.scrollTop = prevScroll;
 }
 function openInventory() {
   if (!started) return;
@@ -17424,6 +17833,7 @@ function openInventory() {
 }
 function closeInventory() {
   inventoryOpen = false;
+  if (creativeSearchEl && document.activeElement === creativeSearchEl) creativeSearchEl.blur();
   refreshOverlays();
   requestLock();
 }
@@ -18127,9 +18537,14 @@ function setSpyglassZoom(active) {
 document.addEventListener('keydown', (e) => {
   const tag = document.activeElement && document.activeElement.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA') {
-    if (e.code === 'Escape' && typeof closeMpChat === 'function' && mpChatOpen) {
-      e.preventDefault();
-      closeMpChat(true);
+    if (e.code === 'Escape') {
+      if (typeof closeMpChat === 'function' && mpChatOpen) {
+        e.preventDefault();
+        closeMpChat(true);
+      } else if (inventoryOpen) {
+        e.preventDefault();
+        closeInventory();
+      }
     }
     return;
   }
@@ -18144,6 +18559,7 @@ document.addEventListener('keydown', (e) => {
     player.fly = !player.fly;
     player.vel.y = 0;
     toast(player.fly ? '✨ 已开启创造模式（自由翱翔，无伤害）' : '🚶 已切换为生存模式');
+    if (inventoryOpen) buildInventory();
   }
   if (e.code === 'KeyT' && locked && mpActive) {
     e.preventDefault();
