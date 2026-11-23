@@ -7450,6 +7450,344 @@ function findGround(x, z) {
   groundCache.set(k, out);
   return out;
 }
+
+/* ============================ 🧭 统一体素生物 A* 寻路与智能避障引擎 ============================ */
+let _mobPathBudget = 3;   // 每帧全局最多执行 3 次完整 A* 寻路，确保 30+ 生物下依然稳跑高帧率
+function mobResetPathBudget() { _mobPathBudget = 3; }
+
+function isMobHazard(b) {
+  return b === B.CACTUS || b === B.MAGMA || b === B.CAMPFIRE || b === B.SOUL_CAMPFIRE;
+}
+function isMobPassable(b, x, y, z) {
+  if (!isSolid(b)) return true;
+  if (b === B.DOOR) return isDoorOpen(x, y, z); // 仅敞开的木门可直接穿行，关闭的门视为墙
+  return false;
+}
+// 局部可通行立足高度检测（支持高低台阶、屋檐、洞穴与敞开门洞，绝不误把屋顶/树冠当成地面）
+function mobStepHeight(ix, currY, iz, opts) {
+  const maxUp = (opts && opts.maxUp !== undefined) ? opts.maxUp : 1;
+  const maxDown = (opts && opts.maxDown !== undefined) ? opts.maxDown : 2;
+  const bodyH = (opts && opts.height !== undefined) ? opts.height : 2;
+  const avoidWater = !(opts && opts.allowWater);
+  const avoidShallowSea = !!(opts && opts.avoidSea);
+  const baseY = Math.round(currY);
+  const hi = Math.min(HEIGHT - bodyH - 1, baseY + maxUp);
+  const lo = Math.max(1, baseY - maxDown);
+  for (let y = hi; y >= lo; y--) {
+    const floorB = world.getBlock(ix, y - 1, iz);
+    if (!isSolid(floorB) || isLeaf(floorB) || floorB === B.DOOR || isMobHazard(floorB)) continue;
+    if (avoidShallowSea && y <= SEA + 1) continue;
+    if (avoidWater && (world.getWater(ix, y, iz) > 0 || world.getWater(ix, y - 1, iz) > 0)) continue;
+    let clear = true;
+    for (let h = 0; h < bodyH; h++) {
+      const ub = world.getBlock(ix, y + h, iz);
+      if (!isMobPassable(ub, ix, y + h, iz) || isMobHazard(ub)) { clear = false; break; }
+    }
+    if (clear) return y;
+  }
+  return -1;
+}
+// 轻量视线遮挡检测（供骷髅/掠夺者判断目标是否被墙遮挡，挡住时先绕路再射击）
+function hasMobLineOfSight(x1, y1, z1, x2, y2, z2) {
+  const dx = x2 - x1, dy = y2 - y1, dz = z2 - z1;
+  const dist = Math.hypot(dx, dy, dz);
+  if (dist < 0.8) return true;
+  const steps = Math.min(48, Math.ceil(dist / 0.45));
+  const sx = dx / steps, sy = dy / steps, sz = dz / steps;
+  for (let i = 1; i < steps; i++) {
+    const px = x1 + sx * i, py = y1 + sy * i, pz = z1 + sz * i;
+    const b = world.getBlock(Math.floor(px), Math.floor(py), Math.floor(pz));
+    if (isSolid(b) && b !== B.GLASS && !(b === B.DOOR && isDoorOpen(Math.floor(px), Math.floor(py), Math.floor(pz)))) {
+      return false;
+    }
+  }
+  return true;
+}
+function lerpAngle(cur, target, t) {
+  let diff = target - cur;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return cur + diff * Math.min(1, t);
+}
+
+// 8 方向体素网格 A* 寻路（带对角防切墙角 + 二叉堆优先队列 + 节点预算封顶）
+const _ASTAR_DIRS = [
+  [1, 0, 1.0], [-1, 0, 1.0], [0, 1, 1.0], [0, -1, 1.0],
+  [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]
+];
+function findMobPath(sx, sy, sz, tx, ty, tz, opts) {
+  const sxi = Math.floor(sx), szi = Math.floor(sz);
+  const txi = Math.floor(tx), tzi = Math.floor(tz);
+  if (sxi === txi && szi === tzi) return [];
+  const maxNodes = (opts && opts.maxNodes) || 150;
+  const maxRadius = (opts && opts.maxRadius) || 20;
+  const startY = Math.round(sy);
+
+  const keyOf = (x, z) => x * 65536 + z;
+  const hCost = (x, z) => {
+    const adx = Math.abs(x - txi), adz = Math.abs(z - tzi);
+    return (adx + adz) + (1.414 - 2) * Math.min(adx, adz); // Octile 启发式
+  };
+
+  const startKey = keyOf(sxi, szi);
+  const nodes = new Map();
+  const startNode = { x: sxi, y: startY, z: szi, g: 0, h: hCost(sxi, szi), f: hCost(sxi, szi), parent: null, closed: false };
+  nodes.set(startKey, startNode);
+
+  // 轻量二叉最小堆
+  const heap = [startNode];
+  const heapPush = (n) => {
+    heap.push(n);
+    let idx = heap.length - 1;
+    while (idx > 0) {
+      const p = (idx - 1) >> 1;
+      if (heap[p].f <= heap[idx].f) break;
+      const tmp = heap[p]; heap[p] = heap[idx]; heap[idx] = tmp;
+      idx = p;
+    }
+  };
+  const heapPop = () => {
+    const top = heap[0];
+    const last = heap.pop();
+    if (heap.length > 0) {
+      heap[0] = last;
+      let idx = 0, len = heap.length;
+      while (true) {
+        let l = idx * 2 + 1, r = l + 1, sm = idx;
+        if (l < len && heap[l].f < heap[sm].f) sm = l;
+        if (r < len && heap[r].f < heap[sm].f) sm = r;
+        if (sm === idx) break;
+        const tmp = heap[idx]; heap[idx] = heap[sm]; heap[sm] = tmp;
+        idx = sm;
+      }
+    }
+    return top;
+  };
+
+  let bestNode = startNode;
+  let expanded = 0;
+
+  while (heap.length > 0 && expanded < maxNodes) {
+    const cur = heapPop();
+    if (cur.closed) continue;
+    cur.closed = true;
+    expanded++;
+
+    if (cur.h < bestNode.h) bestNode = cur;
+    if (cur.x === txi && cur.z === tzi && Math.abs(cur.y - Math.round(ty)) <= 3) {
+      bestNode = cur;
+      break;
+    }
+
+    for (let di = 0; di < 8; di++) {
+      const dx = _ASTAR_DIRS[di][0], dz = _ASTAR_DIRS[di][1], stepCost = _ASTAR_DIRS[di][2];
+      const nx = cur.x + dx, nz = cur.z + dz;
+      if (Math.abs(nx - sxi) > maxRadius || Math.abs(nz - szi) > maxRadius) continue;
+      const nk = keyOf(nx, nz);
+      const existing = nodes.get(nk);
+      if (existing && existing.closed) continue;
+
+      const ny = mobStepHeight(nx, cur.y, nz, opts);
+      if (ny < 0) continue;
+
+      // 对角步必须两侧正交邻格均可通行，彻底避免生物卡在墙角
+      if (dx !== 0 && dz !== 0) {
+        if (mobStepHeight(cur.x + dx, cur.y, cur.z, opts) < 0 ||
+            mobStepHeight(cur.x, cur.y, cur.z + dz, opts) < 0) continue;
+      }
+
+      // 爬升台阶附加微小代价，优先走平路与宽阔通道
+      const ng = cur.g + stepCost + (ny > cur.y ? 0.25 : 0);
+      if (!existing) {
+        const nh = hCost(nx, nz);
+        const nn = { x: nx, y: ny, z: nz, g: ng, h: nh, f: ng + nh, parent: cur, closed: false };
+        nodes.set(nk, nn);
+        heapPush(nn);
+      } else if (ng < existing.g) {
+        existing.g = ng;
+        existing.y = ny;
+        existing.f = ng + existing.h;
+        existing.parent = cur;
+        heapPush(existing);
+      }
+    }
+  }
+
+  if (bestNode === startNode) return [];
+  const path = [];
+  let p = bestNode;
+  while (p && p !== startNode) {
+    path.push({ x: p.x + 0.5, y: p.y, z: p.z + 0.5 });
+    p = p.parent;
+  }
+  path.reverse();
+  return path;
+}
+
+function mobSyncGroundY(mob, dt, opts) {
+  if (mob.y === undefined || !isFinite(mob.y)) {
+    mob.y = findGround(Math.floor(mob.x), Math.floor(mob.z));
+  }
+  const ix = Math.floor(mob.x), iz = Math.floor(mob.z);
+  let targetY = mobStepHeight(ix, mob.y, iz, { ...(opts || {}), maxUp: 1, maxDown: 4, allowWater: true });
+  if (targetY < 0) targetY = findEntityGround(mob.x, mob.y, mob.z);
+  if (mob.y > targetY) mob.y = Math.max(targetY, mob.y - 14 * dt);
+  else if (mob.y < targetY) mob.y = Math.min(targetY, mob.y + 8 * dt);
+  return mob.y;
+}
+
+// 统一目标导航（直线畅通直行 + 遇墙/障碍自动调用 A* 绕行 + 贴墙滑动 + 防抖动）
+function mobMoveToward(mob, tx, ty, tz, speed, dt, opts) {
+  mobSyncGroundY(mob, dt, opts);
+  const dxAll = tx - mob.x, dzAll = tz - mob.z;
+  const distAll = Math.hypot(dxAll, dzAll);
+  if (distAll < 0.05) return false;
+
+  const probeDist = Math.min(0.65, distAll);
+  const dirX = dxAll / distAll, dirZ = dzAll / distAll;
+  const directStepY = mobStepHeight(Math.floor(mob.x + dirX * probeDist), mob.y, Math.floor(mob.z + dirZ * probeDist), opts);
+  const directClear = directStepY >= 0 && (distAll < 2.4 || mobStepHeight(Math.floor(mob.x + dirX * 1.25), directStepY, Math.floor(mob.z + dirZ * 1.25), opts) >= 0);
+
+  // 更新 A* 路径缓存（遇墙立刻触发，或在缓存到期且目标显著移动时重算）
+  mob._pathTimer = (mob._pathTimer || 0) - dt;
+  const targetShifted = mob._lastTx === undefined || Math.hypot(tx - mob._lastTx, tz - mob._lastTz) > 2.2;
+  const hasPath = Array.isArray(mob._path) && mob._path.length > 0;
+
+  if (directClear && distAll < 3.5) {
+    mob._path = null;
+  } else if ((!directClear || hasPath) && (_mobPathBudget > 0) && (mob._pathTimer <= 0 || (!hasPath && !directClear) || (targetShifted && mob._pathTimer < 0.35))) {
+    _mobPathBudget--;
+    mob._path = findMobPath(mob.x, mob.y, mob.z, tx, ty, tz, opts);
+    mob._pathTimer = 0.60 + Math.random() * 0.35;
+    mob._lastTx = tx; mob._lastTz = tz;
+  }
+
+  // 选择当前导航航点
+  let steerX = tx, steerZ = tz;
+  if (Array.isArray(mob._path) && mob._path.length > 0) {
+    while (mob._path.length > 0 && Math.hypot(mob._path[0].x - mob.x, mob._path[0].z - mob.z) < 0.48) {
+      mob._path.shift();
+    }
+    if (mob._path.length > 0) {
+      // 如果下一航点已被新放的方块堵死，立即标记下次重算
+      const wp = mob._path[0];
+      if (mobStepHeight(Math.floor(wp.x), mob.y, Math.floor(wp.z), opts) < 0) {
+        mob._path = null;
+        mob._pathTimer = 0;
+      } else {
+        steerX = wp.x; steerZ = wp.z;
+      }
+    }
+  }
+
+  const sdx = steerX - mob.x, sdz = steerZ - mob.z;
+  const sDist = Math.hypot(sdx, sdz);
+  if (sDist < 0.04) return false;
+  const wantHeading = Math.atan2(sdx, sdz);
+  mob.heading = lerpAngle(mob.heading || 0, wantHeading, dt * 11);
+
+  const step = Math.min(sDist, speed * dt);
+  const mx = (sdx / sDist) * step;
+  const mz = (sdz / sDist) * step;
+  const rPad = (opts && opts.radius) || 0.28;
+
+  const canMoveTo = (nx, nz) => {
+    const checkX = Math.floor(nx + (nx >= mob.x ? rPad : -rPad));
+    const checkZ = Math.floor(nz + (nz >= mob.z ? rPad : -rPad));
+    const hCenter = mobStepHeight(Math.floor(nx), mob.y, Math.floor(nz), opts);
+    if (hCenter < 0) return -1;
+    if ((checkX !== Math.floor(nx) || checkZ !== Math.floor(nz)) && mobStepHeight(checkX, mob.y, checkZ, opts) < 0) return -1;
+    return hCenter;
+  };
+
+  let nextY = canMoveTo(mob.x + mx, mob.z + mz);
+  if (nextY >= 0) {
+    mob.x += mx; mob.z += mz;
+    if (nextY > mob.y) mob.y = Math.min(nextY, mob.y + 8 * dt);
+    return true;
+  }
+
+  // 轴向滑墙回退（碰到斜墙平滑沿墙角滑出，绝不死顶墙面）
+  const slideX = canMoveTo(mob.x + mx, mob.z);
+  const slideZ = canMoveTo(mob.x, mob.z + mz);
+  if (slideX >= 0 && Math.abs(mx) > 0.001) {
+    mob.x += mx;
+    mob._pathTimer = Math.min(mob._pathTimer || 0, 0.12);
+    return true;
+  }
+  if (slideZ >= 0 && Math.abs(mz) > 0.001) {
+    mob.z += mz;
+    mob._pathTimer = Math.min(mob._pathTimer || 0, 0.12);
+    return true;
+  }
+
+  // 局部偏航探测（当 A* 预算用尽或遇到临时障碍时，沿 ±40°/±75° 顺滑绕开）
+  const prefSign = mob._detourSign || (mob._detourSign = (Math.random() < 0.5 ? 1 : -1));
+  for (const deg of [0.68, -0.68, 1.25, -1.25]) {
+    const ang = wantHeading + deg * prefSign;
+    const ax = Math.sin(ang) * step * 0.9, az = Math.cos(ang) * step * 0.9;
+    if (canMoveTo(mob.x + ax, mob.z + az) >= 0) {
+      mob.x += ax; mob.z += az;
+      mob.heading = lerpAngle(mob.heading, ang, dt * 8);
+      mob._pathTimer = Math.min(mob._pathTimer || 0, 0.1);
+      return true;
+    }
+  }
+  mob._detourSign = -prefSign;
+  return false;
+}
+
+// 智能逃离导航（村民躲僵尸、苦力怕躲猫：遇墙/河自动沿开阔角度绕逃，不再一头撞墙）
+function mobFleeFrom(mob, threatX, threatZ, speed, dt, opts) {
+  mobSyncGroundY(mob, dt, opts);
+  const awayAng = Math.atan2(mob.x - threatX, mob.z - threatZ);
+  const probes = [0, 0.55, -0.55, 1.1, -1.1, 1.65, -1.65];
+  for (const off of probes) {
+    const ang = awayAng + off;
+    const lookX = mob.x + Math.sin(ang) * 0.75;
+    const lookZ = mob.z + Math.cos(ang) * 0.75;
+    if (mobStepHeight(Math.floor(lookX), mob.y, Math.floor(lookZ), opts) >= 0) {
+      mob.heading = lerpAngle(mob.heading || 0, ang, dt * 10);
+      const nx = mob.x + Math.sin(ang) * speed * dt;
+      const nz = mob.z + Math.cos(ang) * speed * dt;
+      if (mobStepHeight(Math.floor(nx), mob.y, Math.floor(nz), opts) >= 0) {
+        mob.x = nx; mob.z = nz;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// 智能漫步导航（动物/村民/野生狼猫马：前方遇墙/水/悬崖时自动挑选开阔方向平滑转向）
+function mobWanderStep(mob, speed, dt, opts) {
+  mobSyncGroundY(mob, dt, opts);
+  const h = (mob.targetHeading !== undefined) ? mob.targetHeading : (mob.heading || 0);
+  mob.heading = lerpAngle(mob.heading || 0, h, dt * 5.5);
+  const lookX = mob.x + Math.sin(mob.heading) * 0.65;
+  const lookZ = mob.z + Math.cos(mob.heading) * 0.65;
+  const nx = mob.x + Math.sin(mob.heading) * speed * dt;
+  const nz = mob.z + Math.cos(mob.heading) * speed * dt;
+  if (mobStepHeight(Math.floor(lookX), mob.y, Math.floor(lookZ), opts) >= 0 &&
+      mobStepHeight(Math.floor(nx), mob.y, Math.floor(nz), opts) >= 0) {
+    mob.x = nx; mob.z = nz;
+    return true;
+  }
+  // 前方受阻：从周边开阔角度挑一个顺畅的新航向，告别“对着墙发呆”
+  const turnSign = Math.random() < 0.5 ? 1 : -1;
+  for (const off of [0.85, -0.85, 1.55, -1.55, 2.35, -2.35]) {
+    const tryAng = mob.heading + off * turnSign;
+    const tx = mob.x + Math.sin(tryAng) * 0.9;
+    const tz = mob.z + Math.cos(tryAng) * 0.9;
+    if (mobStepHeight(Math.floor(tx), mob.y, Math.floor(tz), opts) >= 0) {
+      mob.targetHeading = tryAng;
+      mob.heading = lerpAngle(mob.heading, tryAng, dt * 8);
+      return false;
+    }
+  }
+  mob.targetHeading = mob.heading + Math.PI;
+  return false;
+}
 function spawnAnimal(x, z, overrideKind = null, isBaby = false) {
   const kind = overrideKind || selectAnimalKind(x, z);
   const g = new THREE.Group();
@@ -7568,24 +7906,24 @@ function spawnAnimalsNear(cx, cz, count) {
   }
 }
 function updateAnimals(dt) {
+  const animNavOpts = { height: 1, maxUp: 1, maxDown: 2, avoidSea: true, radius: 0.28 };
   for (const a of animals) {
     a.hurtT -= dt;
+    mobSyncGroundY(a, dt, animNavOpts);
     if (a.tamed) {
-      // 驯服的忠犬：自动追击并攻击威胁主人的僵尸，否则紧紧跟随主人
+      // 驯服的忠犬：A* 智能寻路绕墙追击威胁主人的僵尸，否则顺滑绕障跟随主人
       let targetZombie = null, minZd = 12;
       for (const z of zombies) {
         const zd = Math.hypot(z.x - a.x, z.z - a.z);
         if (zd < minZd) { minZd = zd; targetZombie = z; }
       }
+      let dogMoved = false;
       if (targetZombie) {
-        const dxz = targetZombie.x - a.x, dzz = targetZombie.z - a.z;
-        a.heading = Math.atan2(dxz, dzz);
-        const zDist = Math.hypot(dxz, dzz);
+        const zDist = Math.hypot(targetZombie.x - a.x, targetZombie.z - a.z);
         if (zDist > 1.2) {
-          const spd = 3.6;
-          a.x += Math.sin(a.heading) * spd * dt;
-          a.z += Math.cos(a.heading) * spd * dt;
+          dogMoved = mobMoveToward(a, targetZombie.x, targetZombie.y || a.y, targetZombie.z, 3.6, dt, animNavOpts);
         } else {
+          aimHeading(a, targetZombie.x, targetZombie.z, 0.2);
           // 撕咬僵尸
           targetZombie.hp -= 2;
           targetZombie.hurtT = 0.25;
@@ -7603,17 +7941,17 @@ function updateAnimals(dt) {
           // 离主人过远时瞬移至主人身旁
           a.x = player.pos.x + (Math.random() - 0.5) * 2;
           a.z = player.pos.z + (Math.random() - 0.5) * 2;
+          a.y = findEntityGround(a.x, player.pos.y, a.z);
+          a._path = null;
         } else if (dp > 3.2) {
-          a.heading = Math.atan2(player.pos.x - a.x, player.pos.z - a.z);
           const spd = dp > 7 ? 4.2 : 2.4;
-          a.x += Math.sin(a.heading) * spd * dt;
-          a.z += Math.cos(a.heading) * spd * dt;
+          dogMoved = mobMoveToward(a, player.pos.x, player.pos.y, player.pos.z, spd, dt, animNavOpts);
         }
       }
-      a.g.position.set(a.x, findGround(Math.floor(a.x), Math.floor(a.z)), a.z);
+      a.g.position.set(a.x, a.y, a.z);
       a.g.rotation.y = a.heading + Math.PI;
-      a.phase += dt * 6;
-      const swing = Math.sin(a.phase) * 0.4;
+      if (dogMoved) a.phase += dt * 6;
+      const swing = dogMoved ? Math.sin(a.phase) * 0.4 : 0;
       a.legs.forEach((leg, i) => { leg.rotation.x = swing * (i % 2 === 0 ? 1 : -1); });
       continue;
     }
@@ -7624,7 +7962,8 @@ function updateAnimals(dt) {
         const rz = Math.floor(player.pos.z + (Math.random() - 0.5) * 40);
         const rgy = findGround(rx, rz);
         if (isDryGround(rx, rgy, rz)) {
-          a.x = rx + 0.5; a.z = rz + 0.5;
+          a.x = rx + 0.5; a.z = rz + 0.5; a.y = rgy;
+          a._path = null;
           a.g.position.set(a.x, rgy, a.z);
           break;
         }
@@ -7633,6 +7972,7 @@ function updateAnimals(dt) {
     }
 
     // 动物求偶与繁育
+    let specialMoving = false;
     if (a.love > 0) {
       a.love -= dt;
       if (Math.random() < 0.08) {
@@ -7646,12 +7986,10 @@ function updateAnimals(dt) {
         }
       }
       if (mate) {
-        a.heading = Math.atan2(mate.x - a.x, mate.z - a.z);
         const md = Math.hypot(mate.x - a.x, mate.z - a.z);
         if (md > 1.1) {
-          a.x += Math.sin(a.heading) * 1.8 * dt;
-          a.z += Math.cos(a.heading) * 1.8 * dt;
-          a.isIdle = false;
+          specialMoving = mobMoveToward(a, mate.x, mate.y || a.y, mate.z, 1.8, dt, animNavOpts);
+          a.isIdle = !specialMoving;
         } else {
           a.love = 0; mate.love = 0;
           a.breedCooldown = 60; mate.breedCooldown = 60;
@@ -7678,55 +8016,39 @@ function updateAnimals(dt) {
       }
     }
 
-    // 手持喜好食物跟随玩家
+    // 手持喜好食物跟随玩家（走 A* 绕过围墙与障碍，绝不穿墙）
     const sel = hotbar[selected];
     const isAttracted = sel && (
       ((a.kind.name === 'cow' || a.kind.name === 'sheep' || a.kind.name === 'chicken') && sel.id === B.WHEAT) ||
       (a.kind.name === 'pig' && sel.id === B.APPLE)
     );
     const pDist = Math.hypot(player.pos.x - a.x, player.pos.z - a.z);
-    if (isAttracted && pDist < 10.0 && a.love <= 0) {
-      // 玩家几乎正上方时不转向：否则 atan2(≈0, ≈0) 会让动物原地打转
-      aimHeading(a, player.pos.x, player.pos.z, 1.0);
+    if (isAttracted && pDist < 12.0 && a.love <= 0) {
       if (pDist > 2.0) {
-        a.x += Math.sin(a.heading) * 1.6 * dt;
-        a.z += Math.cos(a.heading) * 1.6 * dt;
-        a.isIdle = false;
+        specialMoving = mobMoveToward(a, player.pos.x, player.pos.y, player.pos.z, 1.7, dt, animNavOpts);
+        a.isIdle = !specialMoving;
+      } else {
+        aimHeading(a, player.pos.x, player.pos.z, 0.8);
+        a.isIdle = true;
       }
     }
 
-    a.timer -= dt;
-    if (a.timer <= 0) {
-      a.isIdle = Math.random() < 0.42; // 42% 概率驻足吃草/张望休息
-      a.timer = a.isIdle ? (2.2 + Math.random() * 3.2) : (2.8 + Math.random() * 4.2);
-      if (!a.isIdle) a.targetHeading = Math.random() * Math.PI * 2;
-    }
-    if (!a.isIdle) {
-      if (a.targetHeading !== undefined) {
-        let diff = a.targetHeading - a.heading;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        a.heading += diff * Math.min(1, dt * 4.5);
+    if (!specialMoving && !(isAttracted && pDist < 12.0)) {
+      a.timer -= dt;
+      if (a.timer <= 0) {
+        a.isIdle = Math.random() < 0.42; // 42% 概率驻足吃草/张望休息
+        a.timer = a.isIdle ? (2.2 + Math.random() * 3.2) : (2.8 + Math.random() * 4.2);
+        if (!a.isIdle) a.targetHeading = Math.random() * Math.PI * 2;
       }
-      const nx = a.x + Math.sin(a.heading) * a.speed * dt;
-      const nz = a.z + Math.cos(a.heading) * a.speed * dt;
-      const ti = Math.floor(nx), tz = Math.floor(nz);
-      const gy = findGround(Math.floor(a.x), Math.floor(a.z));
-      const targetGround = findGround(ti, tz);
-      // 前方是水 / 处于海平面及以下 / 水格 / 障碍(树、墙) / 悬崖 → 转向避开，绝不下水
-      const inWater = targetGround <= SEA + 1 ||
-                      world.getWater(ti, targetGround, tz) > 0 ||
-                      world.getWater(ti, targetGround - 1, tz) > 0 ||
-                      world.getWater(ti, gy, tz) > 0;
-      if (inWater || targetGround > gy + 1 || targetGround < gy - 2) {
-        a.targetHeading = a.heading + Math.PI * 0.75 + (Math.random() - 0.5);
-        a.isIdle = true;
-        a.timer = 1.0 + Math.random() * 1.5;
-      } else {
-        a.x = nx; a.z = nz;
+      if (!a.isIdle) {
+        const moved = mobWanderStep(a, a.speed, dt, animNavOpts);
+        if (!moved) {
+          a.isIdle = true;
+          a.timer = 0.8 + Math.random() * 1.2;
+        }
       }
     }
-    a.g.position.set(a.x, findGround(Math.floor(a.x), Math.floor(a.z)), a.z);
+    a.g.position.set(a.x, a.y, a.z);
     a.g.rotation.y = a.heading + Math.PI;
     const isChicken = a.kind && a.kind.name === 'chicken';
     if (!a.isIdle) {
@@ -7948,6 +8270,7 @@ function updateZombies(dt) {
 
     const flying = playerIsFlying();
     let targetX = flying ? null : player.pos.x;
+    let targetY = flying ? null : player.pos.y;
     let targetZ = flying ? null : player.pos.z;
     let targetDist = flying ? Infinity : dist;
     let targetVillager = null;
@@ -7956,33 +8279,23 @@ function updateZombies(dt) {
       if (vd < targetDist && vd < 14) {
         targetDist = vd;
         targetX = v.x;
+        targetY = v.y;
         targetZ = v.z;
         targetVillager = v;
       }
     }
 
+    const zNavOpts = { height: 2, maxUp: 1, maxDown: 2, radius: 0.28 };
+    const zyCur = mobSyncGroundY(z, dt, zNavOpts);
     const hasTarget = targetX !== null;
-    const playerTooHigh = !targetVillager && (player.pos.y - zy > 5);   // 玩家在上方 5 格以上（飞行）→ 不追击不攻击
+    const playerTooHigh = !targetVillager && (player.pos.y - zyCur > 5);   // 玩家在上方 5 格以上（飞行）→ 不追击不攻击
+    let zombieMoved = false;
     if (hasTarget && !playerTooHigh) {
-      if (targetDist > 1.8) {   // 追击
-        aimHeading(z, targetX, targetZ, 0.8);   // 玩家几乎正上方时不转身（避免原地打转）
-        const speed = z.hurtT > 0 ? 0.3 : 1.1;
-        const nx = z.x + Math.sin(z.heading) * speed * dt;
-        const nz = z.z + Math.cos(z.heading) * speed * dt;
-        const ti = Math.floor(nx), tz = Math.floor(nz);
-        const targetGround = findGround(ti, tz);
-        if (world.getWater(ti, zy, tz) > 0 || targetGround > zy + 1 || targetGround < zy - 2) {
-          // 被挡 → 尝试侧移绕行
-          const s = (Math.random() < 0.5 ? 1 : -1);
-          const sx = z.x + Math.cos(z.heading) * s * speed * dt;
-          const sz = z.z - Math.sin(z.heading) * s * speed * dt;
-          const si = Math.floor(sx), szz = Math.floor(sz);
-          const sg = findGround(si, szz);
-          if (world.getWater(si, zy, szz) === 0 && sg <= zy + 1 && sg >= zy - 2) { z.x = sx; z.z = sz; }
-        } else {
-          z.x = nx; z.z = nz;
-        }
+      if (targetDist > 1.8) {   // A* 智能寻路追击（遇墙/房屋/障碍自动绕路）
+        const speed = z.hurtT > 0 ? 0.35 : 1.35;
+        zombieMoved = mobMoveToward(z, targetX, targetY, targetZ, speed, dt, zNavOpts);
       } else {   // 攻击
+        aimHeading(z, targetX, targetZ, 0.4);
         z.attackTimer -= dt;
         if (z.attackTimer <= 0) {
           z.attackTimer = 1.0;
@@ -8004,10 +8317,10 @@ function updateZombies(dt) {
         }
       }
     }
-    const moving = !playerTooHigh && dist > 1.5;
-    z.g.position.set(z.x, findGround(Math.floor(z.x), Math.floor(z.z)) + mobBob(z.phase, moving), z.z);
+    const moving = zombieMoved;
+    z.g.position.set(z.x, z.y + mobBob(z.phase, moving), z.z);
     z.g.rotation.y = z.heading + Math.PI;
-    z.phase += dt * (playerTooHigh ? 0 : 4);
+    z.phase += dt * (moving ? 4.5 : 0);
     const swing = Math.sin(z.phase) * 0.35;
     z.legs.forEach((leg, i2) => { leg.rotation.x = swing * (i2 % 2 === 0 ? 1 : -1); });
     // 前伸的双臂随步伐轻轻摆动（僵尸那种僵硬的小幅晃动）
@@ -8104,30 +8417,26 @@ function updateCreepers(dt) {
       const cd = Math.hypot(cat.x - c.x, cat.z - c.z);
       if (cd < minCatD) { minCatD = cd; nearestCat = cat; }
     }
+    const cNavOpts = { height: 2, maxUp: 1, maxDown: 2, radius: 0.28 };
+    const cyCur = mobSyncGroundY(c, dt, cNavOpts);
     if (nearestCat) {
       c.fuse = Math.max(0, c.fuse - dt * 2.5);
       c.g.scale.set(1, 1, 1);
-      c.heading = Math.atan2(c.x - nearestCat.x, c.z - nearestCat.z);
-      const speed = 2.4;
-      const nx = c.x + Math.sin(c.heading) * speed * dt;
-      const nz = c.z + Math.cos(c.heading) * speed * dt;
-      const ti = Math.floor(nx), tz = Math.floor(nz);
-      const tg = findGround(ti, tz);
-      if (world.getWater(ti, cy, tz) === 0 && Math.abs(tg - cy) <= 1) {
-        c.x = nx; c.z = nz;
-      }
-      c.g.position.set(c.x, cy + mobBob(c.phase, true), c.z);
+      const fleeMoved = mobFleeFrom(c, nearestCat.x, nearestCat.z, 2.5, dt, cNavOpts);
+      c.g.position.set(c.x, c.y + mobBob(c.phase, fleeMoved), c.z);
       c.g.rotation.y = c.heading + Math.PI;
-      c.phase += dt * 6;
-      const swing = Math.sin(c.phase) * 0.35;
+      c.phase += dt * (fleeMoved ? 6 : 0);
+      const swing = fleeMoved ? Math.sin(c.phase) * 0.35 : 0;
       c.legs.forEach((leg, i2) => { leg.rotation.x = swing * (i2 % 2 === 0 ? 1 : -1); });
       mobHeadLook(c.head, c.g, 0.8);
       continue;
     }
 
-    const playerTooHigh = dy3 > 5;
+    const playerTooHigh = Math.abs(player.pos.y - cyCur) > 5;
     const flying = playerIsFlying();
-    const shouldIgnite = !flying && !playerTooHigh && dist3 < 3.2;
+    const canSeePlayer = !flying && !playerTooHigh && dist3 < 3.6 && hasMobLineOfSight(c.x, cyCur + 1.2, c.z, player.pos.x, player.pos.y + 1.1, player.pos.z);
+    const shouldIgnite = canSeePlayer && dist3 < 3.2;
+    let creeperMoving = false;
     if (shouldIgnite) {
       // 进入引爆倒计时
       c.fuse += dt;
@@ -8142,7 +8451,7 @@ function updateCreepers(dt) {
 
       if (c.fuse >= 1.4) {
         // 苦力怕引爆！（紧凑适度的 2.8 格原版自然爆破范围）
-        explodeTnt(c.x, cy + 0.6, c.z, 2.8);
+        explodeTnt(c.x, cyCur + 0.6, c.z, 2.8);
         scene.remove(c.g);
         creepers.splice(i, 1);
         continue;
@@ -8154,22 +8463,14 @@ function updateCreepers(dt) {
         const swell = 1.0 + (c.fuse / 1.4) * 0.28;
         c.g.scale.set(swell, swell, swell);
       }
-      // 追击玩家（飞行/滑翔中不寻找追击玩家）
+      // A* 智能寻路绕墙追击玩家（飞行/滑翔中不寻找追击玩家）
       if (!flying && !playerTooHigh && dist3 < 24) {
-        aimHeading(c, player.pos.x, player.pos.z, 0.8);
-        const speed = c.hurtT > 0 ? 0.3 : 1.35;
-        const nx = c.x + Math.sin(c.heading) * speed * dt;
-        const nz = c.z + Math.cos(c.heading) * speed * dt;
-        const ti = Math.floor(nx), tz = Math.floor(nz);
-        const tg = findGround(ti, tz);
-        if (world.getWater(ti, cy, tz) === 0 && tg <= cy + 1 && tg >= cy - 2) {
-          c.x = nx; c.z = nz;
-        }
+        const speed = c.hurtT > 0 ? 0.35 : 1.45;
+        creeperMoving = mobMoveToward(c, player.pos.x, player.pos.y, player.pos.z, speed, dt, cNavOpts);
       }
     }
 
-    const creeperMoving = !(playerTooHigh || dist3 < 3.2);
-    c.g.position.set(c.x, cy + mobBob(c.phase, creeperMoving), c.z);
+    c.g.position.set(c.x, c.y + mobBob(c.phase, creeperMoving), c.z);
     c.g.rotation.y = c.heading + Math.PI;
     c.phase += dt * (creeperMoving ? 5 : 0);
     const swing = Math.sin(c.phase) * 0.4;
@@ -8307,31 +8608,31 @@ function updateSkeletons(dt) {
       }
     }
 
-    const playerTooHigh = Math.abs(dyp) > 6;
-    if (!playerIsFlying() && !playerTooHigh && dist3 < 20) {
-      aimHeading(s, player.pos.x, player.pos.z, 0.8);
-      s.rightArmGroup.rotation.x = Math.PI * 0.45;
+    const sNavOpts = { height: 2, maxUp: 1, maxDown: 2, radius: 0.28 };
+    const syCur = mobSyncGroundY(s, dt, sNavOpts);
+    const playerTooHigh = Math.abs(player.pos.y - syCur) > 6;
+    let skelMoving = false;
+    if (!playerIsFlying() && !playerTooHigh && dist3 < 22) {
+      const hasLOS = hasMobLineOfSight(s.x, syCur + 1.35, s.z, player.pos.x, player.pos.y + 1.15, player.pos.z);
+      const speed = s.hurtT > 0 ? 0.35 : 1.35;
+      s.rightArmGroup.rotation.x = hasLOS ? Math.PI * 0.45 : 0.2;
 
-      let moveDir = 0;
-      if (dist3 > 12) moveDir = 1;
-      else if (dist3 < 6) moveDir = -1;
-
-      if (moveDir !== 0) {
-        const speed = s.hurtT > 0 ? 0.3 : 1.2;
-        const nx = s.x + Math.sin(s.heading) * speed * dt * moveDir;
-        const nz = s.z + Math.cos(s.heading) * speed * dt * moveDir;
-        const ti = Math.floor(nx), tz = Math.floor(nz);
-        const tg = findGround(ti, tz);
-        if (world.getWater(ti, sy, tz) === 0 && tg <= sy + 1 && tg >= sy - 2) {
-          s.x = nx; s.z = nz;
-        }
+      if (!hasLOS || dist3 > 12) {
+        // 被墙遮挡或距离偏远 → A* 智能绕路逼近至清晰射界
+        skelMoving = mobMoveToward(s, player.pos.x, player.pos.y, player.pos.z, speed, dt, sNavOpts);
+      } else if (dist3 < 6) {
+        // 过近时绕障后撤拉开风筝距离
+        skelMoving = mobFleeFrom(s, player.pos.x, player.pos.z, speed, dt, sNavOpts);
+        aimHeading(s, player.pos.x, player.pos.z, 0.8);
+      } else {
+        aimHeading(s, player.pos.x, player.pos.z, 0.8);
       }
 
-      if (s.shootCooldown <= 0) {
+      if (hasLOS && s.shootCooldown <= 0) {
         s.shootCooldown = 2.4 + Math.random() * 0.8;
         playBowDraw();
-        const arrowDir = new THREE.Vector3(dxp, dyp + 0.35, dzp).normalize();
-        const origin = new THREE.Vector3(s.x + Math.sin(s.heading) * 0.3, sy + 1.25, s.z + Math.cos(s.heading) * 0.3);
+        const arrowDir = new THREE.Vector3(dxp, (player.pos.y - syCur) + 0.35, dzp).normalize();
+        const origin = new THREE.Vector3(s.x + Math.sin(s.heading) * 0.3, syCur + 1.25, s.z + Math.cos(s.heading) * 0.3);
         const mesh = new THREE.Mesh(arrowGeo, arrowMat);
         mesh.position.copy(origin);
         mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), arrowDir);
@@ -8350,8 +8651,7 @@ function updateSkeletons(dt) {
       s.rightArmGroup.rotation.x = 0;
     }
 
-    const skelMoving = !(playerTooHigh || dist3 < 6);
-    s.g.position.set(s.x, sy + mobBob(s.phase, skelMoving), s.z);
+    s.g.position.set(s.x, s.y + mobBob(s.phase, skelMoving), s.z);
     s.g.rotation.y = s.heading + Math.PI;
     s.phase += dt * (skelMoving ? 4.5 : 0);
     const swing = Math.sin(s.phase) * 0.35;
@@ -8499,18 +8799,18 @@ function updateEndermen(dt) {
       }
     }
 
+    const eNavOpts = { height: 3, maxUp: 1, maxDown: 2, radius: 0.30 };
+    mobSyncGroundY(e, dt, eNavOpts);
+    let enderMoved = false;
     if (!playerIsFlying() && e.angry) {
-      aimHeading(e, player.pos.x, player.pos.z, 0.8);
       e.head.position.x = (Math.random() - 0.5) * 0.05;
       e.head.position.z = (Math.random() - 0.5) * 0.05;
 
       const speed = 2.8;
-      const nx = e.x + Math.sin(e.heading) * speed * dt;
-      const nz = e.z + Math.cos(e.heading) * speed * dt;
-      const ti = Math.floor(nx), tz = Math.floor(nz);
-      const tg = findGround(ti, tz);
-      if (world.getWater(ti, ey, tz) === 0 && tg <= ey + 1 && tg >= ey - 2) {
-        e.x = nx; e.z = nz;
+      if (dist3 > 1.5) {
+        enderMoved = mobMoveToward(e, player.pos.x, player.pos.y, player.pos.z, speed, dt, eNavOpts);
+      } else {
+        aimHeading(e, player.pos.x, player.pos.z, 0.5);
       }
 
       if (dist3 < 1.6 && e.attackCooldown <= 0) {
@@ -8520,12 +8820,13 @@ function updateEndermen(dt) {
       }
     } else {
       e.head.position.set(0, 2.25, 0);
-      if (Math.random() < 0.015) e.heading += (Math.random() - 0.5) * 1.5;
+      if (Math.random() < 0.015) e.targetHeading = (e.heading || 0) + (Math.random() - 0.5) * 1.6;
+      enderMoved = mobWanderStep(e, 0.75, dt, eNavOpts);
     }
 
-    e.g.position.set(e.x, ey + mobBob(e.phase, e.angry), e.z);
+    e.g.position.set(e.x, e.y + mobBob(e.phase, enderMoved), e.z);
     e.g.rotation.y = e.heading + Math.PI;
-    e.phase += dt * (e.angry ? 7.0 : 3.0);
+    e.phase += dt * (enderMoved ? (e.angry ? 7.0 : 3.2) : 0);
     const swing = Math.sin(e.phase) * (e.angry ? 0.5 : 0.25);
     e.legs.forEach((leg, idx) => {
       leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
@@ -8884,19 +9185,17 @@ function updateIronGolems(dt) {
       if (d < minDist) { minDist = d; target = { mob: r, kind: 'ravager' }; }
     }
 
+    const gNavOpts = { height: 3, maxUp: 1, maxDown: 2, radius: 0.42 };
+    let isMoving = false;
     if (target) {
       const m = target.mob;
       const dxm = m.x - g.x, dzm = m.z - g.z;
-      g.heading = Math.atan2(dxm, dzm);
       const mDist = Math.hypot(dxm, dzm);
 
       if (mDist > 1.8) {
-        const speed = 2.0;
-        const nx = g.x + Math.sin(g.heading) * speed * dt;
-        const nz = g.z + Math.cos(g.heading) * speed * dt;
-        const tg = findEntityGround(nx, g.y, nz);
-        if (Math.abs(tg - g.y) <= 1.2) { g.x = nx; g.z = nz; }
+        isMoving = mobMoveToward(g, m.x, m.y !== undefined ? m.y : g.y, m.z, 2.1, dt, gNavOpts);
       } else if (g.attackCooldown <= 0) {
+        g.heading = Math.atan2(dxm, dzm);
         g.attackCooldown = 1.2;
         g.swingTimer = 1.0;
         tone(80, 220, 0.18, 'sawtooth', 0.22);
@@ -8919,7 +9218,6 @@ function updateIronGolems(dt) {
         }
       }
     } else {
-      if (Math.random() < 0.01) g.heading += (Math.random() - 0.5) * 1.5;
       const dp = Math.hypot(player.pos.x - g.x, player.pos.z - g.z);
       g.flowerTimer = (g.flowerTimer || 0) + dt;
       if (dp < 3.5 && g.flowerTimer > 25.0) {
@@ -8932,15 +9230,13 @@ function updateIronGolems(dt) {
         toast('🌹 铁傀儡温和地向你递上了一朵鲜艳的虞美人小红花');
       }
       if (dp > 20) {
-        g.heading = Math.atan2(player.pos.x - g.x, player.pos.z - g.z);
-        const nx = g.x + Math.sin(g.heading) * 1.0 * dt;
-        const nz = g.z + Math.cos(g.heading) * 1.0 * dt;
-        const tg = findEntityGround(nx, g.y, nz);
-        if (Math.abs(tg - g.y) <= 1.2) { g.x = nx; g.z = nz; }
+        isMoving = mobMoveToward(g, player.pos.x, player.pos.y, player.pos.z, 1.2, dt, gNavOpts);
+      } else {
+        if (Math.random() < 0.012) g.targetHeading = (g.heading || 0) + (Math.random() - 0.5) * 1.6;
+        isMoving = mobWanderStep(g, 0.65, dt, gNavOpts);
       }
     }
 
-    const isMoving = target && minDist > 1.8;
     g.g.position.set(g.x, g.y + mobBob(g.phase, isMoving, 0.022), g.z);
     g.g.rotation.y = g.heading + Math.PI;
 
@@ -9349,19 +9645,11 @@ function updateVillagers(dt) {
       if (zd < minZd) { minZd = zd; threateningZombie = z; }
     }
 
+    const vNavOpts = { height: 2, maxUp: 1, maxDown: 2, radius: 0.28 };
+    let villagerMoved = false;
     if (threateningZombie) {
       v.fleeing = true;
-      v.heading = Math.atan2(v.x - threateningZombie.x, v.z - threateningZombie.z);
-      const spd = 3.2;
-      const nx = v.x + Math.sin(v.heading) * spd * dt;
-      const nz = v.z + Math.cos(v.heading) * spd * dt;
-      const tg = findEntityGround(nx, v.y, nz);
-      if (Math.abs(tg - v.y) <= 1.05 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
-        const headBlock = world.getBlock(Math.floor(nx), tg + 1, Math.floor(nz));
-        if (!isSolid(headBlock) || headBlock === B.DOOR) {
-          v.x = nx; v.z = nz; v.y = tg;
-        }
-      }
+      villagerMoved = mobFleeFrom(v, threateningZombie.x, threateningZombie.z, 3.2, dt, vNavOpts);
       if (Math.random() < 0.04) sfxAt(v.x, v.y, v.z, playVillagerHmm, 30);
     } else {
       v.fleeing = false;
@@ -9369,33 +9657,23 @@ function updateVillagers(dt) {
       if (v.timer <= 0) {
         v.isIdle = Math.random() < 0.55;
         v.timer = v.isIdle ? (3 + Math.random() * 4) : (2.5 + Math.random() * 3.5);
-        if (!v.isIdle) v.heading = Math.random() * Math.PI * 2;
+        if (!v.isIdle) v.targetHeading = Math.random() * Math.PI * 2;
         if (Math.random() < 0.25) sfxAt(v.x, v.y, v.z, playVillagerHmm, 30);
       }
 
       if (!v.isIdle) {
-        const nx = v.x + Math.sin(v.heading) * v.speed * dt;
-        const nz = v.z + Math.cos(v.heading) * v.speed * dt;
-        const tg = findEntityGround(nx, v.y, nz);
-        if (Math.abs(tg - v.y) <= 1.05 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
-          const headBlock = world.getBlock(Math.floor(nx), tg + 1, Math.floor(nz));
-          if (!isSolid(headBlock) || headBlock === B.DOOR) {
-            v.x = nx; v.z = nz; v.y = tg;
-          } else {
-            v.isIdle = true;
-            v.heading += Math.PI * 0.5 + (Math.random() - 0.5);
-          }
-        } else {
+        villagerMoved = mobWanderStep(v, v.speed, dt, vNavOpts);
+        if (!villagerMoved) {
           v.isIdle = true;
-          v.heading += Math.PI * 0.5 + (Math.random() - 0.5);
+          v.timer = 0.8 + Math.random() * 1.2;
         }
       }
     }
 
-    v.g.position.set(v.x, v.y + mobBob(v.phase, !v.isIdle || v.fleeing, 0.022), v.z);
+    v.g.position.set(v.x, v.y + mobBob(v.phase, villagerMoved, 0.022), v.z);
     v.g.rotation.y = v.heading + Math.PI;
 
-    if (!v.isIdle || v.fleeing) {
+    if (villagerMoved) {
       v.phase += dt * (v.fleeing ? 8.0 : 4.0);
       const swing = Math.sin(v.phase) * 0.35;
       v.legs.forEach((leg, idx) => {
@@ -10248,40 +10526,33 @@ function updateCats(dt) {
         c.g.rotation.y = c.heading + Math.PI;
         continue;
       }
+      const catNavOpts = { height: 1, maxUp: 1, maxDown: 2, radius: 0.24 };
       const pDist = Math.hypot(player.pos.x - c.x, player.pos.z - c.z);
       if (pDist > 16) {
         c.x = player.pos.x + (Math.random() - 0.5) * 2;
         c.z = player.pos.z + (Math.random() - 0.5) * 2;
         c.y = findEntityGround(c.x, player.pos.y, c.z);
+        c._path = null;
       } else if (pDist > 2.5) {
-        c.heading = Math.atan2(player.pos.x - c.x, player.pos.z - c.z);
-        const nx = c.x + Math.sin(c.heading) * 2.4 * dt;
-        const nz = c.z + Math.cos(c.heading) * 2.4 * dt;
-        const tg = findEntityGround(nx, c.y, nz);
-        if (Math.abs(tg - c.y) <= 1.05 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
-          c.x = nx; c.z = nz; c.y = tg;
-        }
-        c.isIdle = false;
+        const moved = mobMoveToward(c, player.pos.x, player.pos.y, player.pos.z, 2.5, dt, catNavOpts);
+        c.isIdle = !moved;
       } else {
         c.isIdle = true;
       }
     } else {
+      const catNavOpts = { height: 1, maxUp: 1, maxDown: 2, radius: 0.24 };
       c.timer -= dt;
       if (c.timer <= 0) {
         c.isIdle = Math.random() < 0.6;
         c.timer = c.isIdle ? (3 + Math.random() * 4) : (2 + Math.random() * 3);
-        if (!c.isIdle) c.heading = Math.random() * Math.PI * 2;
+        if (!c.isIdle) c.targetHeading = Math.random() * Math.PI * 2;
         if (Math.random() < 0.2) sfxAt(c.x, c.y, c.z, playCatMeow, 24);
       }
       if (!c.isIdle) {
-        const nx = c.x + Math.sin(c.heading) * c.speed * dt;
-        const nz = c.z + Math.cos(c.heading) * c.speed * dt;
-        const tg = findEntityGround(nx, c.y, nz);
-        if (Math.abs(tg - c.y) <= 1.05 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
-          c.x = nx; c.z = nz; c.y = tg;
-        } else {
+        const moved = mobWanderStep(c, c.speed, dt, catNavOpts);
+        if (!moved) {
           c.isIdle = true;
-          c.heading += Math.PI * 0.5 + (Math.random() - 0.5);
+          c.timer = 0.8 + Math.random() * 1.2;
         }
       }
     }
@@ -10465,24 +10736,22 @@ function updateWolves(dt) {
       target = null;
     }
 
+    const wNavOpts = { height: 1, maxUp: 1, maxDown: 2, radius: 0.26 };
+    let wolfMoved = false;
     if (target) {
       const dx = target.x - w.x, dz = target.z - w.z;
-      w.heading = Math.atan2(dx, dz);
       const dist = Math.hypot(dx, dz);
 
       if (dist > 1.2) {
-        const sprintSpeed = 3.4;
-        const nx = w.x + Math.sin(w.heading) * sprintSpeed * dt;
-        const nz = w.z + Math.cos(w.heading) * sprintSpeed * dt;
-        const tg = findEntityGround(nx, w.y, nz);
-        if (Math.abs(tg - w.y) <= 1.2) { w.x = nx; w.z = nz; }
-        w.phase += dt * 12.0;
+        wolfMoved = mobMoveToward(w, target.x, target.y !== undefined ? target.y : w.y, target.z, 3.4, dt, wNavOpts);
+        if (wolfMoved) w.phase += dt * 12.0;
       } else if (w.attackCooldown <= 0) {
+        w.heading = Math.atan2(dx, dz);
         w.attackCooldown = 0.8;
         playWolfBark(1.1);
         target.hp -= 4;
         target.hurtT = 0.25;
-        spawnParticles(target.x, target.y + 0.8, target.z, 0xcc2222, 8);
+        spawnParticles(target.x, (target.y !== undefined ? target.y : w.y) + 0.8, target.z, 0xcc2222, 8);
         if (target.hp <= 0) {
           w.attackTarget = null;
         }
@@ -10490,30 +10759,28 @@ function updateWolves(dt) {
     } else if (w.tamed) {
       const dxp = player.pos.x - w.x, dzp = player.pos.z - w.z;
       const dp = Math.hypot(dxp, dzp);
-      if (dp > 2.5) {
-        w.heading = Math.atan2(dxp, dzp);
-        const followSpeed = dp > 6 ? 3.2 : 1.8;
-        const nx = w.x + Math.sin(w.heading) * followSpeed * dt;
-        const nz = w.z + Math.cos(w.heading) * followSpeed * dt;
-        const tg = findEntityGround(nx, w.y, nz);
-        if (Math.abs(tg - w.y) <= 1.2) { w.x = nx; w.z = nz; }
-        w.phase += dt * 8.0;
+      if (dp > 22) {
+        w.x = player.pos.x + (Math.random() - 0.5) * 2;
+        w.z = player.pos.z + (Math.random() - 0.5) * 2;
+        w.y = findEntityGround(w.x, player.pos.y, w.z);
+        w._path = null;
+      } else if (dp > 2.5) {
+        const followSpeed = dp > 6 ? 3.2 : 1.9;
+        wolfMoved = mobMoveToward(w, player.pos.x, player.pos.y, player.pos.z, followSpeed, dt, wNavOpts);
+        if (wolfMoved) w.phase += dt * 8.0;
       } else {
         w.phase = 0;
       }
     } else {
-      if (Math.random() < 0.02) w.heading += (Math.random() - 0.5) * 1.5;
-      const nx = w.x + Math.sin(w.heading) * 0.9 * dt;
-      const nz = w.z + Math.cos(w.heading) * 0.9 * dt;
-      const tg = findEntityGround(nx, w.y, nz);
-      if (Math.abs(tg - w.y) <= 1.0) { w.x = nx; w.z = nz; }
-      w.phase += dt * 4.0;
+      if (Math.random() < 0.02) w.targetHeading = (w.heading || 0) + (Math.random() - 0.5) * 1.6;
+      wolfMoved = mobWanderStep(w, 0.9, dt, wNavOpts);
+      if (wolfMoved) w.phase += dt * 4.0;
     }
 
     w.g.position.set(w.x, w.y, w.z);
     w.g.rotation.y = w.heading + Math.PI;
 
-    const swing = Math.sin(w.phase) * 0.35;
+    const swing = wolfMoved ? Math.sin(w.phase) * 0.35 : 0;
     w.legs.forEach((leg, idx) => {
       leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
     });
@@ -10591,26 +10858,17 @@ function spawnHorse(x, y, z, coatColor = 0x6d4522) {
 }
 
 function updateHorses(dt) {
+  const hNavOpts = { height: 2, maxUp: 1, maxDown: 2, radius: 0.42, avoidSea: true };
   for (let i = horses.length - 1; i >= 0; i--) {
     const h = horses[i];
     if (player.ridingHorse === h) continue;
 
-    const targetHG = findEntityGround(h.x, h.y, h.z);
-    if (h.y > targetHG) h.y = Math.max(targetHG, h.y - 12 * dt);
-    else if (h.y < targetHG) h.y = Math.min(targetHG, h.y + 7 * dt);
-    if (Math.random() < 0.015) h.heading += (Math.random() - 0.5) * 1.5;
+    if (Math.random() < 0.015) h.targetHeading = (h.heading || 0) + (Math.random() - 0.5) * 1.6;
+    const moved = mobWanderStep(h, h.speed, dt, hNavOpts);
+    if (moved) h.phase += dt * 3.5;
+    else h.phase = 0;
 
-    const nx = h.x + Math.sin(h.heading) * h.speed * dt;
-    const nz = h.z + Math.cos(h.heading) * h.speed * dt;
-    const tg = findEntityGround(nx, h.y, nz);
-    if (Math.abs(tg - h.y) <= 1.0 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
-      h.x = nx; h.z = nz;
-      h.phase += dt * 3.5;
-    } else {
-      h.phase = 0;
-    }
-
-    h.g.position.set(h.x, h.y + mobBob(h.phase, h.phase > 0, 0.02), h.z);
+    h.g.position.set(h.x, h.y + mobBob(h.phase, moved, 0.02), h.z);
     h.g.rotation.y = h.heading + Math.PI;
 
     const swing = Math.sin(h.phase) * 0.25;
@@ -10900,19 +11158,16 @@ function updateRavagers(dt) {
       }
     }
 
+    const rNavOpts = { height: 2, maxUp: 1, maxDown: 2, radius: 0.44 };
+    let ravMoved = false;
     if (target) {
       const dx = target.x - r.x, dz = target.z - r.z;
-      r.heading = Math.atan2(dx, dz);
       const dist = Math.hypot(dx, dz);
 
       if (dist > 2.2) {
-        const nx = r.x + Math.sin(r.heading) * r.speed * dt;
-        const nz = r.z + Math.cos(r.heading) * r.speed * dt;
-        const tg = findEntityGround(nx, r.y, nz);
-        if (Math.abs(tg - r.y) <= 1.2 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
-          r.x = nx; r.z = nz;
-        }
+        ravMoved = mobMoveToward(r, target.x, target.y, target.z, r.speed, dt, rNavOpts);
       } else if (r.attackCooldown <= 0) {
+        r.heading = Math.atan2(dx, dz);
         r.attackCooldown = 2.5;
         playRavagerRoar();
         r.headGroup.position.z = -1.45;
@@ -10945,8 +11200,8 @@ function updateRavagers(dt) {
     r.g.position.set(r.x, r.y, r.z);
     r.g.rotation.y = r.heading + Math.PI;
 
-    r.phase += dt * (target ? 6.0 : 2.5);
-    const swing = Math.sin(r.phase) * 0.45;
+    r.phase += dt * (ravMoved ? 6.0 : 0);
+    const swing = ravMoved ? Math.sin(r.phase) * 0.45 : 0;
     r.legs.forEach((leg, idx) => {
       leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
     });
@@ -11067,26 +11322,26 @@ function updatePillagers(dt) {
       if (dv < minDist) { minDist = dv; target = { x: v.x, y: v.y, z: v.z, isVillager: true }; }
     }
 
+    const pNavOpts = { height: 2, maxUp: 1, maxDown: 2, radius: 0.28 };
+    let pilMoved = false;
     if (target) {
       const dx = target.x - p.x, dz = target.z - p.z;
-      p.heading = Math.atan2(dx, dz);
       const dist = Math.hypot(dx, dz);
+      const tY = target.y + (target.isPlayer ? 1.1 : 0.9);
+      const hasLOS = hasMobLineOfSight(p.x, p.y + 1.25, p.z, target.x, tY, target.z);
 
-      if (dist > 7) {
-        const nx = p.x + Math.sin(p.heading) * p.speed * dt;
-        const nz = p.z + Math.cos(p.heading) * p.speed * dt;
-        const tg = findEntityGround(nx, p.y, nz);
-        if (Math.abs(tg - p.y) <= 1.2 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
-          p.x = nx; p.z = nz;
-        }
+      if (!hasLOS || dist > 8) {
+        // 被墙遮挡或距离偏远 → A* 绕障寻找清晰射界
+        pilMoved = mobMoveToward(p, target.x, target.y, target.z, p.speed, dt, pNavOpts);
+      } else {
+        p.heading = lerpAngle(p.heading || 0, Math.atan2(dx, dz), dt * 10);
       }
 
-      // 弩箭远程齐射
-      if (p.shootCooldown <= 0 && dist < 18) {
+      // 弩箭远程齐射（仅在无遮挡时射击）
+      if (hasLOS && p.shootCooldown <= 0 && dist < 18) {
         p.shootCooldown = 2.4 + Math.random() * 0.8;
         playBowDraw();
         const origin = new THREE.Vector3(p.x + Math.sin(p.heading) * 0.3, p.y + 1.1, p.z + Math.cos(p.heading) * 0.3);
-        const tY = target.y + (target.isPlayer ? 0.9 : 0.8);
         const arrowDir = new THREE.Vector3(target.x - origin.x, tY - origin.y, target.z - origin.z).normalize();
         const mesh = new THREE.Mesh(arrowGeo, arrowMat);
         mesh.position.copy(origin);
@@ -11099,20 +11354,15 @@ function updatePillagers(dt) {
         });
       }
     } else {
-      if (Math.random() < 0.02) p.heading += (Math.random() - 0.5) * 1.5;
-      const nx = p.x + Math.sin(p.heading) * 0.9 * dt;
-      const nz = p.z + Math.cos(p.heading) * 0.9 * dt;
-      const tg = findEntityGround(nx, p.y, nz);
-      if (Math.abs(tg - p.y) <= 1.2 && world.getWater(Math.floor(nx), tg, Math.floor(nz)) === 0) {
-        p.x = nx; p.z = nz;
-      }
+      if (Math.random() < 0.02) p.targetHeading = (p.heading || 0) + (Math.random() - 0.5) * 1.6;
+      pilMoved = mobWanderStep(p, 0.9, dt, pNavOpts);
     }
 
     p.g.position.set(p.x, p.y, p.z);
     p.g.rotation.y = p.heading + Math.PI;
 
-    p.phase += dt * (target ? 5.5 : 2.5);
-    const swing = Math.sin(p.phase) * (target ? 0.38 : 0.15);
+    p.phase += dt * (pilMoved ? 5.5 : 0);
+    const swing = pilMoved ? Math.sin(p.phase) * 0.38 : 0;
     p.legs.forEach((leg, idx) => {
       leg.rotation.x = swing * (idx % 2 === 0 ? 1 : -1);
     });
@@ -16745,33 +16995,93 @@ function dropItem(id, x, y, z) {
   }
   const spr = new THREE.Sprite(itemMaterial(id));
   spr.scale.set(0.38, 0.38, 1);
-  spr.position.set(x + 0.5, y + 0.7, z + 0.5);
+  // 从方块中心偏下位置柔和弹出，避免直接卡进上方原木/石顶触发向上顶出
+  const sx = x + 0.5, sy = y + 0.45, sz = z + 0.5;
+  spr.position.set(sx, sy, sz);
   scene.add(spr);
-  items.push({ spr, id, x: x + 0.5, y: y + 0.7, z: z + 0.5,
-    vx: (Math.random() - 0.5) * 2.5, vy: 2.5 + Math.random() * 2, vz: (Math.random() - 0.5) * 2.5, age: 0 });
+  items.push({
+    spr, id, x: sx, y: sy, z: sz,
+    vx: (Math.random() - 0.5) * 1.9,
+    vy: 1.5 + Math.random() * 1.0,
+    vz: (Math.random() - 0.5) * 1.9,
+    age: 0
+  });
+}
+function itemBlockedAt(x, y, z) {
+  const b = world.getBlock(Math.floor(x), Math.floor(y), Math.floor(z));
+  return isSolid(b);
 }
 function updateItems(dt) {
+  const R = 0.14;   // 掉落物碰撞半径
+  const H = 0.22;   // 掉落物半高（用于顶面/地面碰撞）
   for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i];
     it.age += dt;
-    it.vy -= 20 * dt;
-    it.x += it.vx * dt; it.y += it.vy * dt; it.z += it.vz * dt;
-    // 本地向下寻找支撑面，避免地下矿洞挖矿时掉落物瞬移至地面
-    const ix = Math.floor(it.x), iz = Math.floor(it.z);
-    let floorY = 0;
-    const startY = Math.min(HEIGHT - 1, Math.max(0, Math.floor(it.y + 0.2)));
-    for (let sy = startY; sy >= Math.max(0, startY - 8); sy--) {
-      const b = world.getBlock(ix, sy, iz);
-      if (isSolid(b) || isLilyPad(b)) { floorY = sy + 1; break; }
+    it.vy = Math.max(-24, it.vy - 18 * dt);
+
+    // 1) X 轴碰撞：撞到墙/树干时反弹减速，绝不穿进实心方块内部
+    const nx = it.x + it.vx * dt;
+    if (it.vx !== 0 && itemBlockedAt(nx + (it.vx > 0 ? R : -R), it.y, it.z)) {
+      it.vx = -it.vx * 0.25;
+    } else {
+      it.x = nx;
     }
-    if (it.y < floorY + 0.25) { it.y = floorY + 0.25; it.vy = 0; it.vx *= 0.85; it.vz *= 0.85; }
+
+    // 2) Z 轴碰撞
+    const nz = it.z + it.vz * dt;
+    if (it.vz !== 0 && itemBlockedAt(it.x, it.y, nz + (it.vz > 0 ? R : -R))) {
+      it.vz = -it.vz * 0.25;
+    } else {
+      it.z = nz;
+    }
+
+    // 3) Y 轴碰撞：严格区分上升撞顶（停住下坠）与下落触地（落在脚下支撑面），彻底杜绝“穿顶直冲树冠/地表”
+    const ny = it.y + it.vy * dt;
+    const ix = Math.floor(it.x), iz = Math.floor(it.z);
+    if (it.vy > 0) {
+      const ceilY = Math.floor(ny + H);
+      if (ceilY < HEIGHT && isSolid(world.getBlock(ix, ceilY, iz))) {
+        it.y = ceilY - H - 0.01;
+        it.vy = 0;
+      } else {
+        it.y = ny;
+      }
+    } else {
+      const footY = Math.floor(ny - H);
+      const fb = world.getBlock(ix, footY, iz);
+      if (footY < 0 || isSolid(fb) || isLilyPad(fb)) {
+        it.y = footY + 1 + H;
+        it.vy = 0;
+        it.vx *= 0.80;
+        it.vz *= 0.80;
+      } else {
+        it.y = ny;
+      }
+    }
+
+    // 若放置方块恰好把已静止的掉落物包住，仅向相邻水平空位轻推（绝不向上顶穿屋顶/树冠）
+    if (isSolid(world.getBlock(ix, Math.floor(it.y), iz))) {
+      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      for (const [ox, oz] of dirs) {
+        if (!isSolid(world.getBlock(ix + ox, Math.floor(it.y), iz + oz))) {
+          it.x += ox * 3.5 * dt;
+          it.z += oz * 3.5 * dt;
+          break;
+        }
+      }
+    }
+
     const dx = player.pos.x - it.x, dy = (player.pos.y + 1) - it.y, dz = player.pos.z - it.z;
     const d2 = dx * dx + dy * dy + dz * dz;
-    if (d2 < 2.6 * 2.6 && d2 > 0.9 * 0.9) {          // 靠近玩家 → 吸附
+    if (d2 < 2.6 * 2.6 && d2 > 0.9 * 0.9) {          // 靠近玩家 → 吸附（但穿墙前先检查，避免隔墙吸走）
       const pull = Math.min(1, dt * 9);
-      it.x += dx * pull; it.y += dy * pull; it.z += dz * pull;
+      const px = it.x + dx * pull, py = it.y + dy * pull, pz = it.z + dz * pull;
+      if (!itemBlockedAt(px, py, pz)) {
+        it.x = px; it.y = py; it.z = pz;
+      }
     }
-    it.spr.position.set(it.x, it.y, it.z);
+    const bob = it.vy === 0 ? Math.sin(it.age * 3.6 + i) * 0.055 : 0;
+    it.spr.position.set(it.x, it.y + bob, it.z);
     if (d2 < 0.9 * 0.9) {                            // 拾取
       addItem(it.id, 1);
       scene.remove(it.spr);                            // 材质按物品共享，不 dispose
@@ -19575,6 +19885,7 @@ function animate() {
     updateWeather(dt);
     updateSensorsAndEnvironment(dt);
     if (!inNether) {
+      mobResetPathBudget();
       updateAnimals(dt);
       updateAnimalSpawning(dt);
       updateZombies(dt);
