@@ -921,7 +921,15 @@ const B = {
   CLAY_BALL:256, BRICK_ITEM:257, NETHERITE_SCRAP:258, COPPER_INGOT:259,
   AMETHYST_SHARD:260, FLINT:261, FEATHER:262, LEATHER:263,
   PAPER:264, BOOK:265, SUGAR:266, REDSTONE:267,
-  LAPIS_LAZULI:268, GLOWSTONE_DUST:269, SLIME_BALL:270, CAKE:271
+  LAPIS_LAZULI:268, GLOWSTONE_DUST:269, SLIME_BALL:270, CAKE:271,
+  SOUL_TORCH:272, RED_WOOL:273, YELLOW_WOOL:274, BLUE_WOOL:275,
+  GREEN_WOOL:276, BLACK_WOOL:277, PINK_WOOL:278,
+  BIRCH_PLANKS:279, SPRUCE_PLANKS:280, CHERRY_PLANKS:281, CRIMSON_PLANKS:282, WARPED_PLANKS:283,
+  DEEPSLATE_BRICKS:284, CHISELED_STONE_BRICKS:285, QUARTZ_PILLAR:286, PRISMARINE:287,
+  GOLD_PICKAXE:288, GOLD_AXE:289, GOLD_SHOVEL:290, GOLD_SWORD:291,
+  GOLD_HELMET:292, GOLD_CHESTPLATE:293, GOLD_LEGGINGS:294, GOLD_BOOTS:295,
+  LEATHER_HELMET:296, LEATHER_CHESTPLATE:297, LEATHER_LEGGINGS:298, LEATHER_BOOTS:299,
+  MUSHROOM_STEW:300, HONEY_BOTTLE:301, SWEET_BERRIES:302, GOLDEN_MELON:303, REGEN_POTION:304
 };
 
 function mulberry32(a) {
@@ -1408,6 +1416,13 @@ function makeAtlas() {
   T.polishedBlackstone = i++; T.polishedBlackstoneBricks = i++;
   T.mossyCobble = i++; T.redstoneBlock = i++; T.lapisBlock = i++;
   T.emeraldBlock = i++; T.netheriteBlock = i++;
+  T.soulTorch = i++;
+  T.redWool = i++; T.yellowWool = i++; T.blueWool = i++;
+  T.greenWool = i++; T.blackWool = i++; T.pinkWool = i++;
+  T.birchPlanks = i++; T.sprucePlanks = i++; T.cherryPlanks = i++;
+  T.crimsonPlanks = i++; T.warpedPlanks = i++;
+  T.deepslateBricks = i++; T.chiseledStoneBricks = i++;
+  T.quartzPillarTop = i++; T.quartzPillarSide = i++; T.prismarine = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -3749,6 +3764,91 @@ function makeAtlas() {
   }
   speck(T.netheriteBlock, [184, 136, 64], 8, 371);
 
+  // 46. 灵魂火把（幽蓝灵魂焰火把，通透镂空）
+  for (let y = 6; y < 16; y++) {
+    put(T.soulTorch, 7, y, 118, 84, 48);
+    put(T.soulTorch, 8, y, 88, 60, 34);
+  }
+  put(T.soulTorch, 7, 5, 36, 178, 196); put(T.soulTorch, 8, 5, 28, 146, 168);
+  put(T.soulTorch, 6, 4, 46, 206, 224); put(T.soulTorch, 7, 4, 152, 250, 255); put(T.soulTorch, 8, 4, 92, 236, 248); put(T.soulTorch, 9, 4, 36, 186, 206);
+  put(T.soulTorch, 7, 3, 212, 255, 255); put(T.soulTorch, 8, 3, 122, 244, 252);
+  put(T.soulTorch, 7, 2, 118, 242, 252);
+
+  // 47. 六色染色羊毛（柔软编织毛线质感）
+  function paintWool(tile, base, hi, lo, seed) {
+    fill(tile, base, 10, seed);
+    for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+      if (((x + y) & 3) === 0) put(tile, x, y, hi[0], hi[1], hi[2]);
+      else if (((x * 3 + y * 5) & 7) === 0) put(tile, x, y, lo[0], lo[1], lo[2]);
+    }
+  }
+  paintWool(T.redWool,    [176, 46, 38],  [208, 68, 56],  [136, 28, 24], 373);
+  paintWool(T.yellowWool, [238, 198, 48], [254, 224, 88], [198, 154, 26], 374);
+  paintWool(T.blueWool,   [52, 76, 170],  [78, 108, 208], [32, 48, 124], 375);
+  paintWool(T.greenWool,  [76, 128, 42],  [104, 162, 62], [48, 92, 26], 376);
+  paintWool(T.blackWool,  [34, 36, 42],   [54, 58, 68],   [18, 18, 22], 377);
+  paintWool(T.pinkWool,   [236, 140, 174],[252, 176, 204],[198, 104, 138], 378);
+
+  // 48. 五色精致木板（白桦/云杉/樱花/绯红/诡异，水平木板缝与木纹）
+  function paintPlanks(tile, base, hi, seam, seed) {
+    fill(tile, base, 7, seed);
+    for (let y = 0; y < TILE; y++) {
+      const isSeam = (y % 4 === 0);
+      for (let x = 0; x < TILE; x++) {
+        if (isSeam) put(tile, x, y, seam[0], seam[1], seam[2]);
+        else if (y % 4 === 1 && ((x + y) & 1) === 0) put(tile, x, y, hi[0], hi[1], hi[2]);
+      }
+      if (!isSeam) {
+        const vx = ((y >> 2) % 2 === 0) ? 7 : 15;
+        put(tile, vx, y, seam[0], seam[1], seam[2]);
+      }
+    }
+  }
+  paintPlanks(T.birchPlanks,   [212, 198, 148], [228, 216, 172], [164, 148, 104], 380);
+  paintPlanks(T.sprucePlanks,  [116, 84, 50],   [138, 102, 64],  [76, 52, 28],    381);
+  paintPlanks(T.cherryPlanks,  [226, 176, 172], [244, 200, 196], [176, 124, 126], 382);
+  paintPlanks(T.crimsonPlanks, [118, 48, 76],   [146, 66, 98],   [78, 26, 48],    383);
+  paintPlanks(T.warpedPlanks,  [42, 114, 110],  [62, 146, 138],  [24, 74, 76],    384);
+
+  // 49. 深板岩砖（沉稳幽暗地牢石砖）
+  fill(T.deepslateBricks, [72, 74, 80], 7, 386);
+  for (let x = 0; x < TILE; x++) {
+    put(T.deepslateBricks, x, 0, 38, 40, 46); put(T.deepslateBricks, x, 8, 38, 40, 46);
+    put(T.deepslateBricks, x, 1, 94, 98, 106); put(T.deepslateBricks, x, 9, 94, 98, 106);
+  }
+  for (let y = 0; y < 8; y++) put(T.deepslateBricks, 8, y, 38, 40, 46);
+  for (let y = 8; y < 16; y++) put(T.deepslateBricks, 0, y, 38, 40, 46);
+
+  // 50. 雕纹石砖（经典神庙同心方框浮雕石砖）
+  fill(T.chiseledStoneBricks, [132, 134, 138], 6, 388);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5));
+    if (d > 6.5 || (d > 3.4 && d < 4.6) || (d > 0.8 && d < 1.8)) put(T.chiseledStoneBricks, x, y, 82, 84, 88);
+    else if ((d > 5.4 && d <= 6.5) || (d > 2.4 && d <= 3.4)) put(T.chiseledStoneBricks, x, y, 168, 170, 174);
+  }
+
+  // 51. 石英柱（古典希腊神殿竖向凹槽大理石柱）
+  fill(T.quartzPillarSide, [236, 232, 224], 4, 390);
+  for (let y = 0; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      if (x % 4 === 0) put(T.quartzPillarSide, x, y, 202, 196, 186);
+      else if (x % 4 === 1) put(T.quartzPillarSide, x, y, 248, 246, 240);
+    }
+  }
+  fill(T.quartzPillarTop, [234, 230, 222], 4, 391);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const d = Math.hypot(x - 7.5, y - 7.5);
+    if (Math.abs(d - 5.5) < 0.7 || Math.abs(d - 2.6) < 0.6) put(T.quartzPillarTop, x, y, 196, 190, 180);
+  }
+
+  // 52. 海晶石（深海青碧裂纹砖石）
+  fill(T.prismarine, [78, 152, 144], 12, 392);
+  speck(T.prismarine, [118, 196, 182], 26, 393);
+  speck(T.prismarine, [46, 102, 108], 28, 394);
+  for (let x = 0; x < TILE; x++) {
+    if (x % 5 === 0) for (let y = 0; y < TILE; y++) if (((x + y) & 3) !== 0) put(T.prismarine, x, y, 42, 92, 98);
+  }
+
   ctx.putImageData(img, 0, 0);
   // 3D 渲染改用 2D 纹理数组（每 tile 独立一层，配合 RepeatWrapping 可让单个 tile 跨大四边形循环）
   const layers = ATLAS_TILES;
@@ -3777,7 +3877,7 @@ const atlas = makeAtlas();
 /* tileOf 原先每次调用都 new 一个 {top,side,bottom} 对象——
    网格构建时每张面都要查一次，等于每个面都产生一次垃圾。
    这里把它们缓存成不可变单例：id → 对象，之后只是数组索引。 */
-const _tileCache = new Array(256);
+const _tileCache = new Array(512);
 function tileOf(id) {
   let t = _tileCache[id];
   if (t === undefined) t = _tileCache[id] = _tileOfRaw(id);
@@ -3939,6 +4039,22 @@ function _tileOfRaw(id) {
     case B.LAPIS_BLOCK: return { top: atlas.T.lapisBlock, side: atlas.T.lapisBlock, bottom: atlas.T.lapisBlock };
     case B.EMERALD_BLOCK: return { top: atlas.T.emeraldBlock, side: atlas.T.emeraldBlock, bottom: atlas.T.emeraldBlock };
     case B.NETHERITE_BLOCK: return { top: atlas.T.netheriteBlock, side: atlas.T.netheriteBlock, bottom: atlas.T.netheriteBlock };
+    case B.SOUL_TORCH: return { top: atlas.T.soulTorch, side: atlas.T.soulTorch, bottom: atlas.T.soulTorch };
+    case B.RED_WOOL: return { top: atlas.T.redWool, side: atlas.T.redWool, bottom: atlas.T.redWool };
+    case B.YELLOW_WOOL: return { top: atlas.T.yellowWool, side: atlas.T.yellowWool, bottom: atlas.T.yellowWool };
+    case B.BLUE_WOOL: return { top: atlas.T.blueWool, side: atlas.T.blueWool, bottom: atlas.T.blueWool };
+    case B.GREEN_WOOL: return { top: atlas.T.greenWool, side: atlas.T.greenWool, bottom: atlas.T.greenWool };
+    case B.BLACK_WOOL: return { top: atlas.T.blackWool, side: atlas.T.blackWool, bottom: atlas.T.blackWool };
+    case B.PINK_WOOL: return { top: atlas.T.pinkWool, side: atlas.T.pinkWool, bottom: atlas.T.pinkWool };
+    case B.BIRCH_PLANKS: return { top: atlas.T.birchPlanks, side: atlas.T.birchPlanks, bottom: atlas.T.birchPlanks };
+    case B.SPRUCE_PLANKS: return { top: atlas.T.sprucePlanks, side: atlas.T.sprucePlanks, bottom: atlas.T.sprucePlanks };
+    case B.CHERRY_PLANKS: return { top: atlas.T.cherryPlanks, side: atlas.T.cherryPlanks, bottom: atlas.T.cherryPlanks };
+    case B.CRIMSON_PLANKS: return { top: atlas.T.crimsonPlanks, side: atlas.T.crimsonPlanks, bottom: atlas.T.crimsonPlanks };
+    case B.WARPED_PLANKS: return { top: atlas.T.warpedPlanks, side: atlas.T.warpedPlanks, bottom: atlas.T.warpedPlanks };
+    case B.DEEPSLATE_BRICKS: return { top: atlas.T.deepslateBricks, side: atlas.T.deepslateBricks, bottom: atlas.T.deepslateBricks };
+    case B.CHISELED_STONE_BRICKS: return { top: atlas.T.chiseledStoneBricks, side: atlas.T.chiseledStoneBricks, bottom: atlas.T.chiseledStoneBricks };
+    case B.QUARTZ_PILLAR: return { top: atlas.T.quartzPillarTop, side: atlas.T.quartzPillarSide, bottom: atlas.T.quartzPillarTop };
+    case B.PRISMARINE: return { top: atlas.T.prismarine, side: atlas.T.prismarine, bottom: atlas.T.prismarine };
     case B.CAMPFIRE: return { top: atlas.T.campfireTop, side: atlas.T.campfireSide, bottom: atlas.T.campfireSide };
     case B.DOOR: return { top: atlas.T.doorTop, side: atlas.T.doorBottom, bottom: atlas.T.doorBottom };
     case B.COBWEB: return { top: atlas.T.cobweb, side: atlas.T.cobweb, bottom: atlas.T.cobweb };
@@ -3954,7 +4070,7 @@ function _tileOfRaw(id) {
 
 /* 按面索引取贴图层：把 f.face 的字符串查表提前成数字索引，网格热循环里不再比对字符串。
    索引约定与 FACES 一致：0/1 → side，2 → top，3 → bottom，4/5 → side。 */
-const _tileFaceCache = new Array(256);
+const _tileFaceCache = new Array(512);
 function tileFace(id, fi) {
   let a = _tileFaceCache[id];
   if (a === undefined) {
@@ -4855,7 +4971,7 @@ class World {
     const isNetherDim = (this.dim === 'nether');
     const c = {
       cx, cz, dim: this.dim,
-      blocks: new Uint8Array(CHUNK * CHUNK * HEIGHT),
+      blocks: new Uint16Array(CHUNK * CHUNK * HEIGHT),
       water: new Uint8Array(CHUNK * CHUNK * HEIGHT),
       treesPlanted: isNetherDim,
       villageChunk: isNetherDim ? false : undefined,
@@ -5646,7 +5762,7 @@ function stashEditedChunk(c) {
 function restoreTorchLights(c) {
   const baseX = c.cx * 16, baseZ = c.cz * 16;
   for (let i = 0; i < c.blocks.length; i++) {
-    if (c.blocks[i] !== B.TORCH) continue;
+    if (c.blocks[i] !== B.TORCH && c.blocks[i] !== B.SOUL_TORCH) continue;
     const y = Math.floor(i / 256);
     const tz = baseZ + Math.floor((i % 256) / 16);
     const tx = baseX + (i % 16);
@@ -5688,6 +5804,28 @@ function base64ToUint8(str) {
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return arr;
 }
+function encodeBlocksForSave(blocks) {
+  let wide = false;
+  for (let i = 0; i < blocks.length; i++) {
+    if (blocks[i] > 255) { wide = true; break; }
+  }
+  if (wide) {
+    const bytes = new Uint8Array(blocks.buffer, blocks.byteOffset, blocks.byteLength);
+    return { b16: 1, b: uint8ToBase64(bytes) };
+  }
+  const u8 = (blocks instanceof Uint8Array) ? blocks : new Uint8Array(blocks);
+  return { b16: 0, b: uint8ToBase64(u8) };
+}
+function decodeBlocksFromSave(s, need) {
+  const bytes = base64ToUint8(s.b || '');
+  if ((s.b16 || bytes.length === need * 2) && bytes.length === need * 2) {
+    return new Uint16Array(bytes.buffer, bytes.byteOffset, need);
+  }
+  if (bytes.length === need) {
+    return new Uint16Array(bytes);
+  }
+  return null;
+}
 function saveDimChunks(storageKey, chunkMap, editedMap) {
   const seen = new Set();
   const saved = [];
@@ -5695,7 +5833,10 @@ function saveDimChunks(storageKey, chunkMap, editedMap) {
     const k = cx + ',' + cz;
     if (seen.has(k)) return;
     seen.add(k);
-    saved.push({ cx, cz, b: uint8ToBase64(blocks), w: allZero(water) ? '' : uint8ToBase64(water) });
+    const enc = encodeBlocksForSave(blocks);
+    const entry = { cx, cz, b: enc.b, w: allZero(water) ? '' : uint8ToBase64(water) };
+    if (enc.b16) entry.b16 = 1;
+    saved.push(entry);
   };
   for (const c of chunkMap.values()) if (c.edited) push(c.cx, c.cz, c.blocks, c.water);
   for (const s of editedMap.values()) push(s.cx, s.cz, s.blocks, s.water);
@@ -5801,8 +5942,8 @@ function loadWorld(profileOverride) {
       const need = CHUNK * CHUNK * HEIGHT;
       for (const s of saved) {
         if (typeof s.cx !== 'number' || typeof s.cz !== 'number') continue;
-        const blocks = base64ToUint8(s.b || '');
-        if (blocks.length !== need) continue;          // 旧版/损坏的存档直接跳过，别把数组写坏
+        const blocks = decodeBlocksFromSave(s, need);
+        if (!blocks) continue;          // 旧版/损坏的存档直接跳过，别把数组写坏
         const water = s.w ? base64ToUint8(s.w) : new Uint8Array(need);
         targetMap.set(key(s.cx, s.cz), {
           cx: s.cx, cz: s.cz, blocks,
@@ -6257,7 +6398,7 @@ function pushGreedyFace(A, f, ox, oy, oz, W, D, tile, under, baseX, baseZ) {
 // 不透明方块贪心网格（按 6 个方向分别合并）
 function buildOpaqueGreedy(c, A, baseX, baseZ, yMax, colTop, getB, solid) {
   const isNetherChunk = (c.dim === 'nether');
-  const mask = new Uint8Array((yMax + 1) * 16);
+  const mask = new Uint16Array((yMax + 1) * 16);
   const keys = new Int32Array((yMax + 1) * 16);
   const blk = [0, 0, 0];
   for (let fi = 0; fi < 6; fi++) {
@@ -7023,6 +7164,15 @@ const BLOCK_COLORS = {
   [B.AMETHYST_SHARD]: 0xb266e8, [B.FLINT]: 0x3c3e44, [B.FEATHER]: 0xf4f6f8, [B.LEATHER]: 0x9c5a32,
   [B.PAPER]: 0xf2f0e6, [B.BOOK]: 0x7c4a26, [B.SUGAR]: 0xfafafa, [B.REDSTONE]: 0xdc1814,
   [B.LAPIS_LAZULI]: 0x2658cc, [B.GLOWSTONE_DUST]: 0xf8d45c, [B.SLIME_BALL]: 0x74d862, [B.CAKE]: 0xf8eedc,
+  [B.SOUL_TORCH]: 0x4ae8f8, [B.RED_WOOL]: 0xb02e26, [B.YELLOW_WOOL]: 0xeec630, [B.BLUE_WOOL]: 0x344caa,
+  [B.GREEN_WOOL]: 0x4c802a, [B.BLACK_WOOL]: 0x22242a, [B.PINK_WOOL]: 0xec8cae,
+  [B.BIRCH_PLANKS]: 0xd4c694, [B.SPRUCE_PLANKS]: 0x745432, [B.CHERRY_PLANKS]: 0xe2b0ac,
+  [B.CRIMSON_PLANKS]: 0x76304c, [B.WARPED_PLANKS]: 0x2a726e,
+  [B.DEEPSLATE_BRICKS]: 0x484a50, [B.CHISELED_STONE_BRICKS]: 0x84868a, [B.QUARTZ_PILLAR]: 0xece8e0, [B.PRISMARINE]: 0x4e9890,
+  [B.GOLD_PICKAXE]: 0xf4c830, [B.GOLD_AXE]: 0xf4c830, [B.GOLD_SHOVEL]: 0xf4c830, [B.GOLD_SWORD]: 0xf4c830,
+  [B.GOLD_HELMET]: 0xf4c830, [B.GOLD_CHESTPLATE]: 0xf4c830, [B.GOLD_LEGGINGS]: 0xf4c830, [B.GOLD_BOOTS]: 0xf4c830,
+  [B.LEATHER_HELMET]: 0x9c5a32, [B.LEATHER_CHESTPLATE]: 0x9c5a32, [B.LEATHER_LEGGINGS]: 0x9c5a32, [B.LEATHER_BOOTS]: 0x9c5a32,
+  [B.MUSHROOM_STEW]: 0xc66842, [B.HONEY_BOTTLE]: 0xf2a628, [B.SWEET_BERRIES]: 0xc42038, [B.GOLDEN_MELON]: 0xf4c244, [B.REGEN_POTION]: 0xe858a8,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -14739,24 +14889,27 @@ function playerAABB(pos) {
 }
 /* 热路径谓词（isLeaf/isTorch/isLilyPad/isLadder/isCrossPlant/isSapling/isLog/isBed）
    统一在下方用查表实现，这里不再重复定义，避免函数重复声明。 */
-function isPickaxe(id) { return id === B.WOOD_PICKAXE || id === B.STONE_PICKAXE || id === B.IRON_PICKAXE || id === B.DIAMOND_PICKAXE || id === B.NETHERITE_PICKAXE; }
-function isAxe(id) { return id === B.WOOD_AXE || id === B.STONE_AXE || id === B.IRON_AXE || id === B.DIAMOND_AXE || id === B.NETHERITE_AXE; }
-function isShovel(id) { return id === B.WOOD_SHOVEL || id === B.STONE_SHOVEL || id === B.IRON_SHOVEL || id === B.DIAMOND_SHOVEL || id === B.NETHERITE_SHOVEL; }
-function isSword(id) { return id === B.WOOD_SWORD || id === B.STONE_SWORD || id === B.IRON_SWORD || id === B.DIAMOND_SWORD || id === B.NETHERITE_SWORD; }
+function isPickaxe(id) { return id === B.WOOD_PICKAXE || id === B.STONE_PICKAXE || id === B.IRON_PICKAXE || id === B.GOLD_PICKAXE || id === B.DIAMOND_PICKAXE || id === B.NETHERITE_PICKAXE; }
+function isAxe(id) { return id === B.WOOD_AXE || id === B.STONE_AXE || id === B.IRON_AXE || id === B.GOLD_AXE || id === B.DIAMOND_AXE || id === B.NETHERITE_AXE; }
+function isShovel(id) { return id === B.WOOD_SHOVEL || id === B.STONE_SHOVEL || id === B.IRON_SHOVEL || id === B.GOLD_SHOVEL || id === B.DIAMOND_SHOVEL || id === B.NETHERITE_SHOVEL; }
+function isSword(id) { return id === B.WOOD_SWORD || id === B.STONE_SWORD || id === B.IRON_SWORD || id === B.GOLD_SWORD || id === B.DIAMOND_SWORD || id === B.NETHERITE_SWORD; }
 function isBow(id) { return id === B.BOW; }
 function isShield(id) { return id === B.SHIELD; }
 function isFishingRod(id) { return id === B.FISHING_ROD; }
-function isWool(id) { return id === B.WOOL; }
+function isWool(id) { return id === B.WOOL || id === B.RED_WOOL || id === B.YELLOW_WOOL || id === B.BLUE_WOOL || id === B.GREEN_WOOL || id === B.BLACK_WOOL || id === B.PINK_WOOL; }
+function isPlanks(id) { return id === B.PLANKS || id === B.BIRCH_PLANKS || id === B.SPRUCE_PLANKS || id === B.CHERRY_PLANKS || id === B.CRIMSON_PLANKS || id === B.WARPED_PLANKS; }
 function isTool(id) { return isPickaxe(id) || isAxe(id) || isShovel(id) || isSword(id) || id === B.BOW || isShield(id) || isFishingRod(id); }
 function isWoodTier(id) { return id === B.WOOD_PICKAXE || id === B.WOOD_AXE || id === B.WOOD_SHOVEL || id === B.WOOD_SWORD; }
 function isStoneTier(id) { return id === B.STONE_PICKAXE || id === B.STONE_AXE || id === B.STONE_SHOVEL || id === B.STONE_SWORD; }
 function isIronTier(id) { return id === B.IRON_PICKAXE || id === B.IRON_AXE || id === B.IRON_SHOVEL || id === B.IRON_SWORD; }
+function isGoldTier(id) { return id === B.GOLD_PICKAXE || id === B.GOLD_AXE || id === B.GOLD_SHOVEL || id === B.GOLD_SWORD; }
 function isDiamondTier(id) { return id === B.DIAMOND_PICKAXE || id === B.DIAMOND_AXE || id === B.DIAMOND_SHOVEL || id === B.DIAMOND_SWORD; }
 function isNetheriteTier(id) { return id === B.NETHERITE_PICKAXE || id === B.NETHERITE_SWORD || id === B.NETHERITE_AXE || id === B.NETHERITE_SHOVEL; }
-// 工具耐久上限（木 60 / 石 130 / 铁 250 / 钻石 1561 / 下界合金 2031 / 弓 100 / 盾 180 / 钓竿 64）
+// 工具耐久上限（木 60 / 石 130 / 金 45 / 铁 250 / 钻石 1561 / 下界合金 2031 / 弓 100 / 盾 180 / 钓竿 64 / 剪刀 238）
 const TOOL_DURABILITY = {
   [B.WOOD_PICKAXE]: 60, [B.WOOD_AXE]: 60, [B.WOOD_SHOVEL]: 60, [B.WOOD_SWORD]: 60,
   [B.STONE_PICKAXE]: 130, [B.STONE_AXE]: 130, [B.STONE_SHOVEL]: 130, [B.STONE_SWORD]: 130,
+  [B.GOLD_PICKAXE]: 45, [B.GOLD_AXE]: 45, [B.GOLD_SHOVEL]: 45, [B.GOLD_SWORD]: 45,
   [B.IRON_PICKAXE]: 250, [B.IRON_AXE]: 250, [B.IRON_SHOVEL]: 250, [B.IRON_SWORD]: 250,
   [B.DIAMOND_PICKAXE]: 1561, [B.DIAMOND_AXE]: 1561, [B.DIAMOND_SHOVEL]: 1561, [B.DIAMOND_SWORD]: 1561,
   [B.NETHERITE_PICKAXE]: 2031, [B.NETHERITE_AXE]: 2031, [B.NETHERITE_SHOVEL]: 2031, [B.NETHERITE_SWORD]: 2031,
@@ -14764,7 +14917,7 @@ const TOOL_DURABILITY = {
 };
 // 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌/材料物品不可放置）
 function isPlaceable(id) {
-  if (id >= 256) return false;
+  if ((id >= 256 && id <= 271) || id >= 288) return false;
   if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.COMPASS || id === B.CLOCK || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT || id === B.ELYTRA || id === B.NETHERITE_INGOT || id === B.NETHER_PORTAL || id === B.HONEYCOMB || id === B.BONE_MEAL || id === B.GOAT_HORN) return false;
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.MELON_SLICE) return false;
   if (isFood(id)) return false;   // 食物不可放置
@@ -14785,8 +14938,8 @@ function _fillTbl(fn) {
 
 // —— 原始判定逻辑（供建表用，保持单一事实来源；均为函数声明，不产生每次调用的闭包） ——
 function _crossRaw(i) { return i === B.FLOWER_RED || i === B.FLOWER_YELLOW || i === B.GRASS_TALL || i === B.MUSHROOM_RED || i === B.MUSHROOM_BROWN || i === B.FERN || i === B.WHEAT_CROP || i === B.WHEAT_CROP_MATURE || i === B.BAMBOO || i === B.SUGARCANE || i === B.COBWEB || i === B.POINTED_DRIPSTONE || i === B.SAPLING || i === B.MAPLE_SAPLING || i === B.CHERRY_SAPLING || i === B.WEEPING_VINES || i === B.TWISTING_VINES; }
-function _seeRaw(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || id === B.DOOR || _crossRaw(id) || id === B.TORCH || id === B.LILY_PAD || id === B.CHERRY_PETALS || id === B.LADDER || id === B.VINE || id === B.BED || id === B.NETHER_PORTAL || id === B.LIGHTNING_ROD || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.LEVER || id === B.BUTTON || id === B.CHAIN || id === B.BELL || id === B.GRINDSTONE; }
-function _solidRaw(id) { return id !== B.AIR && id !== B.WATER && !_crossRaw(id) && id !== B.TORCH && id !== B.LILY_PAD && id !== B.CHERRY_PETALS && id !== B.LADDER && id !== B.VINE && id !== B.NETHER_PORTAL && id !== B.LEVER && id !== B.BUTTON; }
+function _seeRaw(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || id === B.DOOR || _crossRaw(id) || id === B.TORCH || id === B.SOUL_TORCH || id === B.LILY_PAD || id === B.CHERRY_PETALS || id === B.LADDER || id === B.VINE || id === B.BED || id === B.NETHER_PORTAL || id === B.LIGHTNING_ROD || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.LEVER || id === B.BUTTON || id === B.CHAIN || id === B.BELL || id === B.GRINDSTONE; }
+function _solidRaw(id) { return id !== B.AIR && id !== B.WATER && !_crossRaw(id) && id !== B.TORCH && id !== B.SOUL_TORCH && id !== B.LILY_PAD && id !== B.CHERRY_PETALS && id !== B.LADDER && id !== B.VINE && id !== B.NETHER_PORTAL && id !== B.LEVER && id !== B.BUTTON; }
 function isClimbable(id) { return id === B.LADDER || id === B.VINE || id === B.WEEPING_VINES || id === B.TWISTING_VINES; }
 
 // 透明/可透视（用于面剔除与 AO）—— 查表版
@@ -14820,7 +14973,7 @@ function isLeaf(id) {
   if (!t) t = isLeaf.t = _fillTbl((i) => i === B.LEAVES || i === B.BIRCH_LEAVES || i === B.SPRUCE_LEAVES || i === B.JUNGLE_LEAVES || i === B.ACACIA_LEAVES || i === B.CHERRY_LEAVES || i === B.MAPLE_LEAVES);
   return t[id] === 1;
 }
-function isTorch(id) { return id === B.TORCH; }
+function isTorch(id) { return id === B.TORCH || id === B.SOUL_TORCH; }
 function isLilyPad(id) { return id === B.LILY_PAD; }
 function isLadder(id) { return id === B.LADDER; }
 function isPetals(id) { return id === B.CHERRY_PETALS; }
@@ -15468,16 +15621,16 @@ function burst(dur, vol, freq, type, delay) {
 }
 // —— 原版 MC 纯正材质音效库 ——
 function isStoneMat(id) {
-  return id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.MOSSY_COBBLE || id === B.BRICK ||
-         id === B.SANDSTONE || id === B.QUARTZ || id === B.FURNACE || isOre(id) || id === B.BASALT || id === B.MAGMA ||
+  return id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.CHISELED_STONE_BRICKS || id === B.MOSSY || id === B.MOSSY_COBBLE || id === B.BRICK ||
+         id === B.SANDSTONE || id === B.QUARTZ || id === B.QUARTZ_PILLAR || id === B.PRISMARINE || id === B.FURNACE || isOre(id) || id === B.BASALT || id === B.MAGMA ||
          id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.BEDROCK ||
-         id === B.DEEPSLATE || id === B.TERRACOTTA || id === B.RED_TERRACOTTA || id === B.ORANGE_TERRACOTTA || id === B.YELLOW_TERRACOTTA ||
+         id === B.DEEPSLATE || id === B.DEEPSLATE_BRICKS || id === B.TERRACOTTA || id === B.RED_TERRACOTTA || id === B.ORANGE_TERRACOTTA || id === B.YELLOW_TERRACOTTA ||
          id === B.NETHERRACK || id === B.NETHER_BRICKS || id === B.BLACKSTONE || id === B.POLISHED_BLACKSTONE || id === B.POLISHED_BLACKSTONE_BRICKS ||
          id === B.SMOOTH_STONE || id === B.REDSTONE_BLOCK || id === B.LAPIS_BLOCK || id === B.EMERALD_BLOCK ||
          id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM;
 }
 function isWoodMat(id) {
-  return isLog(id) || id === B.PLANKS || id === B.BOOKSHELF || id === B.CHEST || id === B.DOOR || id === B.LADDER ||
+  return isLog(id) || isPlanks(id) || id === B.BOOKSHELF || id === B.CHEST || id === B.DOOR || id === B.LADDER ||
          id === B.MUSHROOM_STEM || id === B.RED_MUSHROOM_BLOCK || id === B.BROWN_MUSHROOM_BLOCK;
 }
 function isPlantMat(id) {
@@ -15504,7 +15657,7 @@ function isCrystalMat(id) {
 // 软质：黏糊/闷响（粘液块、蜂蜜块、海绵、羊毛、床）
 function isSoftMat(id) {
   return id === B.SLIME_BLOCK || id === B.HONEY_BLOCK || id === B.SPONGE ||
-         id === B.WET_SPONGE || id === B.WOOL || id === B.BED;
+         id === B.WET_SPONGE || isWool(id) || id === B.BED;
 }
 
 /* 原版经典圆润气泡拾取物品音（Pop） */
@@ -16099,31 +16252,48 @@ const NAMES = {
   [B.AMETHYST_SHARD]: '紫水晶碎片', [B.FLINT]: '燧石', [B.FEATHER]: '羽毛', [B.LEATHER]: '皮革',
   [B.PAPER]: '纸', [B.BOOK]: '书', [B.SUGAR]: '糖', [B.REDSTONE]: '红石粉',
   [B.LAPIS_LAZULI]: '青金石', [B.GLOWSTONE_DUST]: '萤石粉', [B.SLIME_BALL]: '史莱姆球', [B.CAKE]: '蛋糕',
+  [B.SOUL_TORCH]: '灵魂火把', [B.RED_WOOL]: '红色羊毛', [B.YELLOW_WOOL]: '黄色羊毛', [B.BLUE_WOOL]: '蓝色羊毛',
+  [B.GREEN_WOOL]: '绿色羊毛', [B.BLACK_WOOL]: '黑色羊毛', [B.PINK_WOOL]: '粉色羊毛',
+  [B.BIRCH_PLANKS]: '白桦木板', [B.SPRUCE_PLANKS]: '云杉木板', [B.CHERRY_PLANKS]: '樱花木板',
+  [B.CRIMSON_PLANKS]: '绯红木板', [B.WARPED_PLANKS]: '诡异木板',
+  [B.DEEPSLATE_BRICKS]: '深板岩砖', [B.CHISELED_STONE_BRICKS]: '雕纹石砖', [B.QUARTZ_PILLAR]: '石英柱', [B.PRISMARINE]: '海晶石',
+  [B.GOLD_PICKAXE]: '金镐', [B.GOLD_AXE]: '金斧', [B.GOLD_SHOVEL]: '金锹', [B.GOLD_SWORD]: '金剑',
+  [B.GOLD_HELMET]: '金头盔', [B.GOLD_CHESTPLATE]: '金胸甲', [B.GOLD_LEGGINGS]: '金护腿', [B.GOLD_BOOTS]: '金靴子',
+  [B.LEATHER_HELMET]: '皮革帽子', [B.LEATHER_CHESTPLATE]: '皮革外套', [B.LEATHER_LEGGINGS]: '皮革裤子', [B.LEATHER_BOOTS]: '皮革靴子',
+  [B.MUSHROOM_STEW]: '蘑菇煲', [B.HONEY_BOTTLE]: '蜂蜜瓶', [B.SWEET_BERRIES]: '甜浆果', [B.GOLDEN_MELON]: '闪烁的西瓜片', [B.REGEN_POTION]: '再生药水',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
-function isHelmet(id) { return id === B.IRON_HELMET || id === B.DIAMOND_HELMET || id === B.NETHERITE_HELMET || id === B.TURTLE_HELMET; }
-function isChestplate(id) { return id === B.IRON_CHESTPLATE || id === B.DIAMOND_CHESTPLATE || id === B.NETHERITE_CHESTPLATE || id === B.ELYTRA; }
-function isLeggings(id) { return id === B.IRON_LEGGINGS || id === B.DIAMOND_LEGGINGS || id === B.NETHERITE_LEGGINGS; }
-function isBoots(id) { return id === B.IRON_BOOTS || id === B.DIAMOND_BOOTS || id === B.NETHERITE_BOOTS; }
+function isHelmet(id) { return id === B.LEATHER_HELMET || id === B.GOLD_HELMET || id === B.IRON_HELMET || id === B.DIAMOND_HELMET || id === B.NETHERITE_HELMET || id === B.TURTLE_HELMET; }
+function isChestplate(id) { return id === B.LEATHER_CHESTPLATE || id === B.GOLD_CHESTPLATE || id === B.IRON_CHESTPLATE || id === B.DIAMOND_CHESTPLATE || id === B.NETHERITE_CHESTPLATE || id === B.ELYTRA; }
+function isLeggings(id) { return id === B.LEATHER_LEGGINGS || id === B.GOLD_LEGGINGS || id === B.IRON_LEGGINGS || id === B.DIAMOND_LEGGINGS || id === B.NETHERITE_LEGGINGS; }
+function isBoots(id) { return id === B.LEATHER_BOOTS || id === B.GOLD_BOOTS || id === B.IRON_BOOTS || id === B.DIAMOND_BOOTS || id === B.NETHERITE_BOOTS; }
 function isArmor(id) { return isHelmet(id) || isChestplate(id) || isLeggings(id) || isBoots(id); }
-function isPotion(id) { return id === B.HEALING_POTION || id === B.SPEED_POTION || id === B.FIRE_RESISTANCE_POTION || id === B.STRENGTH_POTION || id === B.NIGHT_VISION_POTION; }
+function isPotion(id) { return id === B.HEALING_POTION || id === B.SPEED_POTION || id === B.FIRE_RESISTANCE_POTION || id === B.STRENGTH_POTION || id === B.NIGHT_VISION_POTION || id === B.REGEN_POTION; }
 function getArmorPoints() {
   let pts = 0;
   if (!player.armor) return 0;
-  if (player.armor.helmet === B.IRON_HELMET) pts += 2;
+  if (player.armor.helmet === B.LEATHER_HELMET) pts += 1;
+  else if (player.armor.helmet === B.GOLD_HELMET) pts += 2;
+  else if (player.armor.helmet === B.IRON_HELMET) pts += 2;
   else if (player.armor.helmet === B.DIAMOND_HELMET) pts += 3;
   else if (player.armor.helmet === B.NETHERITE_HELMET) pts += 3;
   else if (player.armor.helmet === B.TURTLE_HELMET) pts += 3;
 
-  if (player.armor.chestplate === B.IRON_CHESTPLATE) pts += 6;
+  if (player.armor.chestplate === B.LEATHER_CHESTPLATE) pts += 3;
+  else if (player.armor.chestplate === B.GOLD_CHESTPLATE) pts += 5;
+  else if (player.armor.chestplate === B.IRON_CHESTPLATE) pts += 6;
   else if (player.armor.chestplate === B.DIAMOND_CHESTPLATE) pts += 8;
   else if (player.armor.chestplate === B.NETHERITE_CHESTPLATE) pts += 8;
 
-  if (player.armor.leggings === B.IRON_LEGGINGS) pts += 5;
+  if (player.armor.leggings === B.LEATHER_LEGGINGS) pts += 2;
+  else if (player.armor.leggings === B.GOLD_LEGGINGS) pts += 3;
+  else if (player.armor.leggings === B.IRON_LEGGINGS) pts += 5;
   else if (player.armor.leggings === B.DIAMOND_LEGGINGS) pts += 6;
   else if (player.armor.leggings === B.NETHERITE_LEGGINGS) pts += 6;
 
-  if (player.armor.boots === B.IRON_BOOTS) pts += 2;
+  if (player.armor.boots === B.LEATHER_BOOTS) pts += 1;
+  else if (player.armor.boots === B.GOLD_BOOTS) pts += 1;
+  else if (player.armor.boots === B.IRON_BOOTS) pts += 2;
   else if (player.armor.boots === B.DIAMOND_BOOTS) pts += 3;
   else if (player.armor.boots === B.NETHERITE_BOOTS) pts += 3;
   return pts;
@@ -16203,6 +16373,7 @@ const FOOD = {
   [B.APPLE]: 4, [B.BREAD]: 5, [B.PUMPKIN_PIE]: 8, [B.WHEAT]: 1, [B.ROTTEN_FLESH]: 2, [B.RAW_MEAT]: 3,
   [B.MELON_SLICE]: 2, [B.EGG]: 2, [B.COOKED_MEAT]: 8, [B.RAW_FISH]: 2, [B.COOKED_FISH]: 6,
   [B.GOLDEN_APPLE]: 20, [B.SPIDER_EYE]: 2, [B.GOLDEN_CARROT]: 6, [B.ENCHANTED_GOLDEN_APPLE]: 20, [B.COOKIE]: 2, [B.CAKE]: 14,
+  [B.MUSHROOM_STEW]: 6, [B.HONEY_BOTTLE]: 6, [B.SWEET_BERRIES]: 3, [B.GOLDEN_MELON]: 8,
 };
 function isFood(id) { return FOOD[id] !== undefined; }
 
@@ -16401,6 +16572,42 @@ const RECIPES = [
   { out: B.GOAT_HORN, n: 1, need: [[B.BONE, 3], [B.COPPER_INGOT, 2]] },
   { out: B.QUARTZ, n: 2, need: [[B.WHITE_SAND, 4], [B.STONE, 1]] },
   { out: B.NETHER_BRICKS, n: 4, need: [[B.NETHERRACK, 4]] },
+  { out: B.SOUL_TORCH, n: 4, need: [[B.COAL, 1], [B.STICK, 1], [B.SOUL_SAND, 1]] },
+  { out: B.SOUL_TORCH, n: 4, need: [[B.CHARCOAL, 1], [B.STICK, 1], [B.SOUL_SOIL, 1]] },
+  { out: B.SOUL_LANTERN, n: 1, need: [[B.SOUL_TORCH, 1], [B.IRON_INGOT, 4]] },
+  { out: B.RED_WOOL, n: 1, need: [[B.WOOL, 1], [B.FLOWER_RED, 1]] },
+  { out: B.YELLOW_WOOL, n: 1, need: [[B.WOOL, 1], [B.FLOWER_YELLOW, 1]] },
+  { out: B.BLUE_WOOL, n: 1, need: [[B.WOOL, 1], [B.LAPIS_LAZULI, 1]] },
+  { out: B.GREEN_WOOL, n: 1, need: [[B.WOOL, 1], [B.CACTUS, 1]] },
+  { out: B.BLACK_WOOL, n: 1, need: [[B.WOOL, 1], [B.CHARCOAL, 1]] },
+  { out: B.PINK_WOOL, n: 1, need: [[B.WOOL, 1], [B.CHERRY_PETALS, 1]] },
+  { out: B.BIRCH_PLANKS, n: 4, need: [[B.BIRCH_LOG, 1]] },
+  { out: B.SPRUCE_PLANKS, n: 4, need: [[B.SPRUCE_LOG, 1]] },
+  { out: B.CHERRY_PLANKS, n: 4, need: [[B.CHERRY_LOG, 1]] },
+  { out: B.CRIMSON_PLANKS, n: 4, need: [[B.CRIMSON_STEM, 1]] },
+  { out: B.WARPED_PLANKS, n: 4, need: [[B.WARPED_STEM, 1]] },
+  { out: B.DEEPSLATE_BRICKS, n: 4, need: [[B.DEEPSLATE, 4]] },
+  { out: B.CHISELED_STONE_BRICKS, n: 2, need: [[B.STONE_BRICK, 2]] },
+  { out: B.QUARTZ_PILLAR, n: 2, need: [[B.QUARTZ, 2]] },
+  { out: B.PRISMARINE, n: 4, need: [[B.QUARTZ, 4], [B.LAPIS_LAZULI, 2]] },
+  { out: B.SEA_LANTERN, n: 1, need: [[B.PRISMARINE, 4], [B.GLOWSTONE_DUST, 5]] },
+  { out: B.GOLD_PICKAXE, n: 1, need: [[B.GOLD_INGOT, 3], [B.STICK, 2]] },
+  { out: B.GOLD_AXE, n: 1, need: [[B.GOLD_INGOT, 3], [B.STICK, 2]] },
+  { out: B.GOLD_SHOVEL, n: 1, need: [[B.GOLD_INGOT, 1], [B.STICK, 2]] },
+  { out: B.GOLD_SWORD, n: 1, need: [[B.GOLD_INGOT, 2], [B.STICK, 1]] },
+  { out: B.GOLD_HELMET, n: 1, need: [[B.GOLD_INGOT, 5]] },
+  { out: B.GOLD_CHESTPLATE, n: 1, need: [[B.GOLD_INGOT, 8]] },
+  { out: B.GOLD_LEGGINGS, n: 1, need: [[B.GOLD_INGOT, 7]] },
+  { out: B.GOLD_BOOTS, n: 1, need: [[B.GOLD_INGOT, 4]] },
+  { out: B.LEATHER_HELMET, n: 1, need: [[B.LEATHER, 5]] },
+  { out: B.LEATHER_CHESTPLATE, n: 1, need: [[B.LEATHER, 8]] },
+  { out: B.LEATHER_LEGGINGS, n: 1, need: [[B.LEATHER, 7]] },
+  { out: B.LEATHER_BOOTS, n: 1, need: [[B.LEATHER, 4]] },
+  { out: B.MUSHROOM_STEW, n: 1, need: [[B.MUSHROOM_RED, 1], [B.MUSHROOM_BROWN, 1], [B.PLANKS, 3]] },
+  { out: B.HONEY_BOTTLE, n: 1, need: [[B.HONEYCOMB, 1], [B.GLASS, 1]] },
+  { out: B.SWEET_BERRIES, n: 4, need: [[B.APPLE, 1], [B.SUGAR, 1]] },
+  { out: B.GOLDEN_MELON, n: 1, need: [[B.MELON_SLICE, 1], [B.GOLD_INGOT, 8]] },
+  { out: B.REGEN_POTION, n: 1, need: [[B.GOLDEN_MELON, 1], [B.WATER_BUCKET, 1]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -16445,7 +16652,7 @@ function fuelVal(id) {
   if (id === B.LAVA_BUCKET) return 100;
   if (id === B.COAL || id === B.CHARCOAL) return 8;
   if (isLog(id)) return 2;
-  if (id === B.PLANKS) return 1;
+  if (isPlanks(id)) return 1;
   return 0;
 }
 function updateFurnace(dt) {
@@ -16558,12 +16765,14 @@ function makeToolIcon(id) {
   const ctx = cv.getContext('2d');
   ctx.imageSmoothingEnabled = false;
 
-  // 五大材质高对比度四阶配色（主色 / 高光刃口 / 暗面 / 深色外描边）
+  // 六大材质高对比度四阶配色（主色 / 高光刃口 / 暗面 / 深色外描边）
   let pal;
   if (isWoodTier(id)) {
     pal = { m: '#ce9548', h: '#f0c47a', d: '#8d5d24', o: '#3b2109', g: '#b87d32' };
   } else if (isStoneTier(id)) {
     pal = { m: '#8e949d', h: '#bcc2cb', d: '#5b616a', o: '#22262c', g: '#747a84' };
+  } else if (isGoldTier(id)) {
+    pal = { m: '#f4c830', h: '#fff6ae', d: '#b57b10', o: '#4c2f04', g: '#e09e18' };
   } else if (isIronTier(id)) {
     pal = { m: '#e2eaf4', h: '#ffffff', d: '#9ba9bb', o: '#364150', g: '#c0ccd9' };
   } else if (isDiamondTier(id)) {
@@ -17472,6 +17681,68 @@ function makeItemIcon(id) {
     ctx.fillStyle = '#c88446'; ctx.fillRect(6, 15, 20, 10);
     ctx.fillStyle = '#ffffff'; ctx.fillRect(6, 11, 20, 7); ctx.fillRect(8, 17, 4, 3); ctx.fillRect(15, 17, 4, 4); ctx.fillRect(22, 17, 3, 2);
     ctx.fillStyle = '#e02424'; ctx.fillRect(9, 12, 3, 3); ctx.fillRect(16, 11, 3, 3); ctx.fillRect(21, 13, 3, 3);
+  } else if (id === B.GOLD_HELMET || id === B.LEATHER_HELMET) {
+    const g = (id === B.GOLD_HELMET);
+    ctx.fillStyle = g ? '#6e4706' : '#3e1e0c'; ctx.fillRect(7, 7, 18, 14);
+    ctx.fillStyle = g ? '#f4c830' : '#9c5a32'; ctx.fillRect(8, 8, 16, 12);
+    ctx.fillStyle = g ? '#fff4a6' : '#c67a48'; ctx.fillRect(9, 9, 10, 4);
+    ctx.fillStyle = '#1d222b'; ctx.fillRect(11, 15, 10, 6);
+  } else if (id === B.GOLD_CHESTPLATE || id === B.LEATHER_CHESTPLATE) {
+    const g = (id === B.GOLD_CHESTPLATE);
+    ctx.fillStyle = g ? '#6e4706' : '#3e1e0c'; ctx.fillRect(5, 6, 22, 20);
+    ctx.fillStyle = g ? '#f4c830' : '#9c5a32'; ctx.fillRect(6, 7, 20, 18);
+    ctx.fillStyle = g ? '#fff4a6' : '#c67a48'; ctx.fillRect(7, 8, 7, 8); ctx.fillRect(18, 8, 7, 8);
+    ctx.fillStyle = g ? '#c88e14' : '#6c3818'; ctx.fillRect(12, 7, 8, 5); ctx.fillRect(9, 19, 14, 5);
+  } else if (id === B.GOLD_LEGGINGS || id === B.LEATHER_LEGGINGS) {
+    const g = (id === B.GOLD_LEGGINGS);
+    ctx.fillStyle = g ? '#6e4706' : '#3e1e0c'; ctx.fillRect(7, 6, 18, 21);
+    ctx.fillStyle = g ? '#f4c830' : '#9c5a32'; ctx.fillRect(8, 7, 16, 19);
+    ctx.fillStyle = '#1d222b'; ctx.fillRect(14, 15, 4, 12);
+    ctx.fillStyle = g ? '#fff4a6' : '#c67a48'; ctx.fillRect(9, 8, 14, 4);
+  } else if (id === B.GOLD_BOOTS || id === B.LEATHER_BOOTS) {
+    const g = (id === B.GOLD_BOOTS);
+    ctx.fillStyle = g ? '#6e4706' : '#3e1e0c'; ctx.fillRect(6, 12, 8, 14); ctx.fillRect(18, 12, 8, 14);
+    ctx.fillStyle = g ? '#f4c830' : '#9c5a32'; ctx.fillRect(7, 13, 6, 12); ctx.fillRect(19, 13, 6, 12);
+    ctx.fillStyle = g ? '#fff4a6' : '#c67a48'; ctx.fillRect(8, 14, 4, 4); ctx.fillRect(20, 14, 4, 4);
+    ctx.fillStyle = g ? '#a8700a' : '#5c2c12'; ctx.fillRect(6, 23, 8, 3); ctx.fillRect(18, 23, 8, 3);
+  } else if (id === B.MUSHROOM_STEW) {
+    // 蘑菇煲：木碗盛满浓香红褐蘑菇浓汤
+    ctx.fillStyle = '#4e2c14'; ctx.fillRect(5, 13, 22, 12); ctx.fillRect(8, 24, 16, 3);
+    ctx.fillStyle = '#9a6234'; ctx.fillRect(6, 15, 20, 9); ctx.fillRect(9, 23, 14, 3);
+    ctx.fillStyle = '#cc7646'; ctx.fillRect(7, 12, 18, 6);
+    ctx.fillStyle = '#e03e36'; ctx.fillRect(10, 13, 4, 3);
+    ctx.fillStyle = '#f4ebd4'; ctx.fillRect(17, 13, 4, 3);
+  } else if (id === B.HONEY_BOTTLE) {
+    // 蜂蜜瓶：圆润玻璃瓶盛满金黄流蜜 + 软木塞
+    ctx.fillStyle = '#7c4c20'; ctx.fillRect(13, 5, 6, 4);
+    ctx.fillStyle = '#dce6f0'; ctx.fillRect(12, 9, 8, 3); ctx.fillRect(9, 12, 14, 15);
+    ctx.fillStyle = '#e68c16'; ctx.fillRect(10, 14, 12, 12);
+    ctx.fillStyle = '#ffd23c'; ctx.fillRect(11, 15, 9, 8);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(11, 14, 2, 4);
+  } else if (id === B.SWEET_BERRIES) {
+    // 甜浆果：翠绿小枝缀满鲜红晶亮浆果
+    ctx.fillStyle = '#2d6e26'; ctx.fillRect(14, 6, 4, 14); ctx.fillRect(9, 10, 14, 3);
+    ctx.fillStyle = '#4ea43a'; ctx.fillRect(11, 8, 10, 4);
+    const berries = [[9,14],[16,12],[18,18],[11,20]];
+    for (const [bx, by] of berries) {
+      ctx.fillStyle = '#6c0a18'; ctx.fillRect(bx, by, 7, 7);
+      ctx.fillStyle = '#dc1e38'; ctx.fillRect(bx + 1, by + 1, 5, 5);
+      ctx.fillStyle = '#ff8a9c'; ctx.fillRect(bx + 1, by + 1, 2, 2);
+    }
+  } else if (id === B.GOLDEN_MELON) {
+    // 闪烁的西瓜片：金边包覆鲜红晶莹瓜瓤
+    ctx.fillStyle = '#8c5c06'; ctx.fillRect(7, 14, 18, 11); ctx.fillRect(10, 10, 14, 10);
+    ctx.fillStyle = '#f4c830'; ctx.fillRect(8, 19, 16, 5); ctx.fillRect(18, 10, 6, 13);
+    ctx.fillStyle = '#e03434'; ctx.fillRect(9, 12, 11, 8);
+    ctx.fillStyle = '#fff6ae'; ctx.fillRect(12, 14, 3, 2); ctx.fillRect(20, 12, 2, 6);
+  } else if (id === B.REGEN_POTION) {
+    // 再生药水：粉红蔷薇生命之泉药瓶 + 亮白高光
+    ctx.fillStyle = '#f5cd79'; ctx.fillRect(14, 6, 4, 3);
+    ctx.fillStyle = '#d0d8e0'; ctx.fillRect(13, 9, 6, 3); ctx.fillRect(11, 12, 10, 14);
+    ctx.fillStyle = '#c8347c'; ctx.fillRect(12, 13, 8, 12);
+    ctx.fillStyle = '#ff68b4'; ctx.fillRect(13, 15, 6, 7);
+    ctx.fillStyle = '#ffd4eb'; ctx.fillRect(15, 16, 2, 3);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(17, 13, 2, 2);
   }
   return cv;
 }
@@ -17491,7 +17762,7 @@ function makeIcon(id) {
 }
 function _makeIconRaw(id) {
   if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD && id !== B.CROSSBOW && id !== B.SHEARS && id !== B.FLINT_AND_STEEL)) return makeToolIcon(id);
-  if (id >= 256) return makeItemIcon(id);
+  if ((id >= 256 && id <= 271) || id >= 288) return makeItemIcon(id);
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.GOLDEN_CARROT || id === B.COMPASS || id === B.CLOCK || id === B.ENCHANTED_GOLDEN_APPLE || id === B.COOKIE || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT || id === B.ELYTRA || id === B.NETHERITE_INGOT || id === B.HONEYCOMB || id === B.BONE_MEAL || id === B.GOAT_HORN) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
   return makeIconCanvas(id);
@@ -18657,6 +18928,10 @@ const HARDNESS = {
   [B.CLAY]: 0.6, [B.ANCIENT_DEBRIS]: 6.0, [B.SOUL_SOIL]: 0.5, [B.SMOOTH_STONE]: 2.0,
   [B.POLISHED_BLACKSTONE]: 2.0, [B.POLISHED_BLACKSTONE_BRICKS]: 2.0, [B.MOSSY_COBBLE]: 2.0,
   [B.REDSTONE_BLOCK]: 3.0, [B.LAPIS_BLOCK]: 3.0, [B.EMERALD_BLOCK]: 3.5, [B.NETHERITE_BLOCK]: 8.0,
+  [B.SOUL_TORCH]: 0.05, [B.RED_WOOL]: 0.6, [B.YELLOW_WOOL]: 0.6, [B.BLUE_WOOL]: 0.6,
+  [B.GREEN_WOOL]: 0.6, [B.BLACK_WOOL]: 0.6, [B.PINK_WOOL]: 0.6,
+  [B.BIRCH_PLANKS]: 1.0, [B.SPRUCE_PLANKS]: 1.0, [B.CHERRY_PLANKS]: 1.0, [B.CRIMSON_PLANKS]: 1.1, [B.WARPED_PLANKS]: 1.1,
+  [B.DEEPSLATE_BRICKS]: 2.4, [B.CHISELED_STONE_BRICKS]: 2.0, [B.QUARTZ_PILLAR]: 1.6, [B.PRISMARINE]: 1.8,
 };
 function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
 // 破坏掉落物
@@ -18719,12 +18994,13 @@ function dropOf(id) {
   if (id === B.NETHER_QUARTZ_ORE) return B.QUARTZ;
   if (id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM) return B.NETHERRACK;
   if (isLeaf(id)) return null;               // 树叶徒手不掉方块（手持剪刀可精准剪落）
-  if (id >= 256 || isTool(id) || id === B.STICK || id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.EGG || id === B.SNOWBALL || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.EMERALD || id === B.HONEYCOMB || id === B.BONE_MEAL || id === B.GOAT_HORN) return null;
+  if ((id >= 256 && id <= 271) || id >= 288 || isTool(id) || id === B.STICK || id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.EGG || id === B.SNOWBALL || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.EMERALD || id === B.HONEYCOMB || id === B.BONE_MEAL || id === B.GOAT_HORN) return null;
   return id;
 }
-// 工具等级挖掘倍率
+// 工具等级挖掘倍率（金质工具效率极高、耐久较低，还原原版特色）
 function tierOf(t) {
   if (isNetheriteTier(t)) return 22;
+  if (isGoldTier(t)) return 16;
   if (isDiamondTier(t)) return 14;
   if (isIronTier(t)) return 8;
   if (isStoneTier(t)) return 5;
@@ -18736,15 +19012,15 @@ function effSpeed(id) {
   const s = hotbar[selected];
   if (!s) return 1;
   const t = s.id;
-  if (t === B.SHEARS && (isLeaf(id) || id === B.WOOL || id === B.COBWEB || id === B.VINE)) return 6;
+  if (t === B.SHEARS && (isLeaf(id) || isWool(id) || id === B.COBWEB || id === B.VINE)) return 6;
   if (isPickaxe(t)) {
     if (id === B.OBSIDIAN || id === B.ENDER_CHEST || id === B.CRYING_OBSIDIAN || id === B.RESPAWN_ANCHOR || id === B.ANCIENT_DEBRIS || id === B.NETHERITE_BLOCK) return isNetheriteTier(t) ? 22 : (isDiamondTier(t) ? 14 : (isIronTier(t) ? 4.0 : 1.5));
     if (id === B.ENCHANTING_TABLE || id === B.BEACON) return tierOf(t);
-    if (id === B.STONE || id === B.SMOOTH_STONE || id === B.COBBLE || id === B.MOSSY_COBBLE || id === B.STONE_BRICK || id === B.MOSSY || id === B.BRICK || id === B.SANDSTONE || id === B.QUARTZ || isOre(id) || id === B.FURNACE || id === B.BASALT || id === B.MAGMA || id === B.ICE || id === B.PACKED_ICE || id === B.BLUE_ICE || id === B.DEEPSLATE || id === B.TERRACOTTA || id === B.RED_TERRACOTTA || id === B.ORANGE_TERRACOTTA || id === B.YELLOW_TERRACOTTA || id === B.NETHERRACK || id === B.NETHER_BRICKS || id === B.BLACKSTONE || id === B.POLISHED_BLACKSTONE || id === B.POLISHED_BLACKSTONE_BRICKS || id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM || id === B.GLOWSTONE || id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.REDSTONE_BLOCK || id === B.LAPIS_BLOCK || id === B.EMERALD_BLOCK || id === B.AMETHYST_BLOCK || id === B.LIGHTNING_ROD || id === B.COPPER_BLOCK || id === B.SEA_LANTERN || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.BUTTON || id === B.CHAIN || id === B.SCULK_SENSOR || id === B.SCULK_BLOCK || id === B.DRIPSTONE_BLOCK || id === B.POINTED_DRIPSTONE || id === B.BLAST_FURNACE || id === B.SMOKER || id === B.LODESTONE || id === B.BELL || id === B.GRINDSTONE) return tierOf(t);
+    if (id === B.STONE || id === B.SMOOTH_STONE || id === B.COBBLE || id === B.MOSSY_COBBLE || id === B.STONE_BRICK || id === B.CHISELED_STONE_BRICKS || id === B.MOSSY || id === B.BRICK || id === B.SANDSTONE || id === B.QUARTZ || id === B.QUARTZ_PILLAR || id === B.PRISMARINE || isOre(id) || id === B.FURNACE || id === B.BASALT || id === B.MAGMA || id === B.ICE || id === B.PACKED_ICE || id === B.BLUE_ICE || id === B.DEEPSLATE || id === B.DEEPSLATE_BRICKS || id === B.TERRACOTTA || id === B.RED_TERRACOTTA || id === B.ORANGE_TERRACOTTA || id === B.YELLOW_TERRACOTTA || id === B.NETHERRACK || id === B.NETHER_BRICKS || id === B.BLACKSTONE || id === B.POLISHED_BLACKSTONE || id === B.POLISHED_BLACKSTONE_BRICKS || id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM || id === B.GLOWSTONE || id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.REDSTONE_BLOCK || id === B.LAPIS_BLOCK || id === B.EMERALD_BLOCK || id === B.AMETHYST_BLOCK || id === B.LIGHTNING_ROD || id === B.COPPER_BLOCK || id === B.SEA_LANTERN || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.BUTTON || id === B.CHAIN || id === B.SCULK_SENSOR || id === B.SCULK_BLOCK || id === B.DRIPSTONE_BLOCK || id === B.POINTED_DRIPSTONE || id === B.BLAST_FURNACE || id === B.SMOKER || id === B.LODESTONE || id === B.BELL || id === B.GRINDSTONE) return tierOf(t);
     return 1.15;
   }
   if (isAxe(t)) {
-    if (isLog(id) || id === B.PLANKS || id === B.CHEST || id === B.CAMPFIRE || id === B.CAMPFIRE_OFF || id === B.SOUL_CAMPFIRE || id === B.DOOR || id === B.BAMBOO || id === B.BOOKSHELF || id === B.PUMPKIN || id === B.JACK_O_LANTERN || id === B.MELON || id === B.DAYLIGHT_DETECTOR || id === B.NIGHT_DETECTOR || id === B.NOTE_BLOCK || id === B.BEEHIVE || id === B.COMPOSTER || id === B.MUSHROOM_STEM || id === B.RED_MUSHROOM_BLOCK || id === B.BROWN_MUSHROOM_BLOCK) return tierOf(t);
+    if (isLog(id) || isPlanks(id) || id === B.CHEST || id === B.CAMPFIRE || id === B.CAMPFIRE_OFF || id === B.SOUL_CAMPFIRE || id === B.DOOR || id === B.BAMBOO || id === B.BOOKSHELF || id === B.PUMPKIN || id === B.JACK_O_LANTERN || id === B.MELON || id === B.DAYLIGHT_DETECTOR || id === B.NIGHT_DETECTOR || id === B.NOTE_BLOCK || id === B.BEEHIVE || id === B.COMPOSTER || id === B.MUSHROOM_STEM || id === B.RED_MUSHROOM_BLOCK || id === B.BROWN_MUSHROOM_BLOCK) return tierOf(t);
     return 1.15;
   }
   if (isShovel(t)) {
@@ -20276,6 +20552,20 @@ function onMousedown(btn) {
       return;
     }
 
+    // 手持再生药水饮用
+    if (sel && sel.id === B.REGEN_POTION) {
+      if (!player.fly) removeItem(B.REGEN_POTION, 1);
+      refreshHotbar();
+      playDrink();
+      player.hp = Math.min(20, player.hp + 12);
+      player.hunger = Math.min(20, player.hunger + 4);
+      updateHearts();
+      updateHungerBar();
+      spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0xff68b4, 28);
+      toast('💖 畅饮再生药水！生命力澎湃涌动，瞬间恢复 12 点生命与 4 点饱食度！');
+      return;
+    }
+
     // 手持火焰弹投掷
     if (sel && sel.id === B.FIRE_CHARGE) {
       if (!player.fly) removeItem(B.FIRE_CHARGE, 1);
@@ -20500,7 +20790,7 @@ function onMousedown(btn) {
     if (isSapling(sid) && below !== B.GRASS && below !== B.DIRT && below !== B.SAND) { toast('⚠️ 树苗只能种植在泥土、草地或沙子上'); return; }
     if (sid === B.WATER) world.setWater(px, py, pz, 8);
     else world.setBlock(px, py, pz, sid);
-    if (sid === B.TORCH || sid === B.JACK_O_LANTERN || sid === B.GLOWSTONE || sid === B.CAMPFIRE || sid === B.SOUL_CAMPFIRE || sid === B.SEA_LANTERN || sid === B.REDSTONE_LAMP_ON || sid === B.LANTERN || sid === B.SOUL_LANTERN) addTorchLight(px, py, pz);
+    if (sid === B.TORCH || sid === B.SOUL_TORCH || sid === B.JACK_O_LANTERN || sid === B.GLOWSTONE || sid === B.CAMPFIRE || sid === B.SOUL_CAMPFIRE || sid === B.SEA_LANTERN || sid === B.REDSTONE_LAMP_ON || sid === B.LANTERN || sid === B.SOUL_LANTERN) addTorchLight(px, py, pz);
     if (sid === B.BEACON) addBeaconBeam(px, py, pz);
     if (isSapling(sid)) {
       plantedSaplings.set(`${px},${py},${pz}`, { x: px, y: py, z: pz, id: sid, growAt: performance.now() + 15000 + Math.random() * 15000 });
