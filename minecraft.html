@@ -929,7 +929,15 @@ const B = {
   GOLD_PICKAXE:288, GOLD_AXE:289, GOLD_SHOVEL:290, GOLD_SWORD:291,
   GOLD_HELMET:292, GOLD_CHESTPLATE:293, GOLD_LEGGINGS:294, GOLD_BOOTS:295,
   LEATHER_HELMET:296, LEATHER_CHESTPLATE:297, LEATHER_LEGGINGS:298, LEATHER_BOOTS:299,
-  MUSHROOM_STEW:300, HONEY_BOTTLE:301, SWEET_BERRIES:302, GOLDEN_MELON:303, REGEN_POTION:304
+  MUSHROOM_STEW:300, HONEY_BOTTLE:301, SWEET_BERRIES:302, GOLDEN_MELON:303, REGEN_POTION:304,
+  WOOD_HOE:305, STONE_HOE:306, GOLD_HOE:307, IRON_HOE:308, DIAMOND_HOE:309, NETHERITE_HOE:310,
+  WHITE_CONCRETE:311, RED_CONCRETE:312, BLUE_CONCRETE:313, YELLOW_CONCRETE:314, BLACK_CONCRETE:315, CYAN_CONCRETE:316,
+  JUNGLE_PLANKS:317, ACACIA_PLANKS:318, MAPLE_PLANKS:319, CRAFTING_TABLE:320,
+  POLISHED_GRANITE:321, POLISHED_ANDESITE:322, POLISHED_DIORITE:323, CUT_SANDSTONE:324,
+  RED_NETHER_BRICKS:325, CHISELED_NETHER_BRICKS:326, BARREL:327, GILDED_BLACKSTONE:328,
+  OXIDIZED_COPPER:329, PURPUR_BLOCK:330, END_STONE:331, END_STONE_BRICKS:332,
+  BLAZE_POWDER:333, MAGMA_CREAM:334, GLASS_BOTTLE:335, JUMP_POTION:336,
+  INVISIBILITY_POTION:337, CARROT:338, POTATO:339, BAKED_POTATO:340
 };
 
 function mulberry32(a) {
@@ -1320,7 +1328,7 @@ const { HEIGHT, SEA, NETHER_SEA, B, mulberry32, surfaceHeight, surfaceHeightAt, 
 /* ============================ 常量 ============================ */
 const CHUNK = 16;
 const TILE = 16;
-const ATLAS_TILES = 280;
+const ATLAS_TILES = 320;
 const ATLAS_W = ATLAS_TILES * TILE;
 const AO_LEVELS = [0.55, 0.7, 0.85, 1.0];
 const VIEW_R = 10;        // 视距（chunk 半径，每格 16 块）
@@ -1429,6 +1437,14 @@ function makeAtlas() {
   T.crimsonPlanks = i++; T.warpedPlanks = i++;
   T.deepslateBricks = i++; T.chiseledStoneBricks = i++;
   T.quartzPillarTop = i++; T.quartzPillarSide = i++; T.prismarine = i++;
+  T.whiteConcrete = i++; T.redConcrete = i++; T.blueConcrete = i++;
+  T.yellowConcrete = i++; T.blackConcrete = i++; T.cyanConcrete = i++;
+  T.junglePlanks = i++; T.acaciaPlanks = i++; T.maplePlanks = i++;
+  T.craftingTop = i++; T.craftingSide = i++;
+  T.polishedGranite = i++; T.polishedAndesite = i++; T.polishedDiorite = i++;
+  T.cutSandstone = i++; T.redNetherBricks = i++; T.chiseledNetherBricks = i++;
+  T.barrelTop = i++; T.barrelSide = i++; T.gildedBlackstone = i++;
+  T.oxidizedCopper = i++; T.purpurBlock = i++; T.endStone = i++; T.endStoneBricks = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -3855,6 +3871,123 @@ function makeAtlas() {
     if (x % 5 === 0) for (let y = 0; y < TILE; y++) if (((x + y) & 3) !== 0) put(T.prismarine, x, y, 42, 92, 98);
   }
 
+  // 53. 六色现代混凝土（细腻哑光微颗粒建筑块）
+  fill(T.whiteConcrete,  [220, 224, 228], 4, 396);
+  fill(T.redConcrete,    [164, 36, 34],   5, 397);
+  fill(T.blueConcrete,   [44, 58, 154],   5, 398);
+  fill(T.yellowConcrete, [238, 184, 34],  5, 399);
+  fill(T.blackConcrete,  [22, 24, 30],    4, 400);
+  fill(T.cyanConcrete,   [28, 134, 152],  5, 401);
+
+  // 54. 丛林/金合欢/枫木特种木板
+  paintPlanks(T.junglePlanks, [168, 122, 86],  [192, 146, 108], [116, 78, 52],  403);
+  paintPlanks(T.acaciaPlanks, [180, 98, 52],   [206, 120, 68],  [124, 60, 28],  404);
+  paintPlanks(T.maplePlanks,  [174, 72, 46],   [206, 94, 62],   [116, 40, 24],  405);
+
+  // 55. 工作台（经典 3×3 网格红木台面 + 侧面木工锯/锤挂具）
+  fill(T.craftingTop, [146, 98, 56], 6, 407);
+  for (let k = 0; k < TILE; k++) {
+    put(T.craftingTop, k, 0, 92, 56, 28); put(T.craftingTop, k, 15, 92, 56, 28);
+    put(T.craftingTop, 0, k, 92, 56, 28); put(T.craftingTop, 15, k, 92, 56, 28);
+  }
+  for (let y = 2; y <= 13; y++) for (let x = 2; x <= 13; x++) {
+    if (x === 5 || x === 10 || y === 5 || y === 10) put(T.craftingTop, x, y, 76, 44, 22);
+    else put(T.craftingTop, x, y, 182, 134, 82);
+  }
+  paintPlanks(T.craftingSide, [148, 102, 58], [176, 126, 76], [96, 62, 32], 408);
+  for (let x = 0; x < TILE; x++) { put(T.craftingSide, x, 0, 82, 48, 24); put(T.craftingSide, x, 1, 120, 74, 38); }
+  // 侧面挂具（小钢锯与铁锤）
+  for (let y = 4; y <= 11; y++) put(T.craftingSide, 4, y, 188, 196, 206);
+  put(T.craftingSide, 3, 4, 96, 58, 28); put(T.craftingSide, 5, 4, 96, 58, 28);
+  for (let y = 5; y <= 11; y++) put(T.craftingSide, 11, y, 114, 72, 34);
+  for (let x = 9; x <= 13; x++) put(T.craftingSide, x, 4, 156, 166, 178);
+
+  // 56. 磨制花岗岩 / 磨治安山岩 / 磨制闪长岩（带优雅抛光倒角边框）
+  function paintPolishedStone(tile, base, hi, lo, specks, seed) {
+    fill(tile, base, 6, seed);
+    for (const [col, cnt, off] of specks) speck(tile, col, cnt, seed + off);
+    for (let k = 0; k < TILE; k++) {
+      put(tile, k, 0, hi[0], hi[1], hi[2]); put(tile, 0, k, hi[0], hi[1], hi[2]);
+      put(tile, k, 15, lo[0], lo[1], lo[2]); put(tile, 15, k, lo[0], lo[1], lo[2]);
+    }
+  }
+  paintPolishedStone(T.polishedGranite,  [158, 106, 90],  [188, 136, 118], [112, 68, 56],  [[[194,148,136],22,1], [[118,74,64],22,2]], 410);
+  paintPolishedStone(T.polishedAndesite, [138, 142, 144], [170, 174, 176], [96, 100, 104], [[[164,168,170],18,1], [[108,112,116],18,2]], 414);
+  paintPolishedStone(T.polishedDiorite,  [202, 204, 208], [234, 236, 240], [148, 152, 158],[[[238,240,244],24,1], [[132,136,144],24,2]], 418);
+
+  // 57. 切制砂岩（精致神庙横纹砂岩）
+  fill(T.cutSandstone, [224, 210, 164], 5, 422);
+  for (let x = 0; x < TILE; x++) {
+    put(T.cutSandstone, x, 0, 242, 230, 188); put(T.cutSandstone, x, 1, 198, 182, 134);
+    put(T.cutSandstone, x, 2, 236, 222, 176); put(T.cutSandstone, x, 15, 182, 164, 116);
+  }
+
+  // 58. 红色下界砖块 & 雕纹下界砖块
+  fill(T.redNetherBricks, [92, 16, 24], 7, 424);
+  for (let x = 0; x < TILE; x++) {
+    put(T.redNetherBricks, x, 0, 44, 8, 12); put(T.redNetherBricks, x, 8, 44, 8, 12);
+    put(T.redNetherBricks, x, 1, 122, 26, 36); put(T.redNetherBricks, x, 9, 122, 26, 36);
+  }
+  for (let y = 0; y < 8; y++) put(T.redNetherBricks, 8, y, 44, 8, 12);
+  for (let y = 8; y < 16; y++) put(T.redNetherBricks, 0, y, 44, 8, 12);
+
+  fill(T.chiseledNetherBricks, [54, 26, 32], 6, 426);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5));
+    if (d > 6.5 || (d > 3.2 && d < 4.5)) put(T.chiseledNetherBricks, x, y, 26, 12, 16);
+    else if (d <= 2.2) put(T.chiseledNetherBricks, x, y, 88, 44, 52);
+  }
+
+  // 59. 木桶（铁箍包边橡木桶 + 带拉环顶盖）
+  fill(T.barrelSide, [132, 94, 56], 8, 428);
+  for (let x = 0; x < TILE; x++) {
+    if (x % 4 === 0) for (let y = 0; y < TILE; y++) put(T.barrelSide, x, y, 92, 62, 34);
+    put(T.barrelSide, x, 3, 72, 76, 84); put(T.barrelSide, x, 4, 108, 114, 124);
+    put(T.barrelSide, x, 11, 72, 76, 84); put(T.barrelSide, x, 12, 108, 114, 124);
+  }
+  fill(T.barrelTop, [142, 102, 62], 7, 429);
+  for (let k = 0; k < TILE; k++) {
+    put(T.barrelTop, k, 0, 74, 78, 86); put(T.barrelTop, k, 15, 74, 78, 86);
+    put(T.barrelTop, 0, k, 74, 78, 86); put(T.barrelTop, 15, k, 74, 78, 86);
+  }
+  for (let x = 6; x <= 9; x++) { put(T.barrelTop, x, 4, 54, 58, 64); put(T.barrelTop, x, 5, 116, 122, 132); }
+
+  // 60. 镶金黑石（黑曜岩脉中闪耀天然黄金颗粒）
+  fill(T.gildedBlackstone, [44, 40, 50], 9, 431);
+  speck(T.gildedBlackstone, [24, 22, 28], 26, 432);
+  speck(T.gildedBlackstone, [238, 186, 44], 20, 433);
+  speck(T.gildedBlackstone, [255, 232, 116], 10, 434);
+
+  // 61. 氧化铜块（青翠铜绿铆钉方板）
+  fill(T.oxidizedCopper, [78, 166, 138], 8, 436);
+  for (let k = 0; k < TILE; k++) {
+    put(T.oxidizedCopper, k, 0, 118, 206, 176); put(T.oxidizedCopper, 0, k, 118, 206, 176);
+    put(T.oxidizedCopper, k, 15, 44, 112, 92); put(T.oxidizedCopper, 15, k, 44, 112, 92);
+    put(T.oxidizedCopper, k, 7, 52, 124, 102); put(T.oxidizedCopper, 7, k, 52, 124, 102);
+  }
+  speck(T.oxidizedCopper, [132, 222, 188], 14, 437);
+
+  // 62. 紫珀块（末地城四格薰衣草紫雕砖）
+  fill(T.purpurBlock, [172, 124, 172], 6, 439);
+  for (let k = 0; k < TILE; k++) {
+    put(T.purpurBlock, k, 0, 206, 164, 206); put(T.purpurBlock, 0, k, 206, 164, 206);
+    put(T.purpurBlock, k, 8, 122, 78, 126); put(T.purpurBlock, 8, k, 122, 78, 126);
+    put(T.purpurBlock, k, 15, 116, 72, 120); put(T.purpurBlock, 15, k, 116, 72, 120);
+  }
+
+  // 63. 末地石 & 末地石砖
+  fill(T.endStone, [224, 222, 166], 10, 441);
+  speck(T.endStone, [196, 192, 132], 30, 442);
+  speck(T.endStone, [242, 240, 198], 20, 443);
+
+  fill(T.endStoneBricks, [222, 220, 164], 7, 445);
+  for (let x = 0; x < TILE; x++) {
+    put(T.endStoneBricks, x, 0, 168, 164, 112); put(T.endStoneBricks, x, 8, 168, 164, 112);
+    put(T.endStoneBricks, x, 1, 242, 240, 196); put(T.endStoneBricks, x, 9, 242, 240, 196);
+  }
+  for (let y = 0; y < 8; y++) put(T.endStoneBricks, 8, y, 168, 164, 112);
+  for (let y = 8; y < 16; y++) put(T.endStoneBricks, 0, y, 168, 164, 112);
+
   ctx.putImageData(img, 0, 0);
   // 3D 渲染改用 2D 纹理数组（每 tile 独立一层，配合 RepeatWrapping 可让单个 tile 跨大四边形循环）
   const layers = ATLAS_TILES;
@@ -4061,6 +4194,28 @@ function _tileOfRaw(id) {
     case B.CHISELED_STONE_BRICKS: return { top: atlas.T.chiseledStoneBricks, side: atlas.T.chiseledStoneBricks, bottom: atlas.T.chiseledStoneBricks };
     case B.QUARTZ_PILLAR: return { top: atlas.T.quartzPillarTop, side: atlas.T.quartzPillarSide, bottom: atlas.T.quartzPillarTop };
     case B.PRISMARINE: return { top: atlas.T.prismarine, side: atlas.T.prismarine, bottom: atlas.T.prismarine };
+    case B.WHITE_CONCRETE: return { top: atlas.T.whiteConcrete, side: atlas.T.whiteConcrete, bottom: atlas.T.whiteConcrete };
+    case B.RED_CONCRETE: return { top: atlas.T.redConcrete, side: atlas.T.redConcrete, bottom: atlas.T.redConcrete };
+    case B.BLUE_CONCRETE: return { top: atlas.T.blueConcrete, side: atlas.T.blueConcrete, bottom: atlas.T.blueConcrete };
+    case B.YELLOW_CONCRETE: return { top: atlas.T.yellowConcrete, side: atlas.T.yellowConcrete, bottom: atlas.T.yellowConcrete };
+    case B.BLACK_CONCRETE: return { top: atlas.T.blackConcrete, side: atlas.T.blackConcrete, bottom: atlas.T.blackConcrete };
+    case B.CYAN_CONCRETE: return { top: atlas.T.cyanConcrete, side: atlas.T.cyanConcrete, bottom: atlas.T.cyanConcrete };
+    case B.JUNGLE_PLANKS: return { top: atlas.T.junglePlanks, side: atlas.T.junglePlanks, bottom: atlas.T.junglePlanks };
+    case B.ACACIA_PLANKS: return { top: atlas.T.acaciaPlanks, side: atlas.T.acaciaPlanks, bottom: atlas.T.acaciaPlanks };
+    case B.MAPLE_PLANKS: return { top: atlas.T.maplePlanks, side: atlas.T.maplePlanks, bottom: atlas.T.maplePlanks };
+    case B.CRAFTING_TABLE: return { top: atlas.T.craftingTop, side: atlas.T.craftingSide, bottom: atlas.T.planks };
+    case B.POLISHED_GRANITE: return { top: atlas.T.polishedGranite, side: atlas.T.polishedGranite, bottom: atlas.T.polishedGranite };
+    case B.POLISHED_ANDESITE: return { top: atlas.T.polishedAndesite, side: atlas.T.polishedAndesite, bottom: atlas.T.polishedAndesite };
+    case B.POLISHED_DIORITE: return { top: atlas.T.polishedDiorite, side: atlas.T.polishedDiorite, bottom: atlas.T.polishedDiorite };
+    case B.CUT_SANDSTONE: return { top: atlas.T.sandstone, side: atlas.T.cutSandstone, bottom: atlas.T.sandstone };
+    case B.RED_NETHER_BRICKS: return { top: atlas.T.redNetherBricks, side: atlas.T.redNetherBricks, bottom: atlas.T.redNetherBricks };
+    case B.CHISELED_NETHER_BRICKS: return { top: atlas.T.chiseledNetherBricks, side: atlas.T.chiseledNetherBricks, bottom: atlas.T.chiseledNetherBricks };
+    case B.BARREL: return { top: atlas.T.barrelTop, side: atlas.T.barrelSide, bottom: atlas.T.barrelTop };
+    case B.GILDED_BLACKSTONE: return { top: atlas.T.gildedBlackstone, side: atlas.T.gildedBlackstone, bottom: atlas.T.gildedBlackstone };
+    case B.OXIDIZED_COPPER: return { top: atlas.T.oxidizedCopper, side: atlas.T.oxidizedCopper, bottom: atlas.T.oxidizedCopper };
+    case B.PURPUR_BLOCK: return { top: atlas.T.purpurBlock, side: atlas.T.purpurBlock, bottom: atlas.T.purpurBlock };
+    case B.END_STONE: return { top: atlas.T.endStone, side: atlas.T.endStone, bottom: atlas.T.endStone };
+    case B.END_STONE_BRICKS: return { top: atlas.T.endStoneBricks, side: atlas.T.endStoneBricks, bottom: atlas.T.endStoneBricks };
     case B.CAMPFIRE: return { top: atlas.T.campfireTop, side: atlas.T.campfireSide, bottom: atlas.T.campfireSide };
     case B.DOOR: return { top: atlas.T.doorTop, side: atlas.T.doorBottom, bottom: atlas.T.doorBottom };
     case B.COBWEB: return { top: atlas.T.cobweb, side: atlas.T.cobweb, bottom: atlas.T.cobweb };
@@ -7382,6 +7537,14 @@ const BLOCK_COLORS = {
   [B.GOLD_HELMET]: 0xf4c830, [B.GOLD_CHESTPLATE]: 0xf4c830, [B.GOLD_LEGGINGS]: 0xf4c830, [B.GOLD_BOOTS]: 0xf4c830,
   [B.LEATHER_HELMET]: 0x9c5a32, [B.LEATHER_CHESTPLATE]: 0x9c5a32, [B.LEATHER_LEGGINGS]: 0x9c5a32, [B.LEATHER_BOOTS]: 0x9c5a32,
   [B.MUSHROOM_STEW]: 0xc66842, [B.HONEY_BOTTLE]: 0xf2a628, [B.SWEET_BERRIES]: 0xc42038, [B.GOLDEN_MELON]: 0xf4c244, [B.REGEN_POTION]: 0xe858a8,
+  [B.WOOD_HOE]: 0xce9548, [B.STONE_HOE]: 0x8e949d, [B.GOLD_HOE]: 0xf4c830, [B.IRON_HOE]: 0xe2eaf4, [B.DIAMOND_HOE]: 0x36ece2, [B.NETHERITE_HOE]: 0x685d66,
+  [B.WHITE_CONCRETE]: 0xdce0e4, [B.RED_CONCRETE]: 0xa42422, [B.BLUE_CONCRETE]: 0x2c3a9a, [B.YELLOW_CONCRETE]: 0xeeb822, [B.BLACK_CONCRETE]: 0x16181e, [B.CYAN_CONCRETE]: 0x1c8698,
+  [B.JUNGLE_PLANKS]: 0xa87a56, [B.ACACIA_PLANKS]: 0xb46234, [B.MAPLE_PLANKS]: 0xae482e, [B.CRAFTING_TABLE]: 0x94663a,
+  [B.POLISHED_GRANITE]: 0x9e6a5a, [B.POLISHED_ANDESITE]: 0x8a8e90, [B.POLISHED_DIORITE]: 0xcaccd0, [B.CUT_SANDSTONE]: 0xe0d2a4,
+  [B.RED_NETHER_BRICKS]: 0x5c1018, [B.CHISELED_NETHER_BRICKS]: 0x361a20, [B.BARREL]: 0x845e38, [B.GILDED_BLACKSTONE]: 0x564630,
+  [B.OXIDIZED_COPPER]: 0x4ea68a, [B.PURPUR_BLOCK]: 0xac7cac, [B.END_STONE]: 0xe0dea6, [B.END_STONE_BRICKS]: 0xdedca4,
+  [B.BLAZE_POWDER]: 0xffb424, [B.MAGMA_CREAM]: 0xe87c18, [B.GLASS_BOTTLE]: 0xdce8f4, [B.JUMP_POTION]: 0x58e858,
+  [B.INVISIBILITY_POTION]: 0xc4d4e4, [B.CARROT]: 0xf27c22, [B.POTATO]: 0xd4a45c, [B.BAKED_POTATO]: 0xb67a34,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -8723,7 +8886,7 @@ function killAnimal(i) {
 /* 玩家是否"飞在天上"：创造飞行、鞘翅滑翔都算。
    原来各处只判断 player.fly，导致生存模式用鞘翅从怪物头顶掠过时全都被追着打。 */
 function playerIsFlying() {
-  return !!player.fly || !!player.gliding;
+  return !!player.fly || !!player.gliding || (player.invisPotionTimer > 0);
 }
 
 /* 朝 (tx,tz) 转头并返回是否真的更新了朝向。
@@ -8833,6 +8996,7 @@ function killZombie(i) {
   const n = 1 + ((Math.random() * 2) | 0);
   for (let k = 0; k < n; k++) dropItem(B.ROTTEN_FLESH, dx, by, dz);
   if (Math.random() < 0.35) dropItem(B.BONE, dx, by, dz);   // 僵尸掉落骨头（用于驯狼）
+  if (Math.random() < 0.22) dropItem(Math.random() < 0.5 ? B.CARROT : B.POTATO, dx, by, dz); // 稀有掉落胡萝卜/马铃薯
   spawnXpOrb(z.x, by + 0.6, z.z, 3);
   zombies.splice(i, 1);
   playZombieDeath();
@@ -15107,31 +15271,32 @@ function isPickaxe(id) { return id === B.WOOD_PICKAXE || id === B.STONE_PICKAXE 
 function isAxe(id) { return id === B.WOOD_AXE || id === B.STONE_AXE || id === B.IRON_AXE || id === B.GOLD_AXE || id === B.DIAMOND_AXE || id === B.NETHERITE_AXE; }
 function isShovel(id) { return id === B.WOOD_SHOVEL || id === B.STONE_SHOVEL || id === B.IRON_SHOVEL || id === B.GOLD_SHOVEL || id === B.DIAMOND_SHOVEL || id === B.NETHERITE_SHOVEL; }
 function isSword(id) { return id === B.WOOD_SWORD || id === B.STONE_SWORD || id === B.IRON_SWORD || id === B.GOLD_SWORD || id === B.DIAMOND_SWORD || id === B.NETHERITE_SWORD; }
+function isHoe(id) { return id === B.WOOD_HOE || id === B.STONE_HOE || id === B.GOLD_HOE || id === B.IRON_HOE || id === B.DIAMOND_HOE || id === B.NETHERITE_HOE; }
 function isBow(id) { return id === B.BOW; }
 function isShield(id) { return id === B.SHIELD; }
 function isFishingRod(id) { return id === B.FISHING_ROD; }
 function isWool(id) { return id === B.WOOL || id === B.RED_WOOL || id === B.YELLOW_WOOL || id === B.BLUE_WOOL || id === B.GREEN_WOOL || id === B.BLACK_WOOL || id === B.PINK_WOOL; }
-function isPlanks(id) { return id === B.PLANKS || id === B.BIRCH_PLANKS || id === B.SPRUCE_PLANKS || id === B.CHERRY_PLANKS || id === B.CRIMSON_PLANKS || id === B.WARPED_PLANKS; }
-function isTool(id) { return isPickaxe(id) || isAxe(id) || isShovel(id) || isSword(id) || id === B.BOW || isShield(id) || isFishingRod(id); }
-function isWoodTier(id) { return id === B.WOOD_PICKAXE || id === B.WOOD_AXE || id === B.WOOD_SHOVEL || id === B.WOOD_SWORD; }
-function isStoneTier(id) { return id === B.STONE_PICKAXE || id === B.STONE_AXE || id === B.STONE_SHOVEL || id === B.STONE_SWORD; }
-function isIronTier(id) { return id === B.IRON_PICKAXE || id === B.IRON_AXE || id === B.IRON_SHOVEL || id === B.IRON_SWORD; }
-function isGoldTier(id) { return id === B.GOLD_PICKAXE || id === B.GOLD_AXE || id === B.GOLD_SHOVEL || id === B.GOLD_SWORD; }
-function isDiamondTier(id) { return id === B.DIAMOND_PICKAXE || id === B.DIAMOND_AXE || id === B.DIAMOND_SHOVEL || id === B.DIAMOND_SWORD; }
-function isNetheriteTier(id) { return id === B.NETHERITE_PICKAXE || id === B.NETHERITE_SWORD || id === B.NETHERITE_AXE || id === B.NETHERITE_SHOVEL; }
+function isPlanks(id) { return id === B.PLANKS || id === B.BIRCH_PLANKS || id === B.SPRUCE_PLANKS || id === B.CHERRY_PLANKS || id === B.CRIMSON_PLANKS || id === B.WARPED_PLANKS || id === B.JUNGLE_PLANKS || id === B.ACACIA_PLANKS || id === B.MAPLE_PLANKS; }
+function isTool(id) { return isPickaxe(id) || isAxe(id) || isShovel(id) || isSword(id) || isHoe(id) || id === B.BOW || isShield(id) || isFishingRod(id); }
+function isWoodTier(id) { return id === B.WOOD_PICKAXE || id === B.WOOD_AXE || id === B.WOOD_SHOVEL || id === B.WOOD_SWORD || id === B.WOOD_HOE; }
+function isStoneTier(id) { return id === B.STONE_PICKAXE || id === B.STONE_AXE || id === B.STONE_SHOVEL || id === B.STONE_SWORD || id === B.STONE_HOE; }
+function isIronTier(id) { return id === B.IRON_PICKAXE || id === B.IRON_AXE || id === B.IRON_SHOVEL || id === B.IRON_SWORD || id === B.IRON_HOE; }
+function isGoldTier(id) { return id === B.GOLD_PICKAXE || id === B.GOLD_AXE || id === B.GOLD_SHOVEL || id === B.GOLD_SWORD || id === B.GOLD_HOE; }
+function isDiamondTier(id) { return id === B.DIAMOND_PICKAXE || id === B.DIAMOND_AXE || id === B.DIAMOND_SHOVEL || id === B.DIAMOND_SWORD || id === B.DIAMOND_HOE; }
+function isNetheriteTier(id) { return id === B.NETHERITE_PICKAXE || id === B.NETHERITE_SWORD || id === B.NETHERITE_AXE || id === B.NETHERITE_SHOVEL || id === B.NETHERITE_HOE; }
 // 工具耐久上限（木 60 / 石 130 / 金 45 / 铁 250 / 钻石 1561 / 下界合金 2031 / 弓 100 / 盾 180 / 钓竿 64 / 剪刀 238）
 const TOOL_DURABILITY = {
-  [B.WOOD_PICKAXE]: 60, [B.WOOD_AXE]: 60, [B.WOOD_SHOVEL]: 60, [B.WOOD_SWORD]: 60,
-  [B.STONE_PICKAXE]: 130, [B.STONE_AXE]: 130, [B.STONE_SHOVEL]: 130, [B.STONE_SWORD]: 130,
-  [B.GOLD_PICKAXE]: 45, [B.GOLD_AXE]: 45, [B.GOLD_SHOVEL]: 45, [B.GOLD_SWORD]: 45,
-  [B.IRON_PICKAXE]: 250, [B.IRON_AXE]: 250, [B.IRON_SHOVEL]: 250, [B.IRON_SWORD]: 250,
-  [B.DIAMOND_PICKAXE]: 1561, [B.DIAMOND_AXE]: 1561, [B.DIAMOND_SHOVEL]: 1561, [B.DIAMOND_SWORD]: 1561,
-  [B.NETHERITE_PICKAXE]: 2031, [B.NETHERITE_AXE]: 2031, [B.NETHERITE_SHOVEL]: 2031, [B.NETHERITE_SWORD]: 2031,
+  [B.WOOD_PICKAXE]: 60, [B.WOOD_AXE]: 60, [B.WOOD_SHOVEL]: 60, [B.WOOD_SWORD]: 60, [B.WOOD_HOE]: 60,
+  [B.STONE_PICKAXE]: 130, [B.STONE_AXE]: 130, [B.STONE_SHOVEL]: 130, [B.STONE_SWORD]: 130, [B.STONE_HOE]: 130,
+  [B.GOLD_PICKAXE]: 45, [B.GOLD_AXE]: 45, [B.GOLD_SHOVEL]: 45, [B.GOLD_SWORD]: 45, [B.GOLD_HOE]: 45,
+  [B.IRON_PICKAXE]: 250, [B.IRON_AXE]: 250, [B.IRON_SHOVEL]: 250, [B.IRON_SWORD]: 250, [B.IRON_HOE]: 250,
+  [B.DIAMOND_PICKAXE]: 1561, [B.DIAMOND_AXE]: 1561, [B.DIAMOND_SHOVEL]: 1561, [B.DIAMOND_SWORD]: 1561, [B.DIAMOND_HOE]: 1561,
+  [B.NETHERITE_PICKAXE]: 2031, [B.NETHERITE_AXE]: 2031, [B.NETHERITE_SHOVEL]: 2031, [B.NETHERITE_SWORD]: 2031, [B.NETHERITE_HOE]: 2031,
   [B.BOW]: 100, [B.SHIELD]: 180, [B.FISHING_ROD]: 64, [B.SHEARS]: 238,
 };
 // 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌/材料物品不可放置）
 function isPlaceable(id) {
-  if ((id >= 256 && id <= 271) || id >= 288) return false;
+  if ((id >= 256 && id <= 271) || (id >= 288 && id <= 310) || id >= 333) return false;
   if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.COMPASS || id === B.CLOCK || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT || id === B.ELYTRA || id === B.NETHERITE_INGOT || id === B.NETHER_PORTAL || id === B.HONEYCOMB || id === B.BONE_MEAL || id === B.GOAT_HORN) return false;
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.MELON_SLICE) return false;
   if (isFood(id)) return false;   // 食物不可放置
@@ -15377,6 +15542,18 @@ function updatePlayer(dt) {
       spawnParticles(player.pos.x + (Math.random() - 0.5) * 0.6, player.pos.y + 0.8, player.pos.z + (Math.random() - 0.5) * 0.6, 0x1f3a93, 1);
     }
   }
+  if (player.jumpPotionTimer && player.jumpPotionTimer > 0) {
+    player.jumpPotionTimer = Math.max(0, player.jumpPotionTimer - dt);
+    if (Math.random() < 0.25) {
+      spawnParticles(player.pos.x + (Math.random() - 0.5) * 0.6, player.pos.y + 0.4, player.pos.z + (Math.random() - 0.5) * 0.6, 0x58e858, 1);
+    }
+  }
+  if (player.invisPotionTimer && player.invisPotionTimer > 0) {
+    player.invisPotionTimer = Math.max(0, player.invisPotionTimer - dt);
+    if (Math.random() < 0.20) {
+      spawnParticles(player.pos.x + (Math.random() - 0.5) * 0.6, player.pos.y + 1.0, player.pos.z + (Math.random() - 0.5) * 0.6, 0xc4d4e4, 1);
+    }
+  }
   if (player.blocking) speed *= 0.6; // 举盾格挡时稳步防守减速
   if (keys['ShiftLeft'] || keys['ShiftRight']) speed = player.fly ? 10 : 2.2;
   const inLava = inNether && water;
@@ -15466,7 +15643,11 @@ function updatePlayer(dt) {
       player.vel.y += g * dt;
       player.vel.y = Math.max(player.vel.y, -50);
       if (keys['Space']) {
-        if (player.onGround) { player.vel.y = 8.5; player.onGround = false; playJump(); }
+        if (player.onGround) {
+          player.vel.y = (player.jumpPotionTimer && player.jumpPotionTimer > 0) ? 11.6 : 8.5;
+          player.onGround = false;
+          playJump();
+        }
         else if (inLava) player.vel.y = 3.2;  // 岩浆黏稠上浮
         else if (water) player.vel.y = 4.2;   // 游泳上浮，可跃上岸但不至于水面连跳
       }
@@ -15836,15 +16017,19 @@ function burst(dur, vol, freq, type, delay) {
 // —— 原版 MC 纯正材质音效库 ——
 function isStoneMat(id) {
   return id === B.STONE || id === B.COBBLE || id === B.STONE_BRICK || id === B.CHISELED_STONE_BRICKS || id === B.MOSSY || id === B.MOSSY_COBBLE || id === B.BRICK ||
-         id === B.SANDSTONE || id === B.QUARTZ || id === B.QUARTZ_PILLAR || id === B.PRISMARINE || id === B.FURNACE || isOre(id) || id === B.BASALT || id === B.MAGMA ||
+         id === B.SANDSTONE || id === B.CUT_SANDSTONE || id === B.QUARTZ || id === B.QUARTZ_PILLAR || id === B.PRISMARINE || id === B.FURNACE || isOre(id) || id === B.BASALT || id === B.MAGMA ||
          id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.BEDROCK ||
          id === B.DEEPSLATE || id === B.DEEPSLATE_BRICKS || id === B.TERRACOTTA || id === B.RED_TERRACOTTA || id === B.ORANGE_TERRACOTTA || id === B.YELLOW_TERRACOTTA ||
-         id === B.NETHERRACK || id === B.NETHER_BRICKS || id === B.BLACKSTONE || id === B.POLISHED_BLACKSTONE || id === B.POLISHED_BLACKSTONE_BRICKS ||
-         id === B.SMOOTH_STONE || id === B.REDSTONE_BLOCK || id === B.LAPIS_BLOCK || id === B.EMERALD_BLOCK ||
+         id === B.NETHERRACK || id === B.NETHER_BRICKS || id === B.RED_NETHER_BRICKS || id === B.CHISELED_NETHER_BRICKS ||
+         id === B.BLACKSTONE || id === B.POLISHED_BLACKSTONE || id === B.POLISHED_BLACKSTONE_BRICKS || id === B.GILDED_BLACKSTONE ||
+         id === B.SMOOTH_STONE || id === B.POLISHED_GRANITE || id === B.POLISHED_ANDESITE || id === B.POLISHED_DIORITE ||
+         id === B.WHITE_CONCRETE || id === B.RED_CONCRETE || id === B.BLUE_CONCRETE || id === B.YELLOW_CONCRETE || id === B.BLACK_CONCRETE || id === B.CYAN_CONCRETE ||
+         id === B.PURPUR_BLOCK || id === B.END_STONE || id === B.END_STONE_BRICKS ||
+         id === B.REDSTONE_BLOCK || id === B.LAPIS_BLOCK || id === B.EMERALD_BLOCK ||
          id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM;
 }
 function isWoodMat(id) {
-  return isLog(id) || isPlanks(id) || id === B.BOOKSHELF || id === B.CHEST || id === B.DOOR || id === B.LADDER ||
+  return isLog(id) || isPlanks(id) || id === B.BOOKSHELF || id === B.CHEST || id === B.BARREL || id === B.CRAFTING_TABLE || id === B.DOOR || id === B.LADDER ||
          id === B.MUSHROOM_STEM || id === B.RED_MUSHROOM_BLOCK || id === B.BROWN_MUSHROOM_BLOCK;
 }
 function isPlantMat(id) {
@@ -15858,7 +16043,7 @@ function isEarthMat(id) {
 }
 // 金属：清脆带余韵的金属声（铁块/金块/铜块/下界合金块/远古残骸/磁石/钟/锁链/铁砧/避雷针/信标/标靶）
 function isMetalMat(id) {
-  return id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.COPPER_BLOCK || id === B.NETHERITE_BLOCK || id === B.ANCIENT_DEBRIS ||
+  return id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.COPPER_BLOCK || id === B.OXIDIZED_COPPER || id === B.NETHERITE_BLOCK || id === B.ANCIENT_DEBRIS ||
          id === B.LODESTONE || id === B.BELL || id === B.CHAIN || id === B.ANVIL || id === B.LIGHTNING_ROD ||
          id === B.BEACON || id === B.TARGET || id === B.RESPAWN_ANCHOR || id === B.CRYING_OBSIDIAN;
 }
@@ -16475,6 +16660,14 @@ const NAMES = {
   [B.GOLD_HELMET]: '金头盔', [B.GOLD_CHESTPLATE]: '金胸甲', [B.GOLD_LEGGINGS]: '金护腿', [B.GOLD_BOOTS]: '金靴子',
   [B.LEATHER_HELMET]: '皮革帽子', [B.LEATHER_CHESTPLATE]: '皮革外套', [B.LEATHER_LEGGINGS]: '皮革裤子', [B.LEATHER_BOOTS]: '皮革靴子',
   [B.MUSHROOM_STEW]: '蘑菇煲', [B.HONEY_BOTTLE]: '蜂蜜瓶', [B.SWEET_BERRIES]: '甜浆果', [B.GOLDEN_MELON]: '闪烁的西瓜片', [B.REGEN_POTION]: '再生药水',
+  [B.WOOD_HOE]: '木锄', [B.STONE_HOE]: '石锄', [B.GOLD_HOE]: '金锄', [B.IRON_HOE]: '铁锄', [B.DIAMOND_HOE]: '钻石锄', [B.NETHERITE_HOE]: '下界合金锄',
+  [B.WHITE_CONCRETE]: '白色混凝土', [B.RED_CONCRETE]: '红色混凝土', [B.BLUE_CONCRETE]: '蓝色混凝土', [B.YELLOW_CONCRETE]: '黄色混凝土', [B.BLACK_CONCRETE]: '黑色混凝土', [B.CYAN_CONCRETE]: '青色混凝土',
+  [B.JUNGLE_PLANKS]: '丛林木板', [B.ACACIA_PLANKS]: '金合欢木板', [B.MAPLE_PLANKS]: '枫木木板', [B.CRAFTING_TABLE]: '工作台',
+  [B.POLISHED_GRANITE]: '磨制花岗岩', [B.POLISHED_ANDESITE]: '磨治安山岩', [B.POLISHED_DIORITE]: '磨制闪长岩', [B.CUT_SANDSTONE]: '切制砂岩',
+  [B.RED_NETHER_BRICKS]: '红色下界砖块', [B.CHISELED_NETHER_BRICKS]: '雕纹下界砖块', [B.BARREL]: '木桶', [B.GILDED_BLACKSTONE]: '镶金黑石',
+  [B.OXIDIZED_COPPER]: '氧化铜块', [B.PURPUR_BLOCK]: '紫珀块', [B.END_STONE]: '末地石', [B.END_STONE_BRICKS]: '末地石砖',
+  [B.BLAZE_POWDER]: '烈焰粉', [B.MAGMA_CREAM]: '岩浆膏', [B.GLASS_BOTTLE]: '玻璃瓶', [B.JUMP_POTION]: '跳跃药水',
+  [B.INVISIBILITY_POTION]: '隐身药水', [B.CARROT]: '胡萝卜', [B.POTATO]: '马铃薯', [B.BAKED_POTATO]: '烤马铃薯',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 function isHelmet(id) { return id === B.LEATHER_HELMET || id === B.GOLD_HELMET || id === B.IRON_HELMET || id === B.DIAMOND_HELMET || id === B.NETHERITE_HELMET || id === B.TURTLE_HELMET; }
@@ -16482,7 +16675,7 @@ function isChestplate(id) { return id === B.LEATHER_CHESTPLATE || id === B.GOLD_
 function isLeggings(id) { return id === B.LEATHER_LEGGINGS || id === B.GOLD_LEGGINGS || id === B.IRON_LEGGINGS || id === B.DIAMOND_LEGGINGS || id === B.NETHERITE_LEGGINGS; }
 function isBoots(id) { return id === B.LEATHER_BOOTS || id === B.GOLD_BOOTS || id === B.IRON_BOOTS || id === B.DIAMOND_BOOTS || id === B.NETHERITE_BOOTS; }
 function isArmor(id) { return isHelmet(id) || isChestplate(id) || isLeggings(id) || isBoots(id); }
-function isPotion(id) { return id === B.HEALING_POTION || id === B.SPEED_POTION || id === B.FIRE_RESISTANCE_POTION || id === B.STRENGTH_POTION || id === B.NIGHT_VISION_POTION || id === B.REGEN_POTION; }
+function isPotion(id) { return id === B.HEALING_POTION || id === B.SPEED_POTION || id === B.FIRE_RESISTANCE_POTION || id === B.STRENGTH_POTION || id === B.NIGHT_VISION_POTION || id === B.REGEN_POTION || id === B.JUMP_POTION || id === B.INVISIBILITY_POTION; }
 function getArmorPoints() {
   let pts = 0;
   if (!player.armor) return 0;
@@ -16588,6 +16781,7 @@ const FOOD = {
   [B.MELON_SLICE]: 2, [B.EGG]: 2, [B.COOKED_MEAT]: 8, [B.RAW_FISH]: 2, [B.COOKED_FISH]: 6,
   [B.GOLDEN_APPLE]: 20, [B.SPIDER_EYE]: 2, [B.GOLDEN_CARROT]: 6, [B.ENCHANTED_GOLDEN_APPLE]: 20, [B.COOKIE]: 2, [B.CAKE]: 14,
   [B.MUSHROOM_STEW]: 6, [B.HONEY_BOTTLE]: 6, [B.SWEET_BERRIES]: 3, [B.GOLDEN_MELON]: 8,
+  [B.CARROT]: 3, [B.POTATO]: 2, [B.BAKED_POTATO]: 5,
 };
 function isFood(id) { return FOOD[id] !== undefined; }
 
@@ -16822,6 +17016,43 @@ const RECIPES = [
   { out: B.SWEET_BERRIES, n: 4, need: [[B.APPLE, 1], [B.SUGAR, 1]] },
   { out: B.GOLDEN_MELON, n: 1, need: [[B.MELON_SLICE, 1], [B.GOLD_INGOT, 8]] },
   { out: B.REGEN_POTION, n: 1, need: [[B.GOLDEN_MELON, 1], [B.WATER_BUCKET, 1]] },
+  { out: B.WOOD_HOE, n: 1, need: [[B.PLANKS, 2], [B.STICK, 2]] },
+  { out: B.STONE_HOE, n: 1, need: [[B.COBBLE, 2], [B.STICK, 2]] },
+  { out: B.GOLD_HOE, n: 1, need: [[B.GOLD_INGOT, 2], [B.STICK, 2]] },
+  { out: B.IRON_HOE, n: 1, need: [[B.IRON_INGOT, 2], [B.STICK, 2]] },
+  { out: B.DIAMOND_HOE, n: 1, need: [[B.DIAMOND, 2], [B.STICK, 2]] },
+  { out: B.NETHERITE_HOE, n: 1, need: [[B.DIAMOND_HOE, 1], [B.NETHERITE_INGOT, 1]] },
+  { out: B.CRAFTING_TABLE, n: 1, need: [[B.PLANKS, 4]] },
+  { out: B.BARREL, n: 1, need: [[B.PLANKS, 6], [B.STICK, 2]] },
+  { out: B.JUNGLE_PLANKS, n: 4, need: [[B.JUNGLE_LOG, 1]] },
+  { out: B.ACACIA_PLANKS, n: 4, need: [[B.ACACIA_LOG, 1]] },
+  { out: B.MAPLE_PLANKS, n: 4, need: [[B.MAPLE_LOG, 1]] },
+  { out: B.WHITE_CONCRETE, n: 8, need: [[B.SAND, 4], [B.GRAVEL, 4], [B.BONE_MEAL, 1]] },
+  { out: B.RED_CONCRETE, n: 4, need: [[B.WHITE_CONCRETE, 4], [B.FLOWER_RED, 1]] },
+  { out: B.BLUE_CONCRETE, n: 4, need: [[B.WHITE_CONCRETE, 4], [B.LAPIS_LAZULI, 1]] },
+  { out: B.YELLOW_CONCRETE, n: 4, need: [[B.WHITE_CONCRETE, 4], [B.FLOWER_YELLOW, 1]] },
+  { out: B.BLACK_CONCRETE, n: 4, need: [[B.WHITE_CONCRETE, 4], [B.CHARCOAL, 1]] },
+  { out: B.CYAN_CONCRETE, n: 4, need: [[B.WHITE_CONCRETE, 4], [B.PRISMARINE, 1]] },
+  { out: B.POLISHED_GRANITE, n: 4, need: [[B.STONE, 2], [B.QUARTZ, 2]] },
+  { out: B.POLISHED_ANDESITE, n: 4, need: [[B.STONE, 2], [B.COBBLE, 2]] },
+  { out: B.POLISHED_DIORITE, n: 4, need: [[B.COBBLE, 2], [B.QUARTZ, 2]] },
+  { out: B.CUT_SANDSTONE, n: 4, need: [[B.SANDSTONE, 4]] },
+  { out: B.RED_NETHER_BRICKS, n: 4, need: [[B.NETHER_BRICKS, 2], [B.NETHER_WART_BLOCK, 2]] },
+  { out: B.CHISELED_NETHER_BRICKS, n: 2, need: [[B.NETHER_BRICKS, 2]] },
+  { out: B.GILDED_BLACKSTONE, n: 4, need: [[B.BLACKSTONE, 4], [B.GOLD_INGOT, 4]] },
+  { out: B.OXIDIZED_COPPER, n: 1, need: [[B.COPPER_BLOCK, 1], [B.WATER_BUCKET, 1]] },
+  { out: B.PURPUR_BLOCK, n: 4, need: [[B.AMETHYST_SHARD, 2], [B.QUARTZ, 2]] },
+  { out: B.END_STONE, n: 4, need: [[B.SANDSTONE, 2], [B.ENDER_PEARL, 1]] },
+  { out: B.END_STONE_BRICKS, n: 4, need: [[B.END_STONE, 4]] },
+  { out: B.BLAZE_POWDER, n: 2, need: [[B.FIRE_CHARGE, 1], [B.GLOWSTONE_DUST, 1]] },
+  { out: B.MAGMA_CREAM, n: 1, need: [[B.SLIME_BALL, 1], [B.BLAZE_POWDER, 1]] },
+  { out: B.MAGMA, n: 1, need: [[B.MAGMA_CREAM, 4]] },
+  { out: B.GLASS_BOTTLE, n: 3, need: [[B.GLASS, 3]] },
+  { out: B.HONEY_BOTTLE, n: 1, need: [[B.HONEYCOMB, 1], [B.GLASS_BOTTLE, 1]] },
+  { out: B.ENDER_EYE, n: 1, need: [[B.ENDER_PEARL, 1], [B.BLAZE_POWDER, 1]] },
+  { out: B.GOLDEN_CARROT, n: 1, need: [[B.CARROT, 1], [B.GOLD_INGOT, 8]] },
+  { out: B.JUMP_POTION, n: 1, need: [[B.SLIME_BALL, 1], [B.SUGAR, 1], [B.WATER_BUCKET, 1]] },
+  { out: B.INVISIBILITY_POTION, n: 1, need: [[B.GOLDEN_CARROT, 1], [B.ENDER_PEARL, 1], [B.WATER_BUCKET, 1]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -16859,6 +17090,7 @@ function smeltOut(id) {
   if (id === B.NETHERRACK) return B.NETHER_BRICKS;
   if (id === B.RAW_MEAT) return B.COOKED_MEAT;
   if (id === B.RAW_FISH) return B.COOKED_FISH;
+  if (id === B.POTATO) return B.BAKED_POTATO;
   if (id === B.WET_SPONGE) return B.SPONGE;
   return null;
 }
@@ -17119,6 +17351,29 @@ function makeToolIcon(id) {
       '.......ogmmddo..',
       '.......kloddo...',
       '......klwkoo....',
+      '.....klwk.......',
+      '....klwk........',
+      '...klwk.........',
+      '..klwk..........',
+      '.klwk...........',
+      '.kwk............',
+      '.kk.............',
+      '................',
+    ]);
+    return cv;
+  }
+
+  if (isHoe(id)) {
+    // 经典 MC 农耕锄头：左上方弯曲单刃锄头 + 闭合深描边 + 高光刃口 + 斜木柄
+    drawSprite16([
+      '................',
+      '....ooooooo.....',
+      '...ohhhhhmmo....',
+      '..ohmmddommo....',
+      '..ooo...ogko....',
+      '........klwk....',
+      '.......klwk.....',
+      '......klwk......',
       '.....klwk.......',
       '....klwk........',
       '...klwk.........',
@@ -17957,6 +18212,55 @@ function makeItemIcon(id) {
     ctx.fillStyle = '#ff68b4'; ctx.fillRect(13, 15, 6, 7);
     ctx.fillStyle = '#ffd4eb'; ctx.fillRect(15, 16, 2, 3);
     ctx.fillStyle = '#ffffff'; ctx.fillRect(17, 13, 2, 2);
+  } else if (id === B.BLAZE_POWDER) {
+    // 烈焰粉：炽热金橙星火粉末堆
+    ctx.fillStyle = '#7a2606'; ctx.fillRect(7, 11, 18, 14); ctx.fillRect(11, 7, 10, 6);
+    ctx.fillStyle = '#e86810'; ctx.fillRect(8, 12, 16, 12); ctx.fillRect(12, 8, 8, 6);
+    ctx.fillStyle = '#ffbe28'; ctx.fillRect(10, 12, 12, 9);
+    ctx.fillStyle = '#fff6a6'; ctx.fillRect(13, 10, 5, 5); ctx.fillRect(18, 17, 3, 2);
+  } else if (id === B.MAGMA_CREAM) {
+    // 岩浆膏：橘红熔融黏液圆球 + 熔金高光
+    ctx.fillStyle = '#5c1e06'; ctx.fillRect(8, 8, 16, 16);
+    ctx.fillStyle = '#d85610'; ctx.fillRect(9, 9, 14, 14);
+    ctx.fillStyle = '#ffa024'; ctx.fillRect(10, 10, 11, 10);
+    ctx.fillStyle = '#fff098'; ctx.fillRect(11, 11, 4, 4);
+  } else if (id === B.GLASS_BOTTLE) {
+    // 玻璃瓶：晶莹剔透空炼药瓶
+    ctx.fillStyle = '#6c7c8e'; ctx.fillRect(13, 6, 6, 4); ctx.fillRect(12, 10, 8, 3); ctx.fillRect(10, 13, 12, 13);
+    ctx.fillStyle = '#c8dce8'; ctx.fillRect(14, 7, 4, 3); ctx.fillRect(13, 11, 6, 2); ctx.fillRect(11, 14, 10, 11);
+    ctx.fillStyle = '#eef8ff'; ctx.fillRect(12, 15, 8, 9);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(13, 15, 2, 6);
+  } else if (id === B.JUMP_POTION) {
+    // 跳跃药水：鲜活翠绿弹簧药液
+    ctx.fillStyle = '#f5cd79'; ctx.fillRect(14, 6, 4, 3);
+    ctx.fillStyle = '#d0d8e0'; ctx.fillRect(13, 9, 6, 3); ctx.fillRect(11, 12, 10, 14);
+    ctx.fillStyle = '#289834'; ctx.fillRect(12, 13, 8, 12);
+    ctx.fillStyle = '#68f064'; ctx.fillRect(13, 15, 6, 7);
+    ctx.fillStyle = '#d8ffd0'; ctx.fillRect(15, 16, 2, 3);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(17, 13, 2, 2);
+  } else if (id === B.INVISIBILITY_POTION) {
+    // 隐身药水：空灵银灰月雾药液
+    ctx.fillStyle = '#f5cd79'; ctx.fillRect(14, 6, 4, 3);
+    ctx.fillStyle = '#d0d8e0'; ctx.fillRect(13, 9, 6, 3); ctx.fillRect(11, 12, 10, 14);
+    ctx.fillStyle = '#788ca0'; ctx.fillRect(12, 13, 8, 12);
+    ctx.fillStyle = '#c8d8e8'; ctx.fillRect(13, 15, 6, 7);
+    ctx.fillStyle = '#f0f8ff'; ctx.fillRect(15, 16, 2, 3);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(17, 13, 2, 2);
+  } else if (id === B.CARROT) {
+    // 胡萝卜：翠绿叶缨 + 斜放鲜橙脆萝卜
+    ctx.fillStyle = '#287224'; ctx.fillRect(18, 6, 7, 7);
+    ctx.fillStyle = '#52b840'; ctx.fillRect(19, 7, 5, 5);
+    ctx.fillStyle = '#8c3c08'; ctx.fillRect(13, 11, 7, 7); ctx.fillRect(9, 15, 7, 7); ctx.fillRect(6, 19, 6, 6);
+    ctx.fillStyle = '#f2781c'; ctx.fillRect(14, 12, 5, 5); ctx.fillRect(10, 16, 5, 5); ctx.fillRect(7, 20, 4, 4);
+    ctx.fillStyle = '#ffb85c'; ctx.fillRect(14, 12, 2, 2); ctx.fillRect(10, 16, 2, 2);
+  } else if (id === B.POTATO || id === B.BAKED_POTATO) {
+    // 马铃薯 / 烤马铃薯（金黄诱人烤土豆配热气高光）
+    const baked = (id === B.BAKED_POTATO);
+    ctx.fillStyle = baked ? '#522c0c' : '#6e4e24'; ctx.fillRect(8, 10, 16, 13);
+    ctx.fillStyle = baked ? '#b8762e' : '#cfa056'; ctx.fillRect(9, 11, 14, 11);
+    ctx.fillStyle = baked ? '#e6a84c' : '#ebd088'; ctx.fillRect(10, 12, 10, 7);
+    ctx.fillStyle = baked ? '#fff0a8' : '#967038'; ctx.fillRect(12, 13, 4, 3);
+    if (baked) { ctx.fillStyle = '#ffffff'; ctx.fillRect(13, 6, 2, 3); ctx.fillRect(18, 5, 2, 3); }
   }
   return cv;
 }
@@ -17976,7 +18280,7 @@ function makeIcon(id) {
 }
 function _makeIconRaw(id) {
   if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD && id !== B.CROSSBOW && id !== B.SHEARS && id !== B.FLINT_AND_STEEL)) return makeToolIcon(id);
-  if ((id >= 256 && id <= 271) || id >= 288) return makeItemIcon(id);
+  if ((id >= 256 && id <= 271) || (id >= 288 && id <= 310) || id >= 333) return makeItemIcon(id);
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.GOLDEN_CARROT || id === B.COMPASS || id === B.CLOCK || id === B.ENCHANTED_GOLDEN_APPLE || id === B.COOKIE || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT || id === B.ELYTRA || id === B.NETHERITE_INGOT || id === B.HONEYCOMB || id === B.BONE_MEAL || id === B.GOAT_HORN) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
   return makeIconCanvas(id);
@@ -19158,6 +19462,11 @@ const HARDNESS = {
   [B.GREEN_WOOL]: 0.6, [B.BLACK_WOOL]: 0.6, [B.PINK_WOOL]: 0.6,
   [B.BIRCH_PLANKS]: 1.0, [B.SPRUCE_PLANKS]: 1.0, [B.CHERRY_PLANKS]: 1.0, [B.CRIMSON_PLANKS]: 1.1, [B.WARPED_PLANKS]: 1.1,
   [B.DEEPSLATE_BRICKS]: 2.4, [B.CHISELED_STONE_BRICKS]: 2.0, [B.QUARTZ_PILLAR]: 1.6, [B.PRISMARINE]: 1.8,
+  [B.WHITE_CONCRETE]: 1.8, [B.RED_CONCRETE]: 1.8, [B.BLUE_CONCRETE]: 1.8, [B.YELLOW_CONCRETE]: 1.8, [B.BLACK_CONCRETE]: 1.8, [B.CYAN_CONCRETE]: 1.8,
+  [B.JUNGLE_PLANKS]: 1.0, [B.ACACIA_PLANKS]: 1.0, [B.MAPLE_PLANKS]: 1.0, [B.CRAFTING_TABLE]: 1.2, [B.BARREL]: 1.2,
+  [B.POLISHED_GRANITE]: 1.8, [B.POLISHED_ANDESITE]: 1.8, [B.POLISHED_DIORITE]: 1.8, [B.CUT_SANDSTONE]: 1.6,
+  [B.RED_NETHER_BRICKS]: 2.0, [B.CHISELED_NETHER_BRICKS]: 2.0, [B.GILDED_BLACKSTONE]: 2.0,
+  [B.OXIDIZED_COPPER]: 2.6, [B.PURPUR_BLOCK]: 1.8, [B.END_STONE]: 2.8, [B.END_STONE_BRICKS]: 2.8,
 };
 function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
 // 破坏掉落物
@@ -19220,7 +19529,7 @@ function dropOf(id) {
   if (id === B.NETHER_QUARTZ_ORE) return B.QUARTZ;
   if (id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM) return B.NETHERRACK;
   if (isLeaf(id)) return null;               // 树叶徒手不掉方块（手持剪刀可精准剪落）
-  if ((id >= 256 && id <= 271) || id >= 288 || isTool(id) || id === B.STICK || id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.EGG || id === B.SNOWBALL || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.EMERALD || id === B.HONEYCOMB || id === B.BONE_MEAL || id === B.GOAT_HORN) return null;
+  if ((id >= 256 && id <= 271) || (id >= 288 && id <= 310) || id >= 333 || isTool(id) || id === B.STICK || id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.EGG || id === B.SNOWBALL || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.EMERALD || id === B.HONEYCOMB || id === B.BONE_MEAL || id === B.GOAT_HORN) return null;
   return id;
 }
 // 工具等级挖掘倍率（金质工具效率极高、耐久较低，还原原版特色）
@@ -19242,11 +19551,15 @@ function effSpeed(id) {
   if (isPickaxe(t)) {
     if (id === B.OBSIDIAN || id === B.ENDER_CHEST || id === B.CRYING_OBSIDIAN || id === B.RESPAWN_ANCHOR || id === B.ANCIENT_DEBRIS || id === B.NETHERITE_BLOCK) return isNetheriteTier(t) ? 22 : (isDiamondTier(t) ? 14 : (isIronTier(t) ? 4.0 : 1.5));
     if (id === B.ENCHANTING_TABLE || id === B.BEACON) return tierOf(t);
-    if (id === B.STONE || id === B.SMOOTH_STONE || id === B.COBBLE || id === B.MOSSY_COBBLE || id === B.STONE_BRICK || id === B.CHISELED_STONE_BRICKS || id === B.MOSSY || id === B.BRICK || id === B.SANDSTONE || id === B.QUARTZ || id === B.QUARTZ_PILLAR || id === B.PRISMARINE || isOre(id) || id === B.FURNACE || id === B.BASALT || id === B.MAGMA || id === B.ICE || id === B.PACKED_ICE || id === B.BLUE_ICE || id === B.DEEPSLATE || id === B.DEEPSLATE_BRICKS || id === B.TERRACOTTA || id === B.RED_TERRACOTTA || id === B.ORANGE_TERRACOTTA || id === B.YELLOW_TERRACOTTA || id === B.NETHERRACK || id === B.NETHER_BRICKS || id === B.BLACKSTONE || id === B.POLISHED_BLACKSTONE || id === B.POLISHED_BLACKSTONE_BRICKS || id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM || id === B.GLOWSTONE || id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.REDSTONE_BLOCK || id === B.LAPIS_BLOCK || id === B.EMERALD_BLOCK || id === B.AMETHYST_BLOCK || id === B.LIGHTNING_ROD || id === B.COPPER_BLOCK || id === B.SEA_LANTERN || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.BUTTON || id === B.CHAIN || id === B.SCULK_SENSOR || id === B.SCULK_BLOCK || id === B.DRIPSTONE_BLOCK || id === B.POINTED_DRIPSTONE || id === B.BLAST_FURNACE || id === B.SMOKER || id === B.LODESTONE || id === B.BELL || id === B.GRINDSTONE) return tierOf(t);
+    if (id === B.STONE || id === B.SMOOTH_STONE || id === B.COBBLE || id === B.MOSSY_COBBLE || id === B.STONE_BRICK || id === B.CHISELED_STONE_BRICKS || id === B.MOSSY || id === B.BRICK || id === B.SANDSTONE || id === B.CUT_SANDSTONE || id === B.QUARTZ || id === B.QUARTZ_PILLAR || id === B.PRISMARINE || id === B.POLISHED_GRANITE || id === B.POLISHED_ANDESITE || id === B.POLISHED_DIORITE || id === B.WHITE_CONCRETE || id === B.RED_CONCRETE || id === B.BLUE_CONCRETE || id === B.YELLOW_CONCRETE || id === B.BLACK_CONCRETE || id === B.CYAN_CONCRETE || id === B.RED_NETHER_BRICKS || id === B.CHISELED_NETHER_BRICKS || id === B.GILDED_BLACKSTONE || id === B.OXIDIZED_COPPER || id === B.PURPUR_BLOCK || id === B.END_STONE || id === B.END_STONE_BRICKS || isOre(id) || id === B.FURNACE || id === B.BASALT || id === B.MAGMA || id === B.ICE || id === B.PACKED_ICE || id === B.BLUE_ICE || id === B.DEEPSLATE || id === B.DEEPSLATE_BRICKS || id === B.TERRACOTTA || id === B.RED_TERRACOTTA || id === B.ORANGE_TERRACOTTA || id === B.YELLOW_TERRACOTTA || id === B.NETHERRACK || id === B.NETHER_BRICKS || id === B.BLACKSTONE || id === B.POLISHED_BLACKSTONE || id === B.POLISHED_BLACKSTONE_BRICKS || id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM || id === B.GLOWSTONE || id === B.COAL_BLOCK || id === B.IRON_BLOCK || id === B.GOLD_BLOCK || id === B.DIAMOND_BLOCK || id === B.REDSTONE_BLOCK || id === B.LAPIS_BLOCK || id === B.EMERALD_BLOCK || id === B.AMETHYST_BLOCK || id === B.LIGHTNING_ROD || id === B.COPPER_BLOCK || id === B.SEA_LANTERN || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.BUTTON || id === B.CHAIN || id === B.SCULK_SENSOR || id === B.SCULK_BLOCK || id === B.DRIPSTONE_BLOCK || id === B.POINTED_DRIPSTONE || id === B.BLAST_FURNACE || id === B.SMOKER || id === B.LODESTONE || id === B.BELL || id === B.GRINDSTONE) return tierOf(t);
     return 1.15;
   }
   if (isAxe(t)) {
-    if (isLog(id) || isPlanks(id) || id === B.CHEST || id === B.CAMPFIRE || id === B.CAMPFIRE_OFF || id === B.SOUL_CAMPFIRE || id === B.DOOR || id === B.BAMBOO || id === B.BOOKSHELF || id === B.PUMPKIN || id === B.JACK_O_LANTERN || id === B.MELON || id === B.DAYLIGHT_DETECTOR || id === B.NIGHT_DETECTOR || id === B.NOTE_BLOCK || id === B.BEEHIVE || id === B.COMPOSTER || id === B.MUSHROOM_STEM || id === B.RED_MUSHROOM_BLOCK || id === B.BROWN_MUSHROOM_BLOCK) return tierOf(t);
+    if (isLog(id) || isPlanks(id) || id === B.CHEST || id === B.BARREL || id === B.CRAFTING_TABLE || id === B.CAMPFIRE || id === B.CAMPFIRE_OFF || id === B.SOUL_CAMPFIRE || id === B.DOOR || id === B.BAMBOO || id === B.BOOKSHELF || id === B.PUMPKIN || id === B.JACK_O_LANTERN || id === B.MELON || id === B.DAYLIGHT_DETECTOR || id === B.NIGHT_DETECTOR || id === B.NOTE_BLOCK || id === B.BEEHIVE || id === B.COMPOSTER || id === B.MUSHROOM_STEM || id === B.RED_MUSHROOM_BLOCK || id === B.BROWN_MUSHROOM_BLOCK) return tierOf(t);
+    return 1.15;
+  }
+  if (isHoe(t)) {
+    if (isLeaf(id) || id === B.HAY_BALE || id === B.NETHER_WART_BLOCK || id === B.WARPED_WART_BLOCK || id === B.SHROOMLIGHT || id === B.SPONGE || id === B.WET_SPONGE || id === B.SCULK_BLOCK || id === B.SCULK_SENSOR) return tierOf(t);
     return 1.15;
   }
   if (isShovel(t)) {
@@ -19311,7 +19624,7 @@ function updateBreaking(dt) {
         enqueueAround(bx, by - 1, bz);
       }
     }
-    if (bid === B.CHEST) dropChestItems(bx, by, bz);
+    if (bid === B.CHEST || bid === B.BARREL) dropChestItems(bx, by, bz);
     world.setBlock(bx, by, bz, B.AIR);
     // 竹子、仙人掌、甘蔗连锁向上坍塌掉落
     if (bid === B.BAMBOO || bid === B.CACTUS || bid === B.SUGARCANE) {
@@ -19342,6 +19655,8 @@ function updateBreaking(dt) {
       }
     } else if ((bid === B.GRASS_TALL || bid === B.COBWEB) && heldTool && heldTool.id === B.SHEARS) {
       drop = bid;                                   // 剪刀精准采集草丛/蜘蛛网
+    } else if (bid === B.GRASS_TALL && Math.random() < 0.14) {
+      drop = Math.random() < 0.5 ? B.CARROT : B.POTATO; // 打草丛概率获得野生胡萝卜/马铃薯
     } else if (bid === B.GRAVEL && Math.random() < 0.25) {
       drop = B.FLINT;                               // 沙砾 25% 概率掉落燧石
     }
@@ -20256,11 +20571,51 @@ function onMousedown(btn) {
         openChest(hit.x, hit.y, hit.z, false, true);
         return;
       }
-      // 右键储物箱 → 打开箱子（最高优先级，绝不被周围村民误抢）
-      if (hit.id === B.CHEST) {
+      // 右键储物箱 / 木桶 → 打开 27 格储物界面
+      if (hit.id === B.CHEST || hit.id === B.BARREL) {
         if (tradeOpen) closeTradeUI();
         openChest(hit.x, hit.y, hit.z);
+        const chestTitle = document.querySelector('#chestUI h1');
+        if (chestTitle) chestTitle.textContent = (hit.id === B.BARREL) ? '🛢️ 木桶储物' : '📦 储物箱';
         return;
+      }
+      // 右键工作台 → 直接切换并打开侧边栏合成台视图
+      if (hit.id === B.CRAFTING_TABLE) {
+        if (tradeOpen) closeTradeUI();
+        invActiveTab = 'craft';
+        openInventory();
+        playClick();
+        return;
+      }
+      // 手持锄头右键草方块/泥土/草径 → 翻土开垦为耕地
+      if (sel && isHoe(sel.id) && (hit.id === B.GRASS || hit.id === B.DIRT || hit.id === B.DIRT_PATH)) {
+        if (hit.y + 1 < HEIGHT && world.getBlock(hit.x, hit.y + 1, hit.z) === B.AIR) {
+          world.setBlock(hit.x, hit.y, hit.z, B.FARMLAND);
+          enqueueAround(hit.x, hit.y, hit.z);
+          playPlace(B.DIRT);
+          spawnParticles(hit.x + 0.5, hit.y + 1.0, hit.z + 0.5, 0x5c3a20, 8);
+          if (!player.fly && sel.dur !== undefined) {
+            sel.dur--;
+            if (sel.dur <= 0) { hotbar[selected] = null; playBreak(); }
+            refreshHotbar();
+          }
+          return;
+        }
+      }
+      // 手持锹右键草方块 → 压平修整为草径
+      if (sel && isShovel(sel.id) && hit.id === B.GRASS) {
+        if (hit.y + 1 < HEIGHT && world.getBlock(hit.x, hit.y + 1, hit.z) === B.AIR) {
+          world.setBlock(hit.x, hit.y, hit.z, B.DIRT_PATH);
+          enqueueAround(hit.x, hit.y, hit.z);
+          playPlace(B.DIRT);
+          spawnParticles(hit.x + 0.5, hit.y + 1.0, hit.z + 0.5, 0xa88a4c, 8);
+          if (!player.fly && sel.dur !== undefined) {
+            sel.dur--;
+            if (sel.dur <= 0) { hotbar[selected] = null; playBreak(); }
+            refreshHotbar();
+          }
+          return;
+        }
       }
       // 右键末影箱 → 打开异次元共享末影箱（随身跨维度相通）
       if (hit.id === B.ENDER_CHEST) {
@@ -20357,7 +20712,7 @@ function onMousedown(btn) {
         const px = hit.x + hit.n[0], py = hit.y + hit.n[1], pz = hit.z + hit.n[2];
         if (py >= 0 && py < HEIGHT) {
           const below = world.getBlock(px, py - 1, pz);
-          if ((below === B.GRASS || below === B.DIRT) && world.getBlock(px, py, pz) === B.AIR && world.getWater(px, py, pz) === 0) {
+          if ((below === B.GRASS || below === B.DIRT || below === B.FARMLAND) && world.getBlock(px, py, pz) === B.AIR && world.getWater(px, py, pz) === 0) {
             plantWheat(px, py, pz, sel);
             return;
           }
@@ -20789,6 +21144,28 @@ function onMousedown(btn) {
       updateHungerBar();
       spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0xff68b4, 28);
       toast('💖 畅饮再生药水！生命力澎湃涌动，瞬间恢复 12 点生命与 4 点饱食度！');
+      return;
+    }
+
+    // 手持跳跃药水饮用
+    if (sel && sel.id === B.JUMP_POTION) {
+      if (!player.fly) removeItem(B.JUMP_POTION, 1);
+      refreshHotbar();
+      playDrink();
+      player.jumpPotionTimer = 45;
+      spawnParticles(player.pos.x, player.pos.y + 0.8, player.pos.z, 0x58e858, 26);
+      toast('🦘 畅饮跳跃药水！获得了 45 秒跳跃提升 II（轻松跃过两格高墙）！');
+      return;
+    }
+
+    // 手持隐身药水饮用
+    if (sel && sel.id === B.INVISIBILITY_POTION) {
+      if (!player.fly) removeItem(B.INVISIBILITY_POTION, 1);
+      refreshHotbar();
+      playDrink();
+      player.invisPotionTimer = 45;
+      spawnParticles(player.pos.x, player.pos.y + 1.1, player.pos.z, 0xc4d4e4, 26);
+      toast('👻 畅饮隐身药水！身形隐入月雾 45 秒，敌对怪物将无法察觉你！');
       return;
     }
 
