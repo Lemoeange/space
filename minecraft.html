@@ -8692,27 +8692,28 @@ function updateAnimals(dt) {
 function killAnimal(i) {
   const a = animals[i];
   const bx = Math.floor(a.x), bz = Math.floor(a.z);
-  const by = findGround(bx, bz) - 1;
+  const by = (typeof a.y === 'number' && isFinite(a.y)) ? Math.floor(a.y) : (a.g ? Math.floor(a.g.position.y) : findGround(bx, bz));
+  const dx = a.x - 0.5, dz = a.z - 0.5;
   scene.remove(a.g);
   const isWolf = a.kind && a.kind.name === 'wolf';
   const isChicken = a.kind && a.kind.name === 'chicken';
   const isSheep = a.kind && a.kind.name === 'sheep';
   const isCow = a.kind && a.kind.name === 'cow';
-  spawnParticles(bx, by, bz, isWolf ? 0x9898a0 : (isChicken ? 0xf0f0e8 : (isSheep ? 0xf4f0ea : 0xc88a8a)), 12);
+  spawnParticles(a.x, by + 0.5, a.z, isWolf ? 0x9898a0 : (isChicken ? 0xf0f0e8 : (isSheep ? 0xf4f0ea : 0xc88a8a)), 12);
   const n = 1 + ((Math.random() * 2) | 0);
-  for (let k = 0; k < n; k++) dropItem(B.RAW_MEAT, bx, by, bz);
+  for (let k = 0; k < n; k++) dropItem(B.RAW_MEAT, dx, by, dz);
   if (isChicken) {
-    if (Math.random() < 0.6) dropItem(B.EGG, bx, by, bz);               // 小鸡大概率掉落鸡蛋
+    if (Math.random() < 0.6) dropItem(B.EGG, dx, by, dz);               // 小鸡大概率掉落鸡蛋
     const nf = 1 + ((Math.random() * 2) | 0);
-    for (let k = 0; k < nf; k++) dropItem(B.FEATHER, bx, by, bz);       // 小鸡掉落羽毛
+    for (let k = 0; k < nf; k++) dropItem(B.FEATHER, dx, by, dz);       // 小鸡掉落羽毛
   }
   if (isCow) {
     const nl = 1 + ((Math.random() * 2) | 0);
-    for (let k = 0; k < nl; k++) dropItem(B.LEATHER, bx, by, bz);       // 牛掉落皮革
+    for (let k = 0; k < nl; k++) dropItem(B.LEATHER, dx, by, dz);       // 牛掉落皮革
   }
   if (isSheep) {
     const nw = 1 + ((Math.random() * 2) | 0);
-    for (let k = 0; k < nw; k++) dropItem(B.WOOL, bx, by, bz);          // 羊掉落羊毛
+    for (let k = 0; k < nw; k++) dropItem(B.WOOL, dx, by, dz);          // 羊掉落羊毛
   }
   animals.splice(i, 1);
   playPop();
@@ -8824,14 +8825,15 @@ function spawnZombie(x, z) {
 function killZombie(i) {
   const z = zombies[i];
   const bx = Math.floor(z.x), bz = Math.floor(z.z);
-  const by = findGround(bx, bz) - 1;
+  const by = (typeof z.y === 'number' && isFinite(z.y)) ? Math.floor(z.y) : (z.g ? Math.floor(z.g.position.y) : findGround(bx, bz));
+  const dx = z.x - 0.5, dz = z.z - 0.5;
   scene.remove(z.g);
   glowingMobs.delete(z);
-  spawnParticles(bx, by, bz, 0x609654, 16);
+  spawnParticles(z.x, by + 0.8, z.z, 0x609654, 16);
   const n = 1 + ((Math.random() * 2) | 0);
-  for (let k = 0; k < n; k++) dropItem(B.ROTTEN_FLESH, bx, by, bz);
-  if (Math.random() < 0.35) dropItem(B.BONE, bx, by, bz);   // 僵尸掉落骨头（用于驯狼）
-  spawnXpOrb(bx + 0.5, by + 0.5, bz + 0.5, 3);
+  for (let k = 0; k < n; k++) dropItem(B.ROTTEN_FLESH, dx, by, dz);
+  if (Math.random() < 0.35) dropItem(B.BONE, dx, by, dz);   // 僵尸掉落骨头（用于驯狼）
+  spawnXpOrb(z.x, by + 0.6, z.z, 3);
   zombies.splice(i, 1);
   playZombieDeath();
 }
@@ -8996,14 +8998,15 @@ function spawnCreeper(x, z) {
 function killCreeper(i) {
   const c = creepers[i];
   const bx = Math.floor(c.x), bz = Math.floor(c.z);
-  const by = findGround(bx, bz) - 1;
+  const by = (typeof c.y === 'number' && isFinite(c.y)) ? Math.floor(c.y) : (c.g ? Math.floor(c.g.position.y) : findGround(bx, bz));
+  const dx = c.x - 0.5, dz = c.z - 0.5;
   scene.remove(c.g);
-  spawnParticles(bx, by, bz, 0x4e9a46, 16);
+  spawnParticles(c.x, by + 0.8, c.z, 0x4e9a46, 16);
   // 击败苦力怕掉落火药
   const n = 1 + ((Math.random() * 2) | 0);
-  for (let k = 0; k < n; k++) dropItem(B.GUNPOWDER, bx, by, bz);
-  if (Math.random() < 0.15) dropItem(B.TNT, bx, by, bz);
-  spawnXpOrb(bx + 0.5, by + 0.5, bz + 0.5, 4);
+  for (let k = 0; k < n; k++) dropItem(B.GUNPOWDER, dx, by, dz);
+  if (Math.random() < 0.15) dropItem(B.TNT, dx, by, dz);
+  spawnXpOrb(c.x, by + 0.6, c.z, 4);
   creepers.splice(i, 1);
   playZombieDeath();
 }
@@ -9175,16 +9178,17 @@ function spawnSkeleton(x, z) {
 function killSkeleton(i) {
   const s = skeletons[i];
   const bx = Math.floor(s.x), bz = Math.floor(s.z);
-  const by = findGround(bx, bz) - 1;
+  const by = (typeof s.y === 'number' && isFinite(s.y)) ? Math.floor(s.y) : (s.g ? Math.floor(s.g.position.y) : findGround(bx, bz));
+  const dx = s.x - 0.5, dz = s.z - 0.5;
   scene.remove(s.g);
-  spawnParticles(bx, by, bz, 0xd0d6dc, 16);
+  spawnParticles(s.x, by + 0.8, s.z, 0xd0d6dc, 16);
   // 击败骷髅掉落骨头与箭矢，稀有掉落木弓
   const nBone = 1 + ((Math.random() * 2) | 0);
-  for (let k = 0; k < nBone; k++) dropItem(B.BONE, bx, by, bz);
+  for (let k = 0; k < nBone; k++) dropItem(B.BONE, dx, by, dz);
   const nArrow = 1 + ((Math.random() * 3) | 0);
-  for (let k = 0; k < nArrow; k++) dropItem(B.ARROW, bx, by, bz);
-  if (Math.random() < 0.15) dropItem(B.BOW, bx, by, bz);
-  spawnXpOrb(bx + 0.5, by + 0.5, bz + 0.5, 3);
+  for (let k = 0; k < nArrow; k++) dropItem(B.ARROW, dx, by, dz);
+  if (Math.random() < 0.15) dropItem(B.BOW, dx, by, dz);
+  spawnXpOrb(s.x, by + 0.6, s.z, 3);
   skeletons.splice(i, 1);
   tone(140, 50, 0.25, 'sawtooth', 0.12);
   burst(0.12, 0.08, 980);
@@ -9337,12 +9341,13 @@ function spawnEnderman(x, z) {
 function killEnderman(i) {
   const e = endermen[i];
   const bx = Math.floor(e.x), bz = Math.floor(e.z);
-  const by = findGround(bx, bz) - 1;
+  const by = (typeof e.y === 'number' && isFinite(e.y)) ? Math.floor(e.y) : (e.g ? Math.floor(e.g.position.y) : findGround(bx, bz));
+  const dx = e.x - 0.5, dz = e.z - 0.5;
   scene.remove(e.g);
-  spawnParticles(bx, by + 1.2, bz, 0x9b30ff, 28);
+  spawnParticles(e.x, by + 1.2, e.z, 0x9b30ff, 28);
   const n = 1 + (Math.random() < 0.6 ? 1 : 0);
-  for (let k = 0; k < n; k++) dropItem(B.ENDER_PEARL, bx, by + 1, bz);
-  spawnXpOrb(bx + 0.5, by + 1, bz + 0.5, 5);
+  for (let k = 0; k < n; k++) dropItem(B.ENDER_PEARL, dx, by + 0.2, dz);
+  spawnXpOrb(e.x, by + 0.8, e.z, 5);
   endermen.splice(i, 1);
   playTeleport();
   toast('🔮 获得了末影珍珠！');
@@ -18029,7 +18034,12 @@ function dropItem(id, x, y, z) {
   const spr = new THREE.Sprite(itemMaterial(id));
   spr.scale.set(0.38, 0.38, 1);
   // 从方块中心偏下位置柔和弹出，避免直接卡进上方原木/石顶触发向上顶出
-  const sx = x + 0.5, sy = y + 0.45, sz = z + 0.5;
+  let sx = x + 0.5, sy = y + 0.45, sz = z + 0.5;
+  // 若生物死亡位置等恰好落在表层实心方块内，且正上方 1 格为空气，则温和浮出到该格顶面（绝不穿顶直冲屋顶/树冠）
+  const bix = Math.floor(sx), biy = Math.floor(sy), biz = Math.floor(sz);
+  if (biy >= 0 && biy + 1 < HEIGHT && isSolid(world.getBlock(bix, biy, biz)) && !isSolid(world.getBlock(bix, biy + 1, biz))) {
+    sy = biy + 1.25;
+  }
   spr.position.set(sx, sy, sz);
   scene.add(spr);
   items.push({
@@ -18092,15 +18102,22 @@ function updateItems(dt) {
       }
     }
 
-    // 若放置方块恰好把已静止的掉落物包住，仅向相邻水平空位轻推（绝不向上顶穿屋顶/树冠）
-    if (isSolid(world.getBlock(ix, Math.floor(it.y), iz))) {
+    // 若掉落物意外嵌进实心方块内：优先向相邻水平空位推出；若四周皆实心且正上方 1 格为空，则浮到当前方块顶面
+    const curY = Math.floor(it.y);
+    if (curY >= 0 && curY < HEIGHT && isSolid(world.getBlock(ix, curY, iz))) {
       const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      let pushed = false;
       for (const [ox, oz] of dirs) {
-        if (!isSolid(world.getBlock(ix + ox, Math.floor(it.y), iz + oz))) {
+        if (!isSolid(world.getBlock(ix + ox, curY, iz + oz))) {
           it.x += ox * 3.5 * dt;
           it.z += oz * 3.5 * dt;
+          pushed = true;
           break;
         }
+      }
+      if (!pushed && curY + 1 < HEIGHT && !isSolid(world.getBlock(ix, curY + 1, iz))) {
+        it.y = curY + 1 + H;
+        it.vy = Math.max(0, it.vy);
       }
     }
 
