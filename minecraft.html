@@ -1154,8 +1154,8 @@ function oreFor(wx, y, wz) {
   return B.STONE;
 }
 
-// 生物群系：1=平原 2=森林 3=沙漠 4=雪地 5=沼泽 6=热带草原 7=白桦林 8=丛林 9=恶地 10=蘑菇岛 11=花海 12=砾石平原 13=白沙丘 14=冰刺平原 15=针叶林 16=沙漠绿洲 17=黑森林 18=樱花林 19=竹林 20=熔岩火山 21=枫树林 22=极地冰川
-// 比例经过实测校准：平原与森林各约 12~14%，各大主群系 5~8%，特色与稀有特化群系 1~4%，探索兼顾惊喜与开阔平衡
+// 生物群系：1=平原 2=森林 3=沙漠 4=雪地 5=沼泽 6=热带草原 7=白桦林 8=丛林 9=恶地 10=蘑菇岛 11=花海 12=砾石平原 13=白沙丘 14=冰刺平原 15=针叶林 16=沙漠绿洲 17=黑森林 18=樱花林 19=竹林 20=熔岩火山 21=枫树林 22=极地冰川 23=田园麦原 24=紫晶裂谷 25=喀斯特石林 26=沧海神殿湾
+// 比例经过实测校准：平原与森林各约 10~14%，各大主群系 5~8%，特色与稀有特化群系 1.5~4%，探索兼顾惊喜与开阔平衡
 function biomeOfClimate(cl) {
   const temp = cl.temp, moist = cl.moist, weird = cl.weird;
 
@@ -1167,11 +1167,14 @@ function biomeOfClimate(cl) {
 
   // 稀有特化地貌
   if (weird < -0.34 && moist > 0.03) return 10; // 蘑菇岛
+  if (weird < -0.24 && temp >= -0.18 && temp <= 0.04 && moist >= -0.22 && moist <= 0.02) return 24; // 紫晶裂谷（深板岩与露头紫水晶晶柱）
+  if (moist > 0.14 && weird > 0.16 && temp >= 0.00 && temp <= 0.22) return 26; // 沧海神殿湾（海晶石礁岸与石英神殿遗迹）
   if (weird > 0.22) {
     if (temp > 0.08 && moist < -0.04) return 20; // 熔岩火山谷（干热构造断裂带与黑玄武岩/岩浆）
     if (temp > 0.00 && moist < -0.01) return 9;  // 恶地（干热彩带）
     if (temp > -0.12 && moist > 0.01) return 13; // 白沙丘（纯白石英沙原）
   }
+  if (moist < -0.14 && temp >= -0.16 && temp <= 0.06 && weird >= 0.06 && weird <= 0.24) return 25; // 喀斯特石林（滴水石峰林与尖锥石笋）
   if (temp > 0.20 && moist > 0.10) return 16;   // 沙漠绿洲（干热区内部的丰水绿意）
 
   // 枫树林：秋季温带金红林带（微干温和区，漫山火红与金黄）
@@ -1209,10 +1212,13 @@ function netherBiomeAt(x, z) {
   const wx = x + WX, wz = z + WZ;
   const nTemp = P.terrain.fbm2(wx * 0.0042 + 4100, wz * 0.0042 + 4100, 3);
   const nWild = P.terrain.fbm2(wx * 0.0042 + 5700, wz * 0.0042 + 5700, 3);
+  if (nTemp < -0.20 && nWild < -0.06) return 8;  // 哭泣黑曜裂谷（黑曜石与废弃紫光传送门残框）
   if (nTemp < -0.14 && nWild < 0.08) return 2;   // 灵魂沙峡谷
   if (nTemp < -0.10 && nWild >= 0.08) return 3;  // 玄武岩三角洲
   if (nTemp > 0.08 && nWild >= 0.0) return 4;    // 绯红菌林
   if (nTemp > 0.08 && nWild < 0.0) return 5;     // 诡异菌林
+  if (nWild >= 0.14) return 6;                   // 黑石堡垒荒原（磨制黑石断壁、金块塔楼与宝箱）
+  if (nWild <= -0.14) return 7;                  // 石英晶窟（富集石英矿、石英柱与白晶簇）
   return 1;                                      // 下界荒地
 }
 
@@ -4874,8 +4880,51 @@ const badBand = (y) => {
   return B.RED_SAND;
 };
 /* 群系名（HUD 与调试用） */
-const BIOME_NAMES = { 1: '🌿 平原', 2: '🌲 森林', 3: '🏜️ 沙漠', 4: '❄️ 雪原', 5: '🐸 沼泽湿地', 6: '🌾 热带草原', 7: '🌳 白桦林', 8: '🌴 丛林', 9: '🏜️ 恶地', 10: '🍄 蘑菇岛', 11: '🌷 花海', 12: '🪨 砾石平原', 13: '🏖️ 白沙丘', 14: '🧊 冰刺平原', 15: '🌲 针叶林', 16: '🌴 沙漠绿洲', 17: '🌲 黑森林', 18: '🌸 樱花林', 19: '🎋 竹林', 20: '🌋 熔岩火山', 21: '🍁 枫树林', 22: '🏔️ 极地冰川', 23: '🌾 田园麦原' };
-const NETHER_BIOME_NAMES = { 1: '🔥 下界荒地', 2: '🦴 灵魂沙峡谷', 3: '🌋 玄武岩三角洲', 4: '🍄 绯红菌林', 5: '💠 诡异菌林' };
+const BIOME_NAMES = {
+  1: '🌿 平原', 2: '🌲 森林', 3: '🏜️ 沙漠', 4: '❄️ 雪原', 5: '🐸 沼泽湿地', 6: '🌾 热带草原',
+  7: '🌳 白桦林', 8: '🌴 丛林', 9: '🏜️ 恶地', 10: '🍄 蘑菇岛', 11: '🌷 花海', 12: '🪨 砾石平原',
+  13: '🏖️ 白沙丘', 14: '🧊 冰刺平原', 15: '🌲 针叶林', 16: '🌴 沙漠绿洲', 17: '🌲 黑森林',
+  18: '🌸 樱花林', 19: '🎋 竹林', 20: '🌋 熔岩火山', 21: '🍁 枫树林', 22: '🏔️ 极地冰川',
+  23: '🌾 田园麦原', 24: '🔮 紫晶裂谷', 25: '🪨 喀斯特石林', 26: '🐚 沧海神殿湾'
+};
+const NETHER_BIOME_NAMES = {
+  1: '🔥 下界荒地', 2: '🦴 灵魂沙峡谷', 3: '🌋 玄武岩三角洲', 4: '🍄 绯红菌林',
+  5: '💠 诡异菌林', 6: '🏰 黑石堡垒荒原', 7: '💎 石英晶窟', 8: '🟣 哭泣黑曜裂谷'
+};
+function populateBiomeChest(x, y, z, theme = 'prismarine') {
+  const ck = `${x},${y},${z}`;
+  if (chestStorages.has(ck)) return;
+  const slots = new Array(27).fill(null);
+  const rnd = mulberry32((x * 164053 + y * 977 + z * 31337) ^ 0x4a1f9c23);
+  const loot = theme === 'bastion' ? [
+    { id: B.GOLD_INGOT, count: 3 + Math.floor(rnd() * 6), prob: 0.90 },
+    { id: B.NETHERITE_SCRAP, count: 1 + Math.floor(rnd() * 2), prob: 0.42 },
+    { id: B.CRYING_OBSIDIAN, count: 2 + Math.floor(rnd() * 4), prob: 0.65 },
+    { id: B.GOLDEN_APPLE, count: 1, prob: 0.35 },
+    { id: B.GOLD_SWORD, count: 1, prob: 0.35 },
+    { id: B.DIAMOND, count: 1 + Math.floor(rnd() * 2), prob: 0.32 },
+    { id: B.ARROW, count: 6 + Math.floor(rnd() * 10), prob: 0.65 },
+    { id: B.FIRE_RESISTANCE_POTION, count: 1, prob: 0.45 },
+    { id: B.GLOWSTONE_DUST, count: 4 + Math.floor(rnd() * 8), prob: 0.60 },
+  ] : [
+    { id: B.PRISMARINE, count: 6 + Math.floor(rnd() * 10), prob: 0.85 },
+    { id: B.SEA_LANTERN, count: 1 + Math.floor(rnd() * 3), prob: 0.65 },
+    { id: B.EMERALD, count: 2 + Math.floor(rnd() * 4), prob: 0.70 },
+    { id: B.GOLD_INGOT, count: 2 + Math.floor(rnd() * 5), prob: 0.65 },
+    { id: B.AMETHYST_SHARD, count: 3 + Math.floor(rnd() * 6), prob: 0.55 },
+    { id: B.SPONGE, count: 1 + Math.floor(rnd() * 2), prob: 0.45 },
+    { id: B.REGEN_POTION, count: 1, prob: 0.35 },
+    { id: B.TRIDENT, count: 1, prob: 0.18 },
+    { id: B.COOKED_FISH, count: 3 + Math.floor(rnd() * 4), prob: 0.75 },
+  ];
+  let idx = 0;
+  for (const it of loot) {
+    if (rnd() < it.prob && idx < 27) {
+      slots[idx++] = { id: it.id, count: it.count, dur: isTool(it.id) ? TOOL_DURABILITY[it.id] : undefined };
+    }
+  }
+  chestStorages.set(ck, slots);
+}
 
 // —— 储物箱数据存储与地牢宝箱生成 ——
 const chestStorages = new Map();
@@ -5022,11 +5071,26 @@ class World {
             if (bm === 3) {
               // 玄武岩三角洲：黑石与玄武岩为主体
               id = patch > 0.10 ? B.BASALT : B.BLACKSTONE;
+            } else if (bm === 6) {
+              // 黑石堡垒荒原：黑石、磨制黑石与嵌金岩层
+              id = patch > 0.24 ? B.POLISHED_BLACKSTONE : (patch < -0.26 ? B.BASALT : B.BLACKSTONE);
+              if (y >= 10 && y <= 55 && plantHash(wx * 13 + y * 5, wz * 17 + y * 3) < 0.032) id = B.NETHER_GOLD_ORE;
+            } else if (bm === 7) {
+              // 石英晶窟：富集下界石英矿与纯白石英岩脉
+              if (patch > 0.30 && y > NETHER_SEA - 2) id = B.QUARTZ;
+              else if (plantHash(wx * 11 + y * 7, wz * 19 + y * 5) < 0.095) id = B.NETHER_QUARTZ_ORE;
+              else id = netherOreFor(wx, y, wz);
+            } else if (bm === 8) {
+              // 哭泣黑曜裂谷：深邃黑曜石、哭泣黑曜石与灵魂土裂隙
+              if (patch > 0.28) id = B.OBSIDIAN;
+              else if (patch > 0.18) id = B.CRYING_OBSIDIAN;
+              else if (patch < -0.18 && y >= floorH - 2 && y <= floorH) id = B.SOUL_SOIL;
+              else id = B.BLACKSTONE;
             } else if (bm === 2 && y >= floorH - 2 && y <= floorH) {
               // 灵魂沙峡谷浅表基底
               id = B.SOUL_SAND;
             } else {
-              // 地狱岩主体 + 下界石英矿 / 下界金矿矿脉
+              // 地狱岩主体 + 下界石英矿 / 下界金矿 / 远古残骸矿脉
               id = netherOreFor(wx, y, wz);
             }
             c.blocks[idx] = id;
@@ -5050,7 +5114,7 @@ class World {
         for (let y = Math.min(HEIGHT - 8, ceilH - 2); y >= Math.max(4, NETHER_SEA - 3); y--) {
           const idx = y * 256 + lz * 16 + lx;
           const id = c.blocks[idx];
-          if (id !== B.NETHERRACK && id !== B.SOUL_SAND && id !== B.BLACKSTONE && id !== B.BASALT) continue;
+          if (id !== B.NETHERRACK && id !== B.SOUL_SAND && id !== B.SOUL_SOIL && id !== B.BLACKSTONE && id !== B.POLISHED_BLACKSTONE && id !== B.BASALT && id !== B.OBSIDIAN && id !== B.CRYING_OBSIDIAN && id !== B.QUARTZ) continue;
           const aboveIdx = (y + 1) * 256 + lz * 16 + lx;
           const aboveB = c.blocks[aboveIdx];
           const aboveW = c.water[aboveIdx];
@@ -5064,7 +5128,7 @@ class World {
               else if (y === NETHER_SEA && plantHash(wx * 13 + 3, wz * 17 + 5) < 0.24) c.blocks[idx] = B.MAGMA;
             } else if (bm === 2) {
               c.blocks[idx] = B.SOUL_SAND;
-            } else if (bm === 3 && y <= NETHER_SEA + 1 && plantHash(wx * 11 + 2, wz * 19 + 7) < 0.28) {
+            } else if ((bm === 3 || bm === 6) && y <= NETHER_SEA + 1 && plantHash(wx * 11 + 2, wz * 19 + 7) < 0.28) {
               c.blocks[idx] = B.MAGMA;
             }
           }
@@ -5108,6 +5172,26 @@ class World {
                 }
                 colFeaturePlaced = true;
               }
+            } else if (bm === 6) {
+              // 黑石堡垒荒原：地表铺陈磨制黑石砖废墟石板
+              if (patch > 0.16) c.blocks[idx] = B.POLISHED_BLACKSTONE_BRICKS;
+            } else if (bm === 7) {
+              // 石英晶窟：地面拔地而起的白石英/石英柱结晶柱
+              if (!colFeaturePlaced && plantHash(wx * 29 + 5, wz * 31 + 11) < 0.016) {
+                const qh = 2 + Math.floor(plantHash(wx * 5 + 3, wz * 7 + 2) * 5);
+                c.blocks[idx] = B.QUARTZ;
+                for (let k = 1; k <= qh && y + k < ceilH - 2; k++) {
+                  const qidx = (y + k) * 256 + lz * 16 + lx;
+                  if (c.blocks[qidx] === B.AIR) c.blocks[qidx] = (k === qh && qh >= 5) ? B.GLOWSTONE : B.QUARTZ_PILLAR;
+                }
+                colFeaturePlaced = true;
+              }
+            } else if (bm === 8) {
+              // 哭泣黑曜裂谷：地表偶现闪耀紫水晶与幽蓝灵魂火把
+              if (!colFeaturePlaced && plantHash(wx * 37 + 7, wz * 43 + 3) < 0.014) {
+                c.blocks[aboveIdx] = (plantHash(wx + 5, wz + 9) < 0.55) ? B.SOUL_TORCH : B.AMETHYST_BLOCK;
+                colFeaturePlaced = true;
+              }
             } else if (bm === 1 && !colFeaturePlaced && id === B.NETHERRACK && plantHash(wx * 23 + y * 7, wz * 17 + 9) < 0.012) {
               c.blocks[aboveIdx] = plantHash(wx + 3, wz + 7) < 0.5 ? B.MUSHROOM_BROWN : B.MUSHROOM_RED;
               colFeaturePlaced = true;
@@ -5115,9 +5199,10 @@ class World {
           }
         }
 
-        // 穹顶悬垂萤石晶簇（照亮下界地狱岩天幕）
+        // 穹顶悬垂萤石晶簇（照亮下界地狱岩天幕；石英晶窟额外垂挂洁白石英结晶簇）
         const cgx = Math.floor(wx / 3), cgz = Math.floor(wz / 3);
-        if (plantHash(cgx * 19 + 5, cgz * 23 + 11) < 0.068) {
+        const ceilProb = (bm === 7) ? 0.14 : 0.068;
+        if (plantHash(cgx * 19 + 5, cgz * 23 + 11) < ceilProb) {
           let roofY = -1;
           for (let y = Math.min(HEIGHT - 5, ceilH + 2); y >= Math.max(NETHER_SEA + 18, ceilH - 6); y--) {
             if (c.blocks[y * 256 + lz * 16 + lx] !== B.AIR && c.blocks[(y - 1) * 256 + lz * 16 + lx] === B.AIR) {
@@ -5130,8 +5215,9 @@ class World {
             const dropLen = Math.max(1, 4 - centerDist - Math.floor(plantHash(wx * 7, wz * 13) * 2));
             for (let k = 1; k <= dropLen && roofY - k > NETHER_SEA + 6; k++) {
               const gidx = (roofY - k) * 256 + lz * 16 + lx;
-              if (c.blocks[gidx] === B.AIR && c.water[gidx] === 0) c.blocks[gidx] = B.GLOWSTONE;
-              else break;
+              if (c.blocks[gidx] === B.AIR && c.water[gidx] === 0) {
+                c.blocks[gidx] = (bm === 7 && k < dropLen) ? B.QUARTZ : B.GLOWSTONE;
+              } else break;
             }
           }
         }
@@ -5179,7 +5265,7 @@ class World {
         let fy = -1;
         for (let y = Math.min(HEIGHT - 12, ceilH - 8); y > NETHER_SEA; y--) {
           const id = c.blocks[y * 256 + lz * 16 + lx];
-          if (id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM || id === B.NETHERRACK) {
+          if (id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM || id === B.NETHERRACK || id === B.BLACKSTONE || id === B.POLISHED_BLACKSTONE || id === B.POLISHED_BLACKSTONE_BRICKS || id === B.OBSIDIAN || id === B.CRYING_OBSIDIAN || id === B.SOUL_SOIL) {
             if (c.blocks[(y + 1) * 256 + lz * 16 + lx] === B.AIR && c.water[(y + 1) * 256 + lz * 16 + lx] === 0) {
               fy = y;
               break;
@@ -5202,7 +5288,7 @@ class World {
 
         if (!farEnough(lx, lz)) continue;
 
-        // 检查垂直净空（至少 8 格空气才长巨型菌木或大蘑菇）
+        // 检查垂直净空（至少 7 格空气才长巨型菌木/大蘑菇/遗迹）
         let headroom = 0;
         for (let k = 1; k <= 10 && fy + k < HEIGHT - 4; k++) {
           const ki = (fy + k) * 256 + lz * 16 + lx;
@@ -5210,6 +5296,56 @@ class World {
           else break;
         }
         if (headroom < 7) continue;
+
+        // 0A) 黑石堡垒荒原（6）：磨制黑石砖哨塔废墟 + 鎏金镶饰 + 灵魂提灯 + 堡垒宝箱
+        if (bm === 6 && lx >= 4 && lx <= 11 && lz >= 4 && lz <= 11 && floraRnd() < 0.012) {
+          const towerH = Math.min(headroom - 2, 5 + ((floraRnd() * 3) | 0));
+          for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+            c.blocks[fy * 256 + (lz + dz) * 16 + (lx + dx)] = B.POLISHED_BLACKSTONE_BRICKS;
+            // 四角立柱与城垛
+            if (Math.abs(dx) === 1 && Math.abs(dz) === 1) {
+              const colH = towerH - (floraRnd() < 0.35 ? 1 : 0);
+              for (let k = 1; k <= colH; k++) {
+                setLocal(lx + dx, fy + k, lz + dz, (k === colH - 1 && floraRnd() < 0.45) ? B.GOLD_BLOCK : B.POLISHED_BLACKSTONE_BRICKS);
+              }
+            } else if (dx !== 0 || dz !== 0) {
+              // 残破矮墙
+              if (floraRnd() < 0.72) setLocal(lx + dx, fy + 1, lz + dz, B.POLISHED_BLACKSTONE);
+            }
+          }
+          // 塔心悬垂锁链灵魂提灯与战利品宝箱
+          setLocal(lx, fy + towerH, lz, B.POLISHED_BLACKSTONE_BRICKS);
+          setLocal(lx, fy + towerH - 1, lz, B.CHAIN);
+          setLocal(lx, fy + towerH - 2, lz, B.SOUL_LANTERN);
+          if (floraRnd() < 0.55) {
+            setLocal(lx, fy + 1, lz, B.CHEST);
+            populateBiomeChest(baseX + lx, fy + 1, baseZ + lz, 'bastion');
+          } else {
+            setLocal(lx, fy + 1, lz, B.GOLD_BLOCK);
+          }
+          placedCenters.push([lx, lz]);
+          continue;
+        }
+
+        // 0B) 哭泣黑曜裂谷（8）：古代废弃黑曜石/哭泣黑曜石传送门残框 + 灵魂火把祭坛
+        if (bm === 8 && lx >= 4 && lx <= 11 && lz >= 4 && lz <= 11 && floraRnd() < 0.018) {
+          for (let dx = -2; dx <= 2; dx++) {
+            c.blocks[fy * 256 + lz * 16 + (lx + dx)] = (Math.abs(dx) === 2) ? B.GOLD_BLOCK : B.OBSIDIAN;
+          }
+          for (let k = 1; k <= 4; k++) {
+            setLocal(lx - 2, fy + k, lz, floraRnd() < 0.45 ? B.CRYING_OBSIDIAN : B.OBSIDIAN);
+            if (k <= 3 || floraRnd() < 0.55) {
+              setLocal(lx + 2, fy + k, lz, floraRnd() < 0.45 ? B.CRYING_OBSIDIAN : B.OBSIDIAN);
+            }
+          }
+          for (let dx = -1; dx <= 1; dx++) {
+            if (floraRnd() < 0.65) setLocal(lx + dx, fy + 4, lz, floraRnd() < 0.5 ? B.CRYING_OBSIDIAN : B.OBSIDIAN);
+          }
+          setLocal(lx - 1, fy + 1, lz + 1, B.SOUL_TORCH);
+          setLocal(lx + 1, fy + 1, lz - 1, B.SOUL_TORCH);
+          placedCenters.push([lx, lz]);
+          continue;
+        }
 
         // 1) 绯红巨型菌（下界红树）与 2) 诡异巨型菌（下界青树）
         if ((bm === 4 && groundId === B.CRIMSON_NYLIUM && floraRnd() < 0.055) ||
@@ -5346,6 +5482,9 @@ class World {
         const mapleForest = bm === 21 && !beach;               // 枫树林
         const frozenGlacier = bm === 22 && !beach;             // 极地冰川
         const meadow = bm === 23 && !beach;                    // 田园麦原
+        const amethystCanyon = bm === 24 && !beach;            // 紫晶裂谷
+        const karstForest = bm === 25 && !beach;               // 喀斯特石林
+        const prismarineShore = bm === 26;                     // 沧海神殿湾（覆盖浅海与海岸）
         const patchNoise = P.terrain.fbm2(wx * 0.08, wz * 0.08, 1);
         for (let y = 0; y <= surf; y++) {
           let id;
@@ -5360,7 +5499,13 @@ class World {
             }
           } else if (y < surf) {
             // 次表层过渡层（1~3格深度，泥土/砂石，绝无草方块）
-            if (beach || desert) {
+            if (prismarineShore) {
+              id = (surf <= SEA + 1) ? (patchNoise > 0.05 ? B.PRISMARINE : B.CLAY) : B.WHITE_SAND;
+            } else if (amethystCanyon) {
+              id = patchNoise > 0.26 ? B.AMETHYST_BLOCK : B.DEEPSLATE;
+            } else if (karstForest) {
+              id = patchNoise > -0.10 ? B.DRIPSTONE_BLOCK : B.STONE;
+            } else if (beach || desert) {
               if (badlands) id = badBand(y);
               else if (desert && y === surf - 3) id = B.SANDSTONE;
               else if (beach && surf <= SEA + 1 && patchNoise > 0.24) id = B.CLAY;
@@ -5373,7 +5518,15 @@ class World {
             else id = B.DIRT;
           } else {
             // y === surf 露天地表最高层！草方块仅在此层生成
-            if (beach || desert) {
+            if (prismarineShore) {
+              if (surf < SEA) id = patchNoise > 0.12 ? B.PRISMARINE : (patchNoise < -0.22 ? B.CLAY : B.WHITE_SAND);
+              else if (surf <= SEA + 3) id = patchNoise > 0.20 ? B.PRISMARINE : B.WHITE_SAND;
+              else id = patchNoise > 0.32 ? B.PRISMARINE : (patchNoise > -0.05 ? B.WHITE_SAND : B.GRASS);
+            } else if (amethystCanyon) {
+              id = patchNoise > 0.28 ? B.AMETHYST_BLOCK : (patchNoise < -0.18 ? B.MOSSY_COBBLE : B.DEEPSLATE);
+            } else if (karstForest) {
+              id = patchNoise > 0.15 ? B.DRIPSTONE_BLOCK : (patchNoise < -0.22 ? B.MOSSY_COBBLE : B.STONE);
+            } else if (beach || desert) {
               if (badlands) id = patchNoise > 0.25 ? B.RED_SAND : badBand(y);
               else if (beach && surf <= SEA && patchNoise > 0.28) id = B.CLAY;
               else id = B.SAND;
@@ -5524,6 +5677,51 @@ class World {
             }
           }
         }
+        // 紫晶裂谷（24）：深板岩裂谷中耸立的紫水晶晶柱（3~7 格）与晶簇基座
+        if (amethystCanyon && !nearVillage && surf > SEA && surf + 2 < HEIGHT) {
+          const pr = plantHash(wx * 23 + 11, wz * 29 + 5);
+          if (pr < 0.012 && lx >= 1 && lx <= 14 && lz >= 1 && lz <= 14) {
+            const h = 3 + ((plantHash(wx + 5, wz + 17) * 5) | 0);
+            c.blocks[surf * 256 + lz * 16 + lx] = B.AMETHYST_BLOCK;
+            for (let k = 1; k <= h && surf + k < HEIGHT - 2; k++) {
+              c.blocks[(surf + k) * 256 + lz * 16 + lx] = B.AMETHYST_BLOCK;
+              if (k <= 2 && lx + 1 < 15) c.blocks[(surf + k) * 256 + lz * 16 + lx + 1] = B.AMETHYST_BLOCK;
+            }
+          }
+        }
+        // 喀斯特石林（25）：挺拔滴水石峰林（2~7 格石柱 + 顶部尖锥滴水石笋）
+        if (karstForest && !nearVillage && surf > SEA && surf + 2 < HEIGHT) {
+          const pr = plantHash(wx * 19 + 7, wz * 31 + 3);
+          if (pr < 0.016) {
+            const h = 2 + ((plantHash(wx + 9, wz + 13) * 6) | 0);
+            for (let k = 1; k <= h && surf + k < HEIGHT - 2; k++) {
+              const bId = (k === h) ? B.POINTED_DRIPSTONE : B.DRIPSTONE_BLOCK;
+              c.blocks[(surf + k) * 256 + lz * 16 + lx] = bId;
+              if (k <= 2 && h >= 5 && lx + 1 < 16) c.blocks[(surf + k) * 256 + lz * 16 + lx + 1] = B.DRIPSTONE_BLOCK;
+            }
+          }
+        }
+        // 沧海神殿湾（26）：浅海与海岸矗立古老海晶石/石英柱神殿残柱与发光海晶灯（偶藏神殿宝箱）
+        if (prismarineShore && !nearVillage && surf >= SEA - 4 && surf <= SEA + 6 && lx >= 2 && lx <= 13 && lz >= 2 && lz <= 13) {
+          const pr = plantHash(wx * 37 + 13, wz * 41 + 17);
+          if (pr < 0.0042) {
+            const h = 4 + ((plantHash(wx + 11, wz + 23) * 4) | 0);
+            for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+              c.blocks[surf * 256 + (lz + dz) * 16 + (lx + dx)] = B.PRISMARINE;
+            }
+            for (let k = 1; k <= h && surf + k < HEIGHT - 2; k++) {
+              const colId = (k === h) ? B.SEA_LANTERN : ((k === 1) ? B.PRISMARINE : B.QUARTZ_PILLAR);
+              c.blocks[(surf + k) * 256 + lz * 16 + lx] = colId;
+            }
+            if (plantHash(wx * 7 + 3, wz * 11 + 9) < 0.35 && surf + 1 < HEIGHT) {
+              c.blocks[(surf + 1) * 256 + lz * 16 + (lx + 1)] = B.CHEST;
+              populateBiomeChest(wx + 1, surf + 1, wz, 'prismarine');
+            }
+          } else if (surf < SEA && pr < 0.012) {
+            // 海底零星嵌入自发光海晶灯，夜晚泛出幽蓝海光
+            c.blocks[surf * 256 + lz * 16 + lx] = B.SEA_LANTERN;
+          }
+        }
         // 蘑菇岛：菌丝地表上蘑菇成片生长
         if (mushroom && surf > SEA && surf + 1 < HEIGHT) {
           const gb = c.blocks[surf * 256 + lz * 16 + lx];
@@ -5581,6 +5779,17 @@ class World {
                 if (dp < 0.016 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
                   c.blocks[(y + 1) * 256 + lz * 16 + lx] = B.DRIPSTONE_BLOCK;
                   c.blocks[y * 256 + lz * 16 + lx] = B.POINTED_DRIPSTONE;
+                }
+              }
+              // 深暗之域幽匿窟（y <= 16 深层洞穴地面蔓延幽匿方块、幽匿感测体与深板岩砖遗迹）
+              if (y <= 16 && (below === B.DEEPSLATE || below === B.STONE)) {
+                const sculkZone = P.terrain.fbm2((wx + WX) * 0.018 + 8100, (wz + WZ) * 0.018 + 8100, 2);
+                if (sculkZone > 0.24) {
+                  const sp = plantHash(wx * 29 + y, wz * 31 + 13);
+                  c.blocks[(y - 1) * 256 + lz * 16 + lx] = (sp < 0.14) ? B.DEEPSLATE_BRICKS : B.SCULK_BLOCK;
+                  if (sp > 0.965 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
+                    c.blocks[y * 256 + lz * 16 + lx] = B.SCULK_SENSOR;
+                  }
                 }
               }
             }
@@ -6099,7 +6308,7 @@ function plantTrees(c) {
       }
       if (ground === B.MYCELIUM || ground === B.MUD) continue;
 
-      if (bm === 3 || bm === 9 || bm === 10 || bm === 12 || bm === 13 || bm === 14 || bm === 20 || bm === 22) continue;   // 沙漠/恶地/蘑菇岛/砾石平原/白沙丘/冰刺平原/火山/极地冰川不种普通树
+      if (bm === 3 || bm === 9 || bm === 10 || bm === 12 || bm === 13 || bm === 14 || bm === 20 || bm === 22 || bm === 24 || bm === 25 || bm === 26) continue;   // 沙漠/恶地/蘑菇岛/砾石平原/白沙丘/冰刺平原/火山/极地冰川/紫晶裂谷/喀斯特石林/沧海神殿湾不种普通树
       // 雪地：多层厚雪块的地方不长树；再叠一层 24x24 分区的林线遮罩，让雪原出现大片纯粹的空旷雪野
       if (bm === 4) {
         if (ground === B.SNOW && world.getBlock(wx, surf - 1, wz) === B.SNOW) continue;
