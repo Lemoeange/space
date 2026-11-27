@@ -4149,11 +4149,16 @@ function makeAtlas() {
     if (y === 6 || y === 11 || x === 5 || x === 10) put(T.endFrameSide, x, y, 54, 106, 92);
   }
 
-  // 65. 末地传送门（深邃星渊星点贴图）
-  fill(T.endPortal, [8, 10, 22], 5, 455);
-  speck(T.endPortal, [52, 212, 206], 14, 456);
-  speck(T.endPortal, [186, 122, 255], 12, 457);
-  speck(T.endPortal, [235, 245, 255], 8, 458);
+  // 65. 末地传送门（璀璨星云青紫星渊，在黑曜石/基岩祭坛中清晰闪耀）
+  fill(T.endPortal, [14, 24, 52], 10, 455);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const sw = Math.sin(x * 0.55 + y * 0.35) + Math.cos(x * 0.35 - y * 0.5);
+    if (sw > 0.85) put(T.endPortal, x, y, 42, 138, 168);
+    else if (sw < -0.95) put(T.endPortal, x, y, 98, 46, 158);
+  }
+  speck(T.endPortal, [72, 245, 224], 22, 456);
+  speck(T.endPortal, [212, 136, 255], 18, 457);
+  speck(T.endPortal, [245, 252, 255], 12, 458);
 
   // 66. 紫珀柱（竖向浮雕条纹 + 顶部同心圆环）
   fill(T.purpurPillarSide, [172, 124, 174], 5, 460);
@@ -7347,6 +7352,7 @@ function saveWorld() {
       weather,
       weatherTimer,
       dragonDefeated: !!dragonDefeated,
+      bedSpawn: playerBedSpawn ? [playerBedSpawn.x, playerBedSpawn.y, playerBedSpawn.z] : null,
       crops: keys.world ? Array.from(crops.entries()) : [],
       furnace: {
         input: furnace.input ? [furnace.input.id, furnace.input.count, furnace.input.dur || 0] : null,
@@ -7440,6 +7446,9 @@ function loadWorld(profileOverride) {
       if (typeof d.selected === 'number' && d.selected >= 0 && d.selected < HOTBAR_SIZE) selected = d.selected;
       if (typeof d.hunger === 'number') player.hunger = Math.max(0, Math.min(20, d.hunger));
       if (keys.world && typeof d.dragonDefeated === 'boolean') dragonDefeated = d.dragonDefeated;
+      if (keys.world && Array.isArray(d.bedSpawn) && d.bedSpawn.length === 3) {
+        playerBedSpawn = { x: d.bedSpawn[0] | 0, y: d.bedSpawn[1] | 0, z: d.bedSpawn[2] | 0 };
+      }
       if (keys.world && typeof d.timeOfDay === 'number' && isFinite(d.timeOfDay)) timeOfDay = ((d.timeOfDay % 1) + 1) % 1;
       if (keys.world && typeof d.weather === 'string') weather = d.weather;
       if (keys.world && typeof d.weatherTimer === 'number') weatherTimer = d.weatherTimer;
@@ -15665,20 +15674,30 @@ function onEnderDragonDefeated() {
     spawnParticles(dx + (Math.random() - 0.5) * 6, dy + (Math.random() - 0.5) * 4, dz + (Math.random() - 0.5) * 6, (k & 1) ? 0xf058ff : 0xffdf60, 32);
   }
   // 丰厚屠龙奖励：+500 经验 + 4 瓶龙息掉落
-  player.xp = (player.xp || 0) + 500;
-  updateXPBar();
+  addPlayerXp(500);
   for (let i = 0; i < 4; i++) dropItem(B.DRAGON_BREATH, Math.round(dx), Math.max(63, Math.round(dy - 2)), Math.round(dz));
 
-  // 点亮主岛中心返回传送门基座 + 放置【龙蛋】战利品 + 开启通往外岛的【末地折跃门】！
+  // 完整重建并点亮主岛中心基岩返回传送门祭坛 (0, 62, 0) + 放置【龙蛋】战利品 + 开启东缘【末地折跃门】！
   for (let wz = -3; wz <= 3; wz++) {
     for (let wx = -3; wx <= 3; wx++) {
       const d = Math.hypot(wx, wz);
-      if (d <= 2.25 && !(wx === 0 && wz === 0)) {
-        world.setBlock(wx, 62, wz, B.END_PORTAL);
+      if (d <= 3.4) {
+        world.setBlock(wx, 61, wz, B.BEDROCK);
+        if (d >= 2.25) {
+          world.setBlock(wx, 62, wz, B.BEDROCK);
+        } else if (wx === 0 && wz === 0) {
+          for (let y = 62; y <= 65; y++) world.setBlock(0, y, 0, B.BEDROCK);
+          world.setBlock(0, 66, 0, B.DRAGON_EGG);
+        } else {
+          world.setBlock(wx, 62, wz, B.END_PORTAL);
+          for (let y = 63; y <= 68; y++) world.setBlock(wx, y, wz, B.AIR);
+        }
+        if ((Math.abs(wx) === 1 && wz === 0) || (wx === 0 && Math.abs(wz) === 1)) {
+          world.setBlock(wx, 64, wz, B.TORCH);
+        }
       }
     }
   }
-  world.setBlock(0, 66, 0, B.DRAGON_EGG);
   // 主岛东缘 (56, 68, 0) 点亮通往外岛群的末地折跃门
   world.setBlock(56, 66, 0, B.BEDROCK);
   world.setBlock(56, 67, 0, B.BEDROCK);
@@ -15687,10 +15706,15 @@ function onEnderDragonDefeated() {
   world.setBlock(56, 70, 0, B.BEDROCK);
   enqueueAround(0, 62, 0);
   enqueueAround(56, 68, 0);
+  // 立即重建中心祭坛与折跃门所在区块网格，确保星渊返回传送门与龙蛋瞬间清晰显现
+  for (const [rcx, rcz] of [[0, 0], [-1, 0], [0, -1], [-1, -1], [3, 0], [3, -1]]) {
+    const cc = world.chunks.get(key(rcx, rcz));
+    if (cc) buildChunkMeshes(cc);
+  }
 
   updateDragonHUD();
   saveWorld();
-  toast('🏆 恭喜击败【末影龙】！获得 +500 XP 与【龙蛋】！返回传送门与外岛折跃门已全部开启！');
+  toast('🏆 恭喜击败【末影龙】！获得 +500 XP 与【龙蛋】！中心祭坛返回传送门与外岛折跃门已开启！');
 }
 
 function tryActivateEndPortal(fx, fy, fz) {
@@ -15824,19 +15848,22 @@ function teleportToEnd() {
       toast('🌌 返回【末地主岛】！');
       return;
     }
-    // 主岛中心基岩返回传送门 → 回归主世界
-    const target = endPortalReturnPos || { x: 0, y: Math.floor(surfaceHeight(0, 0)) + 2, z: 0 };
+    // 主岛中心基岩返回传送门 → 回归主世界重生点（若已绑定床则在床旁安全落点，否则回到世界默认出生点）
     switchDimension('overworld');
+    const target = resolveOverworldRespawn();
     const ocx = Math.floor(target.x / CHUNK), ocz = Math.floor(target.z / CHUNK);
     for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) world.ensureChunk(ocx + dx, ocz + dz);
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
       const cc = world.chunks.get(key(ocx + dx, ocz + dz));
       if (cc) { restoreTorchLights(cc); buildChunkMeshes(cc); }
     }
-    player.pos.set(target.x, target.y + 0.2, target.z);
+    player.pos.set(target.x, target.y, target.z);
     player.vel.set(0, 0, 0);
+    maxFallY = null;
     spawnParticles(target.x, target.y + 1, target.z, 0x5fd184, 48);
-    toast('✨ 穿越末地星渊返回传送门，荣耀归来主世界！');
+    toast(target.fromBed
+      ? '✨ 穿越末地返回传送门，已回到你的床边重生点！'
+      : '✨ 穿越末地返回传送门，已回到主世界默认出生点！');
   }
 }
 
@@ -15852,6 +15879,13 @@ function updateEndDimension(dt) {
     }
   }
   if (!inEnd) return;
+
+  // 屠龙后中心祭坛返回传送门持续升腾青紫星辉粒子，远近清晰可辨
+  if (dragonDefeated && Math.hypot(player.pos.x, player.pos.z) < 64 && Math.random() < 0.45) {
+    const a = Math.random() * Math.PI * 2;
+    const r = 0.8 + Math.random() * 1.4;
+    spawnParticles(Math.cos(a) * r + 0.5, 62.9 + Math.random() * 1.2, Math.sin(a) * r + 0.5, Math.random() < 0.5 ? 0x40f5d8 : 0xc084fc, 1);
+  }
 
   // 2) 末地虚空跌落保护/伤害
   if (player.pos.y < 8) {
@@ -16085,8 +16119,7 @@ function updateTridents(dt) {
           tone(880, 1320, 0.25, 'sine', 0.45);
           spawnParticles(bx + 0.5, by + 0.5, bz + 0.5, 0xffd700, 25);
           spawnParticles(bx + 0.5, by + 0.5, bz + 0.5, 0x70a1ff, 20);
-          player.xp = (player.xp || 0) + 15;
-          updateXPBar();
+          addPlayerXp(15);
           toast('🎯 传奇三叉戟贯穿命中靶心！【15 分】满分！获得 15 点经验！');
         }
       }
@@ -16549,8 +16582,7 @@ function updateArrows(dt) {
           } else {
             spawnParticles(bx + 0.5, by + 0.5, bz + 0.5, 0xff4757, 10);
           }
-          player.xp = (player.xp || 0) + score;
-          updateXPBar();
+          addPlayerXp(score);
           toast(score >= 14 ? `🎯 绝妙正中红心！10环【${score} 分】满分！获得 ${score} 点经验！` : `🎯 命中标靶！得分【${score} 分】！+${score} 经验！`);
         }
         break;
@@ -16896,6 +16928,7 @@ function updatePlayerModel(dt) {
   // 抬头/低头：模型头部跟着视角轻微俯仰，第三人称也能看出你在看哪
   playerHead.rotation.x = Math.max(-0.55, Math.min(0.55, player.pitch * 0.6));
 }
+let playerBedSpawn = null; // 玩家绑定的主世界床重生点 { x, y, z }
 function findSpawn() {
   for (let r = 0; r < 200; r += 4) {
     for (let a = 0; a < 8; a++) {
@@ -16905,6 +16938,37 @@ function findSpawn() {
     }
   }
   return { x: 8.5, z: 8.5, y: SEA + 4 };
+}
+function resolveOverworldRespawn() {
+  // 须在主世界维度下调用：若玩家已绑定床且该床方块仍在，则找床旁安全站立点；否则回退到世界默认出生点
+  if (playerBedSpawn) {
+    const bx = playerBedSpawn.x | 0, by = playerBedSpawn.y | 0, bz = playerBedSpawn.z | 0;
+    const bcx = bx >> 4, bcz = bz >> 4;
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) world.ensureChunk(bcx + dx, bcz + dz);
+    if (world.getBlock(bx, by, bz) === B.BED) {
+      const offsets = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1], [0, 0]];
+      for (const [ox, oz] of offsets) {
+        const sx = bx + ox, sz = bz + oz;
+        for (const sy of [by, by + 1, by - 1]) {
+          if (sy <= 2 || sy >= HEIGHT - 3) continue;
+          const floorOk = isSolid(world.getBlock(sx, sy - 1, sz)) || world.getBlock(sx, sy - 1, sz) === B.BED;
+          const feetB = world.getBlock(sx, sy, sz);
+          const headB = world.getBlock(sx, sy + 1, sz);
+          const feetOk = (feetB === B.AIR || !isSolid(feetB)) && world.getWater(sx, sy, sz) === 0;
+          const headOk = (headB === B.AIR || !isSolid(headB)) && world.getWater(sx, sy + 1, sz) === 0;
+          if (floorOk && feetOk && headOk) {
+            return { x: sx + 0.5, y: sy + 0.1, z: sz + 0.5, fromBed: true };
+          }
+        }
+      }
+      return { x: bx + 0.5, y: by + 1.1, z: bz + 0.5, fromBed: true };
+    } else {
+      // 绑定的床已被破坏或移除，清除绑定并回退世界默认出生点
+      playerBedSpawn = null;
+    }
+  }
+  const def = findSpawn();
+  return { x: def.x, y: def.y, z: def.z, fromBed: false };
 }
 
 const heartsEl = document.getElementById('hearts');
@@ -17044,7 +17108,14 @@ function damagePlayer(dmg) {
     player.hp = 20;                       // 重生
     player.hunger = 20;
     player.absorption = 0;
-    const sp = findSpawn();
+    if (inNether || inEnd) switchDimension('overworld');
+    const sp = resolveOverworldRespawn();
+    const scx = Math.floor(sp.x / CHUNK), scz = Math.floor(sp.z / CHUNK);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      world.ensureChunk(scx + dx, scz + dz);
+      const cc = world.chunks.get(key(scx + dx, scz + dz));
+      if (cc) { restoreTorchLights(cc); buildChunkMeshes(cc); }
+    }
     player.pos.set(sp.x, sp.y, sp.z);
     player.vel.set(0, 0, 0);
     maxFallY = null;
@@ -17053,7 +17124,7 @@ function damagePlayer(dmg) {
     breaking = null;
     breakingMesh.visible = false;
     updateHungerBar();
-    toast('💀 你被击倒了 · 已重生');
+    toast(sp.fromBed ? '💀 你被击倒了 · 已在床边重生点复活' : '💀 你被击倒了 · 已在主世界出生点重生');
   }
   updateHearts();
 }
@@ -22678,13 +22749,27 @@ function onMousedown(btn) {
           return;
         }
       }
-      // 右键红床 → 睡觉
+      // 右键红床 → 绑定主世界重生点（白天/夜间均可绑定），夜间同时入睡跳过黑夜
       if (hit.id === B.BED) {
+        if (inNether || inEnd) {
+          toast('⚠️ 床只能在主世界设置重生点与入睡！');
+          return;
+        }
+        const changed = !playerBedSpawn || playerBedSpawn.x !== hit.x || playerBedSpawn.y !== hit.y || playerBedSpawn.z !== hit.z;
+        playerBedSpawn = { x: hit.x, y: hit.y, z: hit.z };
+        if (changed) {
+          tone(520, 780, 0.16, 'sine', 0.16);
+          spawnParticles(hit.x + 0.5, hit.y + 0.8, hit.z + 0.5, 0x5fd184, 12);
+          saveWorld();
+        }
         const isNight = timeOfDay >= 0.48 || timeOfDay < 0.20;
-        if (!isNight) { toast('☀️ 只能在夜间入睡'); return; }
+        if (!isNight) {
+          toast(`🛏️ 已绑定重生点 (${hit.x}, ${hit.y}, ${hit.z})！仅夜间可入睡`);
+          return;
+        }
         for (const z of zombies) {
           if (Math.hypot(z.x - player.pos.x, z.z - player.pos.z) < 8) {
-            toast('⚠️ 附近有怪物游荡，无法入睡！');
+            toast('🛏️ 重生点已绑定，但附近有怪物游荡，无法入睡！');
             return;
           }
         }
@@ -24318,6 +24403,7 @@ function reloadActiveWorld(seed, opts = {}) {
     inNether = false;
     inEnd = false;
     dragonDefeated = false;
+    playerBedSpawn = null;
     world.dim = 'overworld';
     world.chunks = world.overworldChunks;
     editedChunks = overworldEdited;
