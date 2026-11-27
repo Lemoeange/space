@@ -1035,20 +1035,20 @@ function climateAt(x, z) {
   };
 }
 
-// 沼泽低洼湿地权重（在连续温湿噪声区间内平滑过渡，确保沼泽地形平滑衔接）
+// 沼泽低洼湿地权重（在连续温湿噪声区间内平滑过渡，确保沼泽地形平滑衔接且不压平邻近海湾/花海）
 function swampWeightAt(cl) {
   const moist = cl.moist;
-  if (moist < 0.15) return 0;
+  if (moist < 0.17) return 0;
   const temp = cl.temp;
-  if (temp < -0.16 || temp > 0.22) return 0;
+  if (temp < -0.16 || temp > 0.20) return 0;
   const weird = cl.weird;
-  if (weird > 0.22 || weird < -0.34) return 0;
+  if (weird > 0.14 || weird < -0.34) return 0;
   if (temp > 0.04 && weird < -0.08) return 0; // 竹林通道排除
-  if (weird > 0.08 && weird < 0.26 && temp > -0.10 && temp < 0.10 && moist < 0.22) return 0; // 樱花林排除
+  if (weird > 0.08 && temp > -0.10 && temp < 0.10 && moist < 0.22) return 0; // 樱花林排除
 
-  const mWeight = Math.min(1, Math.max(0, (moist - 0.15) / 0.11));
-  const tWeight = Math.min(1, Math.max(0, (0.22 - temp) / 0.06));
-  const wWeight = Math.min(1, Math.max(0, (0.22 - weird) / 0.06));
+  const mWeight = Math.min(1, Math.max(0, (moist - 0.17) / 0.08));
+  const tWeight = Math.min(1, Math.max(0, (0.20 - temp) / 0.06));
+  const wWeight = Math.min(1, Math.max(0, (0.14 - weird) / 0.06));
   const w = mWeight * tWeight * wWeight;
   return w * w * (3 - 2 * w); // smoothstep 平滑样条过渡
 }
@@ -1076,10 +1076,21 @@ function surfaceHeightAt(x, z, cl) {
   if (sw > 0) {
     // 沼泽内部微地形：温和波动的浅水洼、泥滩与低土丘
     const poolNoise = P.terrain.fbm2(wx * 0.020 + 77, wz * 0.020 + 77, 3);
-    // 目标高度：SEA 在 32，poolNoise (-0.5 ~ +0.5) 映射出 30.6 ~ 33.3
-    // 低于 32 即自动生成天然连片浅水坑与蜿蜒水塘，高于 32 为贴水湿泥草地与泥洲
+    // 目标高度：SEA 在 34，poolNoise (-0.5 ~ +0.5) 映射出平滑浅水塘与湿泥洲
     const hSwamp = SEA + 0.6 + poolNoise * 2.2;
     h = h * (1.0 - sw) + hSwamp * sw;
+  }
+
+  // 苍翠高山平滑抬升权重（与周围群系样条衔接，绝无突兀垂直断崖）
+  if (cl.temp > -0.32 && cl.temp < -0.10 && cl.moist > -0.18 && cl.moist < 0.06 && cl.weird > 0.00 && shore > 0.35) {
+    const wt = smoothstep01((cl.temp + 0.32) / 0.06) * smoothstep01((-0.10 - cl.temp) / 0.06);
+    const wm = smoothstep01((cl.moist + 0.18) / 0.06) * smoothstep01((0.06 - cl.moist) / 0.06);
+    const ww = smoothstep01((cl.weird - 0.00) / 0.08);
+    const alpineW = wt * wm * ww * smoothstep01((shore - 0.35) / 0.45);
+    if (alpineW > 0) {
+      const ridge = 1.0 - Math.abs(P.terrain.fbm2(wx * 0.016 + 310, wz * 0.016 + 310, 3) * 2.0);
+      h += alpineW * (10 + Math.max(0, ridge) * 14);
+    }
   }
 
   return Math.max(2, Math.min(HEIGHT - 6, h));
@@ -1162,19 +1173,21 @@ function oreFor(wx, y, wz) {
   return B.STONE;
 }
 
-// 生物群系：1=平原 2=森林 3=沙漠 4=雪地 5=沼泽 6=热带草原 7=白桦林 8=丛林 9=恶地 10=蘑菇岛 11=花海 12=砾石平原 13=白沙丘 14=冰刺平原 15=针叶林 16=沙漠绿洲 17=黑森林 18=樱花林 19=竹林 20=熔岩火山 21=枫树林 22=极地冰川 23=田园麦原 24=紫晶裂谷 25=喀斯特石林 26=沧海神殿湾
-// 比例经过实测校准：平原与森林各约 10~14%，各大主群系 5~8%，特色与稀有特化群系 1.5~4%，探索兼顾惊喜与开阔平衡
+// 生物群系：1=平原 2=森林 3=沙漠 4=雪地 5=沼泽 6=热带草原 7=白桦林 8=丛林 9=恶地 10=蘑菇岛 11=花海 12=砾石平原 13=白沙丘 14=冰刺平原 15=针叶林 16=沙漠绿洲 17=黑森林 18=樱花林 19=竹林 20=熔岩火山 21=枫树林 22=极地冰川 23=田园麦原 24=紫晶裂谷 25=喀斯特石林 26=沧海神殿湾 27=苍翠高山 28=丹霞红岩原 29=苍苔古遗址 30=星陨末地遗境
+// 比例经过实测校准：平原与森林为主体，各大主群系 4~8%，特色与稀有特化群系 1~3.5%，探索兼顾惊喜与开阔平衡
 function biomeOfClimate(cl) {
   const temp = cl.temp, moist = cl.moist, weird = cl.weird;
 
-  // 极冷与极地
+  // 极冷与极地 / 高山
   if (temp < -0.34) return 14;                  // 冰刺平原（极冷稀有）
   if (temp < -0.28 && moist < -0.06) return 22; // 极地冰川（深冻浮冰雪原）
+  if (temp >= -0.28 && temp < -0.14 && moist >= -0.14 && moist < 0.02 && weird > 0.04) return 27; // 苍翠高山（雪顶安山岩山脊与绿宝石露头）
   if (temp < -0.18 && moist < 0.02) return 4;   // 雪地（冷干原野）
   if (temp < -0.16 && moist >= 0.02) return 15; // 针叶林（冷温带云杉与蕨）
 
   // 稀有特化地貌
-  if (weird < -0.34 && moist > 0.03) return 10; // 蘑菇岛
+  if (weird < -0.34 && moist > 0.03) return 10;  // 蘑菇岛
+  if (weird < -0.34 && moist <= 0.03) return 30; // 星陨末地遗境（末地石与紫珀石方尖塔，蘑菇岛的干区镜像稀有群系）
   if (weird < -0.24 && temp >= -0.18 && temp <= 0.04 && moist >= -0.22 && moist <= 0.02) return 24; // 紫晶裂谷（深板岩与露头紫水晶晶柱）
   if (moist > 0.14 && weird > 0.16 && temp >= 0.00 && temp <= 0.22) return 26; // 沧海神殿湾（海晶石礁岸与石英神殿遗迹）
   if (weird > 0.22) {
@@ -1182,8 +1195,12 @@ function biomeOfClimate(cl) {
     if (temp > 0.00 && moist < -0.01) return 9;  // 恶地（干热彩带）
     if (temp > -0.12 && moist > 0.01) return 13; // 白沙丘（纯白石英沙原）
   }
+  if (temp > 0.14 && moist < -0.08 && weird >= 0.06 && weird <= 0.22) return 28; // 丹霞红岩原（切制砂岩、磨制花岗岩与红沙神龛）
   if (moist < -0.14 && temp >= -0.16 && temp <= 0.06 && weird >= 0.06 && weird <= 0.24) return 25; // 喀斯特石林（滴水石峰林与尖锥石笋）
   if (temp > 0.20 && moist > 0.10) return 16;   // 沙漠绿洲（干热区内部的丰水绿意）
+
+  // 苍苔古遗址：湿润温带苔石氧化铜古林遗迹
+  if (moist > 0.10 && temp >= -0.08 && temp <= 0.08 && weird < -0.18 && weird >= -0.34) return 29;
 
   // 枫树林：秋季温带金红林带（微干温和区，漫山火红与金黄）
   if (weird < -0.16 && temp > -0.08 && temp < 0.08 && moist > -0.14 && moist < 0.02) return 21;
@@ -1222,7 +1239,9 @@ function netherBiomeAt(x, z) {
   const nWild = P.terrain.fbm2(wx * 0.0042 + 5700, wz * 0.0042 + 5700, 3);
   if (nTemp < -0.20 && nWild < -0.06) return 8;  // 哭泣黑曜裂谷（黑曜石与废弃紫光传送门残框）
   if (nTemp < -0.14 && nWild < 0.08) return 2;   // 灵魂沙峡谷
+  if (nTemp < -0.04 && nTemp >= -0.20 && nWild >= 0.18) return 10; // 鎏金熔炉谷（镶金黑石、岩浆块与富金火山谷）
   if (nTemp < -0.10 && nWild >= 0.08) return 3;  // 玄武岩三角洲
+  if (nTemp > 0.15 && nWild > 0.10) return 9;    // 绯红要塞遗迹（红下界砖拱桥、烽火台与要塞宝箱）
   if (nTemp > 0.08 && nWild >= 0.0) return 4;    // 绯红菌林
   if (nTemp > 0.08 && nWild < 0.0) return 5;     // 诡异菌林
   if (nWild >= 0.14) return 6;                   // 黑石堡垒荒原（磨制黑石断壁、金块塔楼与宝箱）
@@ -5040,11 +5059,13 @@ const BIOME_NAMES = {
   7: '🌳 白桦林', 8: '🌴 丛林', 9: '🏜️ 恶地', 10: '🍄 蘑菇岛', 11: '🌷 花海', 12: '🪨 砾石平原',
   13: '🏖️ 白沙丘', 14: '🧊 冰刺平原', 15: '🌲 针叶林', 16: '🌴 沙漠绿洲', 17: '🌲 黑森林',
   18: '🌸 樱花林', 19: '🎋 竹林', 20: '🌋 熔岩火山', 21: '🍁 枫树林', 22: '🏔️ 极地冰川',
-  23: '🌾 田园麦原', 24: '🔮 紫晶裂谷', 25: '🪨 喀斯特石林', 26: '🐚 沧海神殿湾'
+  23: '🌾 田园麦原', 24: '🔮 紫晶裂谷', 25: '🪨 喀斯特石林', 26: '🐚 沧海神殿湾',
+  27: '🏔️ 苍翠高山', 28: '🏺 丹霞红岩原', 29: '🌿 苍苔古遗址', 30: '🌌 星陨末地遗境'
 };
 const NETHER_BIOME_NAMES = {
   1: '🔥 下界荒地', 2: '🦴 灵魂沙峡谷', 3: '🌋 玄武岩三角洲', 4: '🍄 绯红菌林',
-  5: '💠 诡异菌林', 6: '🏰 黑石堡垒荒原', 7: '💎 石英晶窟', 8: '🟣 哭泣黑曜裂谷'
+  5: '💠 诡异菌林', 6: '🏰 黑石堡垒荒原', 7: '💎 石英晶窟', 8: '🟣 哭泣黑曜裂谷',
+  9: '🧱 绯红要塞遗迹', 10: '✨ 鎏金熔炉谷'
 };
 function populateBiomeChest(x, y, z, theme = 'prismarine') {
   const ck = `${x},${y},${z}`;
@@ -5241,6 +5262,15 @@ class World {
               else if (patch > 0.18) id = B.CRYING_OBSIDIAN;
               else if (patch < -0.18 && y >= floorH - 2 && y <= floorH) id = B.SOUL_SOIL;
               else id = B.BLACKSTONE;
+            } else if (bm === 9) {
+              // 绯红要塞遗迹：红下界砖、下界砖与地狱岩混构古要塞基台
+              id = patch > 0.22 ? B.RED_NETHER_BRICKS : (patch < -0.20 ? B.NETHER_BRICKS : netherOreFor(wx, y, wz));
+            } else if (bm === 10) {
+              // 鎏金熔炉谷：镶金黑石、玄武岩、岩浆块与富金下界矿脉
+              if (patch > 0.20) id = B.GILDED_BLACKSTONE;
+              else if (patch < -0.22) id = B.MAGMA;
+              else if (plantHash(wx * 11 + y * 5, wz * 17 + y * 7) < 0.065) id = B.NETHER_GOLD_ORE;
+              else id = B.BLACKSTONE;
             } else if (bm === 2 && y >= floorH - 2 && y <= floorH) {
               // 灵魂沙峡谷浅表基底
               id = B.SOUL_SAND;
@@ -5269,7 +5299,7 @@ class World {
         for (let y = Math.min(HEIGHT - 8, ceilH - 2); y >= Math.max(4, NETHER_SEA - 3); y--) {
           const idx = y * 256 + lz * 16 + lx;
           const id = c.blocks[idx];
-          if (id !== B.NETHERRACK && id !== B.SOUL_SAND && id !== B.SOUL_SOIL && id !== B.BLACKSTONE && id !== B.POLISHED_BLACKSTONE && id !== B.BASALT && id !== B.OBSIDIAN && id !== B.CRYING_OBSIDIAN && id !== B.QUARTZ) continue;
+          if (id !== B.NETHERRACK && id !== B.SOUL_SAND && id !== B.SOUL_SOIL && id !== B.BLACKSTONE && id !== B.POLISHED_BLACKSTONE && id !== B.GILDED_BLACKSTONE && id !== B.NETHER_BRICKS && id !== B.RED_NETHER_BRICKS && id !== B.BASALT && id !== B.OBSIDIAN && id !== B.CRYING_OBSIDIAN && id !== B.QUARTZ) continue;
           const aboveIdx = (y + 1) * 256 + lz * 16 + lx;
           const aboveB = c.blocks[aboveIdx];
           const aboveW = c.water[aboveIdx];
@@ -5347,6 +5377,21 @@ class World {
                 c.blocks[aboveIdx] = (plantHash(wx + 5, wz + 9) < 0.55) ? B.SOUL_TORCH : B.AMETHYST_BLOCK;
                 colFeaturePlaced = true;
               }
+            } else if (bm === 9) {
+              // 绯红要塞遗迹：铺陈雕纹/红下界砖残路与熔岩砖基座
+              if (patch > 0.14) c.blocks[idx] = B.RED_NETHER_BRICKS;
+              else if (patch < -0.18) c.blocks[idx] = B.CHISELED_NETHER_BRICKS;
+            } else if (bm === 10) {
+              // 鎏金熔炉谷：炙热岩浆脉 + 镶金黑石尖柱
+              if (patch > 0.24) c.blocks[idx] = B.MAGMA;
+              if (!colFeaturePlaced && plantHash(wx * 23 + 11, wz * 31 + 5) < 0.016) {
+                const gh = 2 + Math.floor(plantHash(wx * 7 + 3, wz * 11 + 2) * 4);
+                for (let k = 1; k <= gh && y + k < ceilH - 2; k++) {
+                  const gidx = (y + k) * 256 + lz * 16 + lx;
+                  if (c.blocks[gidx] === B.AIR) c.blocks[gidx] = (k === gh) ? B.GLOWSTONE : B.GILDED_BLACKSTONE;
+                }
+                colFeaturePlaced = true;
+              }
             } else if (bm === 1 && !colFeaturePlaced && id === B.NETHERRACK && plantHash(wx * 23 + y * 7, wz * 17 + 9) < 0.012) {
               c.blocks[aboveIdx] = plantHash(wx + 3, wz + 7) < 0.5 ? B.MUSHROOM_BROWN : B.MUSHROOM_RED;
               colFeaturePlaced = true;
@@ -5420,7 +5465,7 @@ class World {
         let fy = -1;
         for (let y = Math.min(HEIGHT - 12, ceilH - 8); y > NETHER_SEA; y--) {
           const id = c.blocks[y * 256 + lz * 16 + lx];
-          if (id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM || id === B.NETHERRACK || id === B.BLACKSTONE || id === B.POLISHED_BLACKSTONE || id === B.POLISHED_BLACKSTONE_BRICKS || id === B.OBSIDIAN || id === B.CRYING_OBSIDIAN || id === B.SOUL_SOIL) {
+          if (id === B.CRIMSON_NYLIUM || id === B.WARPED_NYLIUM || id === B.NETHERRACK || id === B.BLACKSTONE || id === B.POLISHED_BLACKSTONE || id === B.POLISHED_BLACKSTONE_BRICKS || id === B.GILDED_BLACKSTONE || id === B.NETHER_BRICKS || id === B.RED_NETHER_BRICKS || id === B.CHISELED_NETHER_BRICKS || id === B.OBSIDIAN || id === B.CRYING_OBSIDIAN || id === B.SOUL_SOIL) {
             if (c.blocks[(y + 1) * 256 + lz * 16 + lx] === B.AIR && c.water[(y + 1) * 256 + lz * 16 + lx] === 0) {
               fy = y;
               break;
@@ -5498,6 +5543,30 @@ class World {
           }
           setLocal(lx - 1, fy + 1, lz + 1, B.SOUL_TORCH);
           setLocal(lx + 1, fy + 1, lz - 1, B.SOUL_TORCH);
+          placedCenters.push([lx, lz]);
+          continue;
+        }
+
+        // 0C) 绯红要塞遗迹（9）：红下界砖拱门与烽火哨台 + 战利品宝箱
+        if (bm === 9 && lx >= 4 && lx <= 11 && lz >= 4 && lz <= 11 && floraRnd() < 0.015) {
+          const fh = Math.min(headroom - 2, 5 + ((floraRnd() * 3) | 0));
+          for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+            c.blocks[fy * 256 + (lz + dz) * 16 + (lx + dx)] = B.RED_NETHER_BRICKS;
+            if (Math.abs(dx) === 1 && Math.abs(dz) === 1) {
+              for (let k = 1; k <= fh; k++) {
+                setLocal(lx + dx, fy + k, lz + dz, (k === fh) ? B.CHISELED_NETHER_BRICKS : B.NETHER_BRICKS);
+              }
+            }
+          }
+          // 顶部烽火台横梁与发光岩浆火盆
+          for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+            if (dx === 0 && dz === 0) setLocal(lx, fy + fh, lz, B.GLOWSTONE);
+            else if (Math.abs(dx) + Math.abs(dz) === 1) setLocal(lx + dx, fy + fh, lz + dz, B.RED_NETHER_BRICKS);
+          }
+          if (floraRnd() < 0.50) {
+            setLocal(lx, fy + 1, lz, B.CHEST);
+            populateBiomeChest(baseX + lx, fy + 1, baseZ + lz, 'bastion');
+          }
           placedCenters.push([lx, lz]);
           continue;
         }
@@ -5640,6 +5709,10 @@ class World {
         const amethystCanyon = bm === 24 && !beach;            // 紫晶裂谷
         const karstForest = bm === 25 && !beach;               // 喀斯特石林
         const prismarineShore = bm === 26;                     // 沧海神殿湾（覆盖浅海与海岸）
+        const alpinePeaks = bm === 27 && !beach;               // 苍翠高山
+        const danxiaMesa = bm === 28 && !beach;                // 丹霞红岩原
+        const mossyRuins = bm === 29 && !beach;                // 苍苔古遗址
+        const endBarrens = bm === 30 && !beach;                // 星陨末地遗境
         const patchNoise = P.terrain.fbm2(wx * 0.08, wz * 0.08, 1);
         for (let y = 0; y <= surf; y++) {
           let id;
@@ -5654,7 +5727,15 @@ class World {
             }
           } else if (y < surf) {
             // 次表层过渡层（1~3格深度，泥土/砂石，绝无草方块）
-            if (prismarineShore) {
+            if (endBarrens) {
+              id = B.END_STONE;
+            } else if (alpinePeaks) {
+              id = patchNoise > 0.22 ? B.POLISHED_ANDESITE : B.STONE;
+            } else if (danxiaMesa) {
+              id = (y % 2 === 0) ? B.CUT_SANDSTONE : B.ORANGE_TERRACOTTA;
+            } else if (mossyRuins) {
+              id = patchNoise > 0.24 ? B.CLAY : B.DIRT;
+            } else if (prismarineShore) {
               id = (surf <= SEA + 1) ? (patchNoise > 0.05 ? B.PRISMARINE : B.CLAY) : B.WHITE_SAND;
             } else if (amethystCanyon) {
               id = patchNoise > 0.26 ? B.AMETHYST_BLOCK : B.DEEPSLATE;
@@ -5673,7 +5754,18 @@ class World {
             else id = B.DIRT;
           } else {
             // y === surf 露天地表最高层！草方块仅在此层生成
-            if (prismarineShore) {
+            if (endBarrens) {
+              id = patchNoise > 0.26 ? B.END_STONE_BRICKS : B.END_STONE;
+            } else if (alpinePeaks) {
+              if (surf >= 53) id = B.SNOW;
+              else if (patchNoise > 0.34) id = B.POLISHED_DIORITE;
+              else if (patchNoise > 0.05) id = B.STONE;
+              else id = B.GRASS;
+            } else if (danxiaMesa) {
+              id = patchNoise > 0.26 ? B.POLISHED_GRANITE : (patchNoise < -0.16 ? B.CUT_SANDSTONE : B.RED_SAND);
+            } else if (mossyRuins) {
+              id = patchNoise > 0.24 ? B.MOSSY_COBBLE : (patchNoise < -0.18 ? B.PODZOL : B.GRASS);
+            } else if (prismarineShore) {
               if (surf < SEA) id = patchNoise > 0.12 ? B.PRISMARINE : (patchNoise < -0.22 ? B.CLAY : B.WHITE_SAND);
               else if (surf <= SEA + 3) id = patchNoise > 0.20 ? B.PRISMARINE : B.WHITE_SAND;
               else id = patchNoise > 0.32 ? B.PRISMARINE : (patchNoise > -0.05 ? B.WHITE_SAND : B.GRASS);
@@ -5789,12 +5881,38 @@ class World {
           else if (pr < 0.06) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.GRASS_TALL;
           else if (pr < 0.065) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.PUMPKIN;
         }
-        // 极地冰川：海冰封冻（水面冻结成厚冰块）
-        if (frozenGlacier && surf <= SEA) {
-          for (let y = surf + 1; y <= SEA; y++) {
-            if (y === SEA && c.water[y * 256 + lz * 16 + lx] === 8) {
-              c.blocks[y * 256 + lz * 16 + lx] = B.ICE;
-              c.water[y * 256 + lz * 16 + lx] = 0;
+        // 苍翠高山（27）：山腰岩面偶现绿宝石矿露头
+        if (alpinePeaks && surf >= SEA + 8 && surf <= 56 && c.blocks[surf * 256 + lz * 16 + lx] === B.STONE) {
+          if (plantHash(wx * 29 + 3, wz * 37 + 11) < 0.018) c.blocks[surf * 256 + lz * 16 + lx] = B.EMERALD_ORE;
+        }
+        // 丹霞红岩原（28）：风蚀切制砂岩/花岗岩石柱与金色小神龛
+        if (danxiaMesa && !nearVillage && surf > SEA && surf + 2 < HEIGHT) {
+          const pr = plantHash(wx * 31 + 7, wz * 43 + 5);
+          if (pr < 0.0085) {
+            const h = 3 + ((plantHash(wx + 3, wz + 11) * 5) | 0);
+            for (let k = 1; k <= h && surf + k < HEIGHT - 2; k++) {
+              c.blocks[(surf + k) * 256 + lz * 16 + lx] = (k === h && h >= 6) ? B.GOLD_BLOCK : ((k % 2 === 0) ? B.POLISHED_GRANITE : B.CUT_SANDSTONE);
+            }
+          }
+        }
+        // 苍苔古遗址（29）：风化氧化铜块 + 雕纹石砖远古石阵立柱
+        if (mossyRuins && !nearVillage && surf > SEA && surf + 2 < HEIGHT) {
+          const pr = plantHash(wx * 17 + 13, wz * 23 + 9);
+          if (pr < 0.0075 && lx >= 1 && lx <= 14 && lz >= 1 && lz <= 14) {
+            const h = 2 + ((plantHash(wx + 7, wz + 5) * 4) | 0);
+            for (let k = 1; k <= h && surf + k < HEIGHT - 2; k++) {
+              c.blocks[(surf + k) * 256 + lz * 16 + lx] = (k === h) ? B.OXIDIZED_COPPER : ((k === 1) ? B.MOSSY : B.CHISELED_STONE_BRICKS);
+            }
+          }
+        }
+        // 星陨末地遗境（30）：紫珀块与黑曜石异界方尖塔 + 悬浮光源
+        if (endBarrens && !nearVillage && surf > SEA && surf + 3 < HEIGHT) {
+          const pr = plantHash(wx * 41 + 3, wz * 47 + 19);
+          if (pr < 0.007 && lx >= 1 && lx <= 14 && lz >= 1 && lz <= 14) {
+            const h = 4 + ((plantHash(wx + 17, wz + 3) * 6) | 0);
+            for (let k = 1; k <= h && surf + k < HEIGHT - 2; k++) {
+              const obId = (k === h) ? B.GLOWSTONE : ((k % 2 === 0) ? B.PURPUR_BLOCK : B.OBSIDIAN);
+              c.blocks[(surf + k) * 256 + lz * 16 + lx] = obId;
             }
           }
         }
@@ -5952,6 +6070,11 @@ class World {
         }
         if (surf < SEA) {
           for (let y = surf + 1; y <= SEA; y++) c.water[y * 256 + lz * 16 + lx] = 8;
+          // 极地冰川 / 冰刺平原：水面表层真正封冻为厚海冰（须在灌水后执行才生效）
+          if (bm === 22 || bm === 14) {
+            c.blocks[SEA * 256 + lz * 16 + lx] = B.ICE;
+            c.water[SEA * 256 + lz * 16 + lx] = 0;
+          }
           // 仅在湖泊、河流、池塘与沼泽生成睡莲（浅水且紧邻陆地），绝不在开阔深海生成
           if (surf >= SEA - 3) {
             let nearLand = swamp;
@@ -6463,7 +6586,9 @@ function plantTrees(c) {
       }
       if (ground === B.MYCELIUM || ground === B.MUD) continue;
 
-      if (bm === 3 || bm === 9 || bm === 10 || bm === 12 || bm === 13 || bm === 14 || bm === 20 || bm === 22 || bm === 24 || bm === 25 || bm === 26) continue;   // 沙漠/恶地/蘑菇岛/砾石平原/白沙丘/冰刺平原/火山/极地冰川/紫晶裂谷/喀斯特石林/沧海神殿湾不种普通树
+      if (bm === 3 || bm === 9 || bm === 10 || bm === 12 || bm === 13 || bm === 14 || bm === 20 || bm === 22 || bm === 24 || bm === 25 || bm === 26 || bm === 28 || bm === 30) continue;   // 沙漠/恶地/蘑菇岛/砾石平原/白沙丘/冰刺平原/火山/极地冰川/紫晶裂谷/喀斯特石林/沧海神殿湾/丹霞红岩原/星陨末地遗境不种普通树
+      // 苍翠高山：高海拔雪顶不长树，山麓疏落长云杉
+      if (bm === 27 && surf >= 52) continue;
       // 雪地：多层厚雪块的地方不长树；再叠一层 24x24 分区的林线遮罩，让雪原出现大片纯粹的空旷雪野
       if (bm === 4) {
         if (ground === B.SNOW && world.getBlock(wx, surf - 1, wz) === B.SNOW) continue;
@@ -6472,6 +6597,8 @@ function plantTrees(c) {
       }
       let log = B.LOG, leaf = B.LEAVES, prob = 0.0075, spruce = false, cherry = false, maple = false;
       if (bm === 4) { log = B.SPRUCE_LOG; leaf = B.SPRUCE_LEAVES; prob = 0.0012; spruce = true; }   // 雪地：极稀疏孤立的针叶树（有效密度约 0.06 棵/区块）
+      else if (bm === 27) { log = B.SPRUCE_LOG; leaf = B.SPRUCE_LEAVES; prob = 0.007; spruce = true; } // 苍翠高山：山腰孤松云杉
+      else if (bm === 29) { prob = 0.016; if (rnd() < 0.35) { log = B.JUNGLE_LOG; leaf = B.JUNGLE_LEAVES; } } // 苍苔古遗址：繁茂古林
       else if (bm === 15) { log = B.SPRUCE_LOG; leaf = B.SPRUCE_LEAVES; prob = 0.024; spruce = true; } // 针叶林：高大云杉群
       else if (bm === 18) { log = B.CHERRY_LOG; leaf = B.CHERRY_LEAVES; prob = 0.0105; cherry = true; } // 樱花林：专属樱花树干
       else if (bm === 21) { log = B.MAPLE_LOG; leaf = B.MAPLE_LEAVES; prob = 0.022; maple = true; }          // 枫树林：秋季火红/金黄枫树与专属枫木树干
@@ -10614,11 +10741,23 @@ function buildVillage(c) {
   const cx8 = c.cx * 16 + 8, cz8 = c.cz * 16 + 8;
   const gy = Math.floor(surfaceHeight(cx8, cz8));
   if (gy <= SEA + 1) return;
+  const vBiome = biomeOf(cx8, cz8);
+  // 极端危险或异界地形不生成木质村庄（保留 (3,3) 出生点示范村）
+  if (!(c.cx === 3 && c.cz === 3) && (vBiome === 10 || vBiome === 20 || vBiome === 24 || vBiome === 25 || vBiome === 27 || vBiome === 30)) return;
 
   const vk = `${c.cx},${c.cz}`;
   if (villageCenters.has(vk)) return;
   villageCenters.add(vk);
   villagePositions.push({ x: cx8, y: gy, z: cz8 });
+
+  // 按所在生物群系定制村道与桥梁材质
+  const isDesertVil = (vBiome === 3 || vBiome === 9 || vBiome === 13 || vBiome === 16 || vBiome === 28);
+  const isColdVil = (vBiome === 4 || vBiome === 14 || vBiome === 15 || vBiome === 22);
+  const bridgeDeckMat = isDesertVil ? B.ACACIA_PLANKS : (isColdVil ? B.SPRUCE_PLANKS : B.PLANKS);
+  const bridgePillarMat = isColdVil ? B.SPRUCE_LOG : B.LOG;
+  const loadedMinX = c.cx * 16 - 16, loadedMaxX = c.cx * 16 + 31;
+  const loadedMinZ = c.cz * 16 - 16, loadedMaxZ = c.cz * 16 + 31;
+  const inLoaded = (x, z) => x >= loadedMinX && x <= loadedMaxX && z >= loadedMinZ && z <= loadedMaxZ;
 
   // —— 建筑基底填充函数：彻底根除建筑浮空问题，向下深填实心圆石支撑柱 ——
   const fillFoundation = (minX, maxX, minZ, maxZ, floorY, floorMat = B.COBBLE) => {
@@ -10637,29 +10776,30 @@ function buildVillage(c) {
     }
   };
 
-  // —— 门前通道清理函数：彻底根除泥土与障碍堵门问题，铺设平缓台阶与实心地基 ——
+  // —— 门前通道清理函数：彻底根除泥土与障碍堵门问题，与村道齐平对接（地面在 floorY - 1） ——
   const clearDoorway = (doorX, doorZ, floorY, dirX, dirZ, length = 3) => {
     for (let s = 1; s <= length; s++) {
       const px = doorX + dirX * s;
       const pz = doorZ + dirZ * s;
-      const stepY = floorY - (s > 1 ? 1 : 0);
+      const deckY = floorY - 1;
       for (let perp = -1; perp <= 1; perp++) {
         const ax = px + (dirZ !== 0 ? perp : 0);
         const az = pz + (dirX !== 0 ? perp : 0);
-        for (let y = stepY; y <= floorY + 4; y++) {
+        if (!inLoaded(ax, az)) continue;
+        for (let y = deckY + 1; y <= floorY + 4; y++) {
           world.setBlock(ax, y, az, B.AIR);
         }
-        world.setBlock(ax, stepY - 1, az, B.COBBLE);
-        for (let y = stepY - 2; y >= Math.max(1, stepY - 12); y--) {
+        world.setBlock(ax, deckY, az, isDesertVil ? B.CUT_SANDSTONE : B.COBBLE);
+        for (let y = deckY - 1; y >= Math.max(1, deckY - 12); y--) {
           const cur = world.getBlock(ax, y, az);
           if (isSolid(cur) && cur !== B.LOG && cur !== B.PLANKS && cur !== B.DOOR && cur !== B.GLASS) break;
-          world.setBlock(ax, y, az, B.COBBLE);
+          world.setBlock(ax, y, az, isDesertVil ? B.SANDSTONE : B.COBBLE);
         }
       }
     }
   };
 
-  // —— 村庄建筑与保护区判定（道路绝不破坏任何建筑，智能绕行）——
+  // —— 村庄建筑与保护区判定（完整覆盖全部 9 处建筑含粮仓，道路绝不穿墙破坏）——
   const isBuildingZone = (x, z) => {
     // 1. 水井中心与金钟区域
     if (x >= cx8 - 3 && x <= cx8 + 3 && z >= cz8 - 3 && z <= cz8 + 3) return true;
@@ -10667,79 +10807,166 @@ function buildVillage(c) {
     if (x >= cx8 - 4 && x <= cx8 + 4 && z >= cz8 + 8 && z <= cz8 + 18) return true;
     // 3. 正南农田与水渠 (farmX, farmZ-15, 11x9)
     if (x >= cx8 - 6 && x <= cx8 + 6 && z >= cz8 - 20 && z <= cz8 - 10) return true;
-    // 4. 西北图书馆 (libX-14, libZ+9, 7x7)
+    // 4. 农田西侧粮仓塔楼 (granX-8, granZ-15, 4x4)
+    if (x >= cx8 - 10 && x <= cx8 - 5 && z >= cz8 - 17 && z <= cz8 - 12) return true;
+    // 5. 西北图书馆 (libX-14, libZ+9, 7x7)
     if (x >= cx8 - 18 && x <= cx8 - 10 && z >= cz8 + 5 && z <= cz8 + 14) return true;
-    // 5. 西南小屋 (cotX-14, cotZ-6, 7x7)
+    // 6. 西南小屋 (cotX-14, cotZ-6, 7x7)
     if (x >= cx8 - 18 && x <= cx8 - 10 && z >= cz8 - 10 && z <= cz8 - 2) return true;
-    // 6. 东南铁匠铺 (smithX+14, smithZ-5, 7x7)
+    // 7. 东南铁匠铺 (smithX+14, smithZ-5, 7x7)
     if (x >= cx8 + 10 && x <= cx8 + 18 && z >= cz8 - 9 && z <= cz8 - 1) return true;
-    // 7. 东北洋楼 (thX+14, thZ+10, 7x7)
+    // 8. 东北洋楼 (thX+14, thZ+10, 7x7)
     if (x >= cx8 + 10 && x <= cx8 + 18 && z >= cz8 + 6 && z <= cz8 + 14) return true;
-    // 8. 东南牧场栅栏圈 (ranX+14, ranZ-16, 8x8)
+    // 9. 东南牧场栅栏圈 (ranX+14, ranZ-16, 8x8)
     if (x >= cx8 + 10 && x <= cx8 + 18 && z >= cz8 - 20 && z <= cz8 - 12) return true;
     return false;
   };
 
-  // —— 智能平滑道路铺设系统 ——
-  // 1. 沿行进方向逐格平滑延伸，高度变化严格限制在最多 ±1 格，杜绝断崖
-  // 2. 双格宽道路截面强制绝对同高，绝不出现左右倾斜或错层
-  // 3. 严格避让建筑结构，遇到建筑时绕行；绝不破坏门窗、墙壁、家具与农田
-  const paveSmoothStrip = (steps, startY = gy) => {
-    let curY = startY;
+  const isVillageStructBlock = (b) => (
+    b === B.PLANKS || b === B.SPRUCE_PLANKS || b === B.ACACIA_PLANKS ||
+    b === B.STONE_BRICK || b === B.DOOR || b === B.GLASS || b === B.CHEST ||
+    b === B.FURNACE || b === B.BLAST_FURNACE || b === B.ANVIL || b === B.GRINDSTONE ||
+    b === B.BED || b === B.QUARTZ || b === B.BOOKSHELF || b === B.COMPOSTER ||
+    b === B.BELL || b === B.LANTERN || b === B.CAMPFIRE || b === B.HAY_BALE
+  );
+
+  // 记录已铺设路面的真实标高，供支线道路与路灯无缝齐平对接
+  const roadHeights = new Map();
+  const roadKey = (x, z) => `${x},${z}`;
+  const getRoadHeight = (x, z, fallback = gy - 1) => {
+    const h = roadHeights.get(roadKey(x, z));
+    if (h !== undefined) return h;
+    for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nh = roadHeights.get(roadKey(x + ox, z + oz));
+      if (nh !== undefined) return nh;
+    }
+    return fallback;
+  };
+
+  // —— 升级版平滑村道 + 自动跨水木桥铺设系统 ——
+  // 1. 起点与广场/屋内地坪 (gy - 1) 严格齐平，彻底消除出门踩 1 格高坎的割裂感
+  // 2. 预采样整条路线地表高程 → 三点滑动平均去锯齿 → 终点锚定平滑衔接 → 坡度严格限制 ≤ ±1 格/步
+  // 3. 自动识别水面/浅溪并抬升架设木板栈桥 + 原木桥墩（不淹水、不浮空）
+  // 4. 彻底清理路面上方 4 格所有自然沙土/岩石/积雪/野树障碍，确保视野通畅
+  const paveSmoothStrip = (steps, startY = gy - 1, endY = null) => {
+    const validSteps = [];
     for (const step of steps) {
-      /* 原来只要这一步里有一格落在建筑保护区，就丢掉整个 2 格宽的台阶 ——
-         道路贴着房子走时会留下一块块空洞。现在改成过滤掉保护区里的格子，
-         只要还剩至少一格就继续铺，路宽变窄但不断头。 */
-      const cells = step.filter(([x, z]) => !isBuildingZone(x, z));
-      if (cells.length === 0) continue;
+      const cells = step.filter(([x, z]) => inLoaded(x, z) && !isBuildingZone(x, z));
+      if (cells.length > 0) validSteps.push(cells);
+    }
+    if (validSteps.length === 0) return startY;
 
-      let avgGround = 0;
+    // Pass 1：采样每一步的自然地表高程与涉水状态
+    const rawY = new Array(validSteps.length);
+    const waterStep = new Array(validSteps.length).fill(false);
+    let probeY = startY;
+    for (let si = 0; si < validSteps.length; si++) {
+      const cells = validSteps[si];
+      let sumY = 0, wetCount = 0;
       for (const [x, z] of cells) {
-        let sy = curY;
-        /* 只从 curY + 8 往下扫：道路高度被限制在每步 ±1 格，往下找 10 格足够；
-           原来从 HEIGHT-2 全高度扫，每条路要多做几十倍的 getBlock。 */
-        const from = Math.min(HEIGHT - 2, curY + 8);
-        const to = Math.max(1, curY - 10);
+        let sy = probeY;
+        const from = Math.min(HEIGHT - 3, probeY + 10);
+        const to = Math.max(2, probeY - 12);
+        let hasWater = false;
         for (let y = from; y >= to; y--) {
+          if (world.getWater(x, y, z) > 0) { hasWater = true; }
           const b = world.getBlock(x, y, z);
-          if (isSolid(b) && b !== B.LOG && b !== B.PLANKS && b !== B.DOOR && b !== B.GLASS && b !== B.STONE_BRICK && !isLeaf(b)) {
-            sy = y; break;
+          if (isSolid(b) && !isVillageStructBlock(b) && b !== B.LOG && !isLeaf(b)) {
+            sy = y;
+            break;
           }
         }
-        avgGround += sy;
+        if (hasWater || sy < SEA) {
+          wetCount++;
+          sy = Math.max(sy, SEA);
+        }
+        sumY += sy;
       }
-      avgGround = Math.round(avgGround / cells.length);
+      const avg = Math.round(sumY / cells.length);
+      rawY[si] = avg;
+      waterStep[si] = (wetCount > 0);
+      probeY = avg;
+    }
 
-      if (avgGround > curY) curY += 1;
-      else if (avgGround < curY) curY -= 1;
+    // Pass 2：三点均值滤波消除单格凹凸锯齿，再结合起终点锚定与 ±1 坡度限制生成最终标高曲线
+    const smoothY = rawY.slice();
+    for (let si = 1; si < validSteps.length - 1; si++) {
+      smoothY[si] = Math.round((rawY[si - 1] + rawY[si] * 2 + rawY[si + 1]) / 4);
+    }
+    const profile = new Array(validSteps.length);
+    let curY = startY;
+    for (let si = 0; si < validSteps.length; si++) {
+      let target = smoothY[si];
+      if (si === 0) target = startY;
+      else if (endY !== null && si >= validSteps.length - 4) {
+        const remain = validSteps.length - 1 - si;
+        target = remain === 0 ? endY : Math.round((target * remain + endY * (4 - remain)) / 4);
+      }
+      if (waterStep[si]) target = Math.max(target, SEA);
+      if (target > curY) curY += 1;
+      else if (target < curY) curY -= 1;
+      if (waterStep[si] && curY < SEA) curY = SEA;
+      profile[si] = curY;
+    }
 
-      for (const [x, z] of cells) {
-        // 若当前格已有建筑方块（木板、原木、石砖、玻璃、门、箱子、熔炉等），严格跳过保留，绝不破坏！
-        const checkB = world.getBlock(x, curY, z);
-        if (checkB === B.PLANKS || checkB === B.LOG || checkB === B.STONE_BRICK || checkB === B.DOOR || checkB === B.GLASS || checkB === B.CHEST || checkB === B.FURNACE || checkB === B.BED || checkB === B.QUARTZ) continue;
+    // Pass 3：沿平滑曲线逐格铺路/架桥、清理净空并加固路基
+    for (let si = 0; si < validSteps.length; si++) {
+      const cells = validSteps[si];
+      const yDeck = profile[si];
+      const isBridge = waterStep[si];
+      for (let ci = 0; ci < cells.length; ci++) {
+        const [x, z] = cells[ci];
+        const checkB = world.getBlock(x, yDeck, z);
+        if (isVillageStructBlock(checkB)) continue;
 
-        /* 路面材质：采用暖金草径为主体、点缀圆石与沙砾，呈现原汁原味的乡间村道 */
-        const hsh = (Math.imul(x, 73856093) ^ Math.imul(z, 19349663)) >>> 0;
-        const pick = hsh % 100;
-        const mat = pick < 64 ? B.DIRT_PATH : (pick < 84 ? B.COBBLE : (pick < 95 ? B.GRAVEL : B.MOSSY));
-        world.setBlock(x, curY, z, mat);
+        let mat;
+        if (isBridge) {
+          mat = bridgeDeckMat;
+        } else {
+          const hsh = (Math.imul(x, 73856093) ^ Math.imul(z, 19349663)) >>> 0;
+          const pick = hsh % 100;
+          if (isDesertVil) {
+            mat = pick < 55 ? B.CUT_SANDSTONE : (pick < 82 ? B.SANDSTONE : B.SAND);
+          } else if (isColdVil) {
+            mat = pick < 55 ? B.DIRT_PATH : (pick < 82 ? B.COBBLE : B.GRAVEL);
+          } else {
+            mat = pick < 64 ? B.DIRT_PATH : (pick < 84 ? B.COBBLE : (pick < 94 ? B.GRAVEL : B.MOSSY_COBBLE));
+          }
+        }
+        world.setBlock(x, yDeck, z, mat);
+        if (world.getWater(x, yDeck, z) > 0) world.setWater(x, yDeck, z, 0);
+        roadHeights.set(roadKey(x, z), yDeck);
 
-        // 仅在上方是自然方块（空气/花草/树叶/泥土/沙子）时清理净空，绝不掏空建筑屋顶或室内
-        for (let dy = 1; dy <= 3; dy++) {
-          const ub = world.getBlock(x, curY + dy, z);
-          if (ub === B.AIR || isCrossPlant(ub) || isLeaf(ub) || isPetals(ub) || ub === B.GRASS || ub === B.DIRT) {
-            world.setBlock(x, curY + dy, z, B.AIR);
+        // 清理路面上方 4 格全部自然地形障碍（含沙丘/积雪/野树/岩石/花草），不碰已建房屋构件
+        for (let dy = 1; dy <= 4; dy++) {
+          if (yDeck + dy >= HEIGHT - 1) break;
+          const ub = world.getBlock(x, yDeck + dy, z);
+          if (!isVillageStructBlock(ub)) {
+            world.setBlock(x, yDeck + dy, z, B.AIR);
+            if (world.getWater(x, yDeck + dy, z) > 0) world.setWater(x, yDeck + dy, z, 0);
           }
         }
 
-        // 地基向下加固
-        for (let y = curY - 1; y >= Math.max(1, curY - 10); y--) {
-          const cur = world.getBlock(x, y, z);
-          if (isSolid(cur) && cur !== B.LOG && cur !== B.PLANKS && cur !== B.DOOR && cur !== B.GLASS && cur !== B.STONE_BRICK && !isLeaf(cur)) break;
-          world.setBlock(x, y, z, B.COBBLE);
+        // 桥梁下方每 3 步打原木桥墩直抵河床；陆路向下稳固填实路基
+        if (isBridge) {
+          if (si % 3 === 0) {
+            for (let y = yDeck - 1; y >= Math.max(2, yDeck - 12); y--) {
+              const cur = world.getBlock(x, y, z);
+              if (isSolid(cur) && cur !== bridgePillarMat && !isLeaf(cur)) break;
+              world.setBlock(x, y, z, bridgePillarMat);
+            }
+          }
+        } else {
+          const baseMat = isDesertVil ? B.SANDSTONE : B.COBBLE;
+          for (let y = yDeck - 1; y >= Math.max(2, yDeck - 10); y--) {
+            const cur = world.getBlock(x, y, z);
+            if (isSolid(cur) && !isVillageStructBlock(cur) && cur !== B.LOG && !isLeaf(cur)) break;
+            world.setBlock(x, y, z, baseMat);
+          }
         }
       }
     }
+    return profile[profile.length - 1];
   };
 
   // 1. 中央集市广场与水井金钟 (Town Plaza & Well)
@@ -11015,90 +11242,92 @@ function buildVillage(c) {
   world.setBlock(ranX - 2, gy + 1, ranZ + 2, B.HAY_BALE);
   clearDoorway(ranX - 3, ranZ, gy, -1, 0, 3);
 
-  // 9. 纵横延申的大道网络 (Extended Roads & Lighting - 全程平滑且避让全部房屋建筑，智能绕行)
-  // 北大道（由集市广场直达大教堂正门台阶）
+  // 9. 纵横延申的大道网络（与广场/屋内地坪 gy - 1 齐平对接，全路段严格落在已加载 3×3 区块内，跨水自动架桥）
+  const floorY = gy - 1;
+
+  // 北大道（由集市广场直达大教堂正门台阶，两端齐平于 floorY）
   const northRoad = [];
   for (let dz = 4; dz <= 8; dz++) northRoad.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
-  paveSmoothStrip(northRoad, gy);
+  paveSmoothStrip(northRoad, floorY, floorY);
 
-  // 大教堂环行绕道：东侧优雅绕过大教堂主体，在教堂后方会合继续北上，绝不破坏大教堂墙体
+  // 大教堂环行绕道：东侧优雅绕过大教堂主体，在教堂后方会合继续北上至村口
   const cathedralBypass = [];
   for (let dx = 1; dx <= 5; dx++) cathedralBypass.push([[cx8 + dx, cz8 + 6], [cx8 + dx, cz8 + 7]]);
   for (let dz = 8; dz <= 18; dz++) cathedralBypass.push([[cx8 + 5, cz8 + dz], [cx8 + 6, cz8 + dz]]);
   for (let dx = 5; dx >= 0; dx--) cathedralBypass.push([[cx8 + dx, cz8 + 19], [cx8 + dx, cz8 + 20]]);
-  for (let dz = 21; dz <= 27; dz++) cathedralBypass.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
-  paveSmoothStrip(cathedralBypass, gy);
+  for (let dz = 21; dz <= 22; dz++) cathedralBypass.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
+  paveSmoothStrip(cathedralBypass, getRoadHeight(cx8, cz8 + 6, floorY));
 
   // 南大道（由集市广场直达正南农田北入口）
   const southRoad = [];
   for (let dz = -4; dz >= -9; dz--) southRoad.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
-  paveSmoothStrip(southRoad, gy);
+  paveSmoothStrip(southRoad, floorY, floorY);
 
-  // 农田环行绕道：西侧平滑绕过整片农田与水渠，在农田南侧会合继续南下，绝不踩踏庄稼与破坏栅栏
+  // 农田环行绕道：改沿农田东侧开阔走廊（x = +7..+8）优雅绕行，彻底避开西侧粮仓与东侧牧场，南侧会合出村
   const farmBypass = [];
-  for (let dx = -1; dx >= -7; dx--) farmBypass.push([[cx8 + dx, cz8 - 8], [cx8 + dx, cz8 - 9]]);
-  for (let dz = -10; dz >= -20; dz--) farmBypass.push([[cx8 - 7, cz8 + dz], [cx8 - 8, cz8 + dz]]);
-  for (let dx = -7; dx <= 0; dx++) farmBypass.push([[cx8 + dx, cz8 - 21], [cx8 + dx, cz8 - 22]]);
-  for (let dz = -23; dz >= -27; dz--) farmBypass.push([[cx8, cz8 + dz], [cx8 - 1, cz8 + dz]]);
-  paveSmoothStrip(farmBypass, gy);
+  for (let dx = 1; dx <= 7; dx++) farmBypass.push([[cx8 + dx, cz8 - 8], [cx8 + dx, cz8 - 9]]);
+  for (let dz = -10; dz >= -20; dz--) farmBypass.push([[cx8 + 7, cz8 + dz], [cx8 + 8, cz8 + dz]]);
+  for (let dx = 7; dx >= 0; dx--) farmBypass.push([[cx8 + dx, cz8 - 21], [cx8 + dx, cz8 - 22]]);
+  paveSmoothStrip(farmBypass, getRoadHeight(cx8, cz8 - 8, floorY));
 
-  // 东西主干大道（由广场中心向东、向西平滑延展，穿过建筑间开阔带）
+  // 东西主干大道（严格控制在 [-22..+22] 已加载安全区内，绝不在区块边缘断头）
   const eastRoad = [];
-  for (let dx = 4; dx <= 25; dx++) eastRoad.push([[cx8 + dx, cz8], [cx8 + dx, cz8 + 1]]);
-  paveSmoothStrip(eastRoad, gy);
+  for (let dx = 4; dx <= 22; dx++) eastRoad.push([[cx8 + dx, cz8], [cx8 + dx, cz8 + 1]]);
+  paveSmoothStrip(eastRoad, floorY);
 
   const westRoad = [];
-  for (let dx = -4; dx >= -25; dx--) westRoad.push([[cx8 + dx, cz8], [cx8 + dx, cz8 + 1]]);
-  paveSmoothStrip(westRoad, gy);
+  for (let dx = -4; dx >= -22; dx--) westRoad.push([[cx8 + dx, cz8], [cx8 + dx, cz8 + 1]]);
+  paveSmoothStrip(westRoad, floorY);
 
-  // 支线延伸小道（直通各建筑大门门前台阶，在门外止步对接，绝不破门入室）
+  // 支线延伸小道（自动读取干道交汇标高，终点平滑锚定至各建筑门前台阶 floorY）
   const libBranch = [];
   for (let dz = 2; dz <= 9; dz++) libBranch.push([[cx8 - 10, cz8 + dz], [cx8 - 9, cz8 + dz]]);
-  paveSmoothStrip(libBranch, gy);
+  paveSmoothStrip(libBranch, getRoadHeight(cx8 - 9, cz8 + 1, floorY), floorY);
 
   const cotBranch = [];
-  for (let dz = -2; dz >= -6; dz--) cotBranch.push([[cx8 - 10, cz8 + dz], [cx8 - 9, cz8 + dz]]);
-  paveSmoothStrip(cotBranch, gy);
+  for (let dz = -1; dz >= -6; dz--) cotBranch.push([[cx8 - 10, cz8 + dz], [cx8 - 9, cz8 + dz]]);
+  paveSmoothStrip(cotBranch, getRoadHeight(cx8 - 9, cz8, floorY), floorY);
 
   const smithBranch = [];
-  for (let dz = -2; dz >= -5; dz--) smithBranch.push([[cx8 + 9, cz8 + dz], [cx8 + 10, cz8 + dz]]);
-  paveSmoothStrip(smithBranch, gy);
+  for (let dz = -1; dz >= -5; dz--) smithBranch.push([[cx8 + 9, cz8 + dz], [cx8 + 10, cz8 + dz]]);
+  paveSmoothStrip(smithBranch, getRoadHeight(cx8 + 9, cz8, floorY), floorY);
 
   const thBranch = [];
   for (let dz = 2; dz <= 10; dz++) thBranch.push([[cx8 + 9, cz8 + dz], [cx8 + 10, cz8 + dz]]);
-  paveSmoothStrip(thBranch, gy);
+  paveSmoothStrip(thBranch, getRoadHeight(cx8 + 9, cz8 + 1, floorY), floorY);
 
   const ranBranch = [];
   for (let dz = -6; dz >= -16; dz--) ranBranch.push([[cx8 + 9, cz8 + dz], [cx8 + 10, cz8 + dz]]);
-  paveSmoothStrip(ranBranch, gy);
+  paveSmoothStrip(ranBranch, getRoadHeight(cx8 + 9, cz8 - 5, floorY), floorY);
 
-  // 街道火把立柱路灯：广场四角 + 沿四条主干道每 6 格一盏（立在路侧，不挡道）
+  // 街道铁艺提灯立柱路灯：紧贴实际路面标高立于路侧，绝不挡道、不浮水、不二次叠高
   const placeLamp = (px, pz) => {
-    if (isBuildingZone(px, pz)) return;
-    /* 从上方往下找地面，并跳过已有的原木灯柱：
-       用 findGround 会把上一次立好的灯柱顶当成地面，导致路灯一次次往上长。 */
+    if (!inLoaded(px, pz) || isBuildingZone(px, pz)) return;
+    if (roadHeights.has(roadKey(px, pz))) return; // 不占路面
+    const nearRoadY = getRoadHeight(px, pz, -999);
     let sy = -1;
-    const top = Math.min(HEIGHT - 2, gy + 22);
-    for (let y = top; y >= 1; y--) {
+    const top = Math.min(HEIGHT - 4, (nearRoadY > 0 ? nearRoadY + 6 : gy + 18));
+    for (let y = top; y >= Math.max(2, SEA); y--) {
+      if (world.getWater(px, y, pz) > 0) return;  // 水面不立灯
       const b = world.getBlock(px, y, pz);
-      if (isSolid(b) && b !== B.LOG && b !== B.WOOD_PICKAXE && !isLeaf(b)) { sy = y + 1; break; }
+      if (isSolid(b) && b !== B.LOG && b !== B.SPRUCE_LOG && b !== B.LANTERN && b !== B.TORCH && !isLeaf(b)) { sy = y + 1; break; }
     }
     if (sy < 0) return;
     const ground = world.getBlock(px, sy - 1, pz);
-    if (!isSolid(ground) || ground === B.WATER) return;   // 悬空或水面上不立灯
-    world.setBlock(px, sy, pz, B.LOG);
-    world.setBlock(px, sy + 1, pz, B.LOG);
-    world.setBlock(px, sy + 2, pz, B.TORCH);
+    if (!isSolid(ground) || ground === B.WATER || isVillageStructBlock(ground)) return;
+    world.setBlock(px, sy, pz, bridgePillarMat);
+    world.setBlock(px, sy + 1, pz, bridgePillarMat);
+    world.setBlock(px, sy + 2, pz, B.LANTERN);
     world.setBlock(px, sy + 3, pz, B.AIR);
   };
-  for (const [lx, lz] of [[-6, -6], [6, -6], [-6, 6], [6, 6]]) placeLamp(cx8 + lx, cz8 + lz);
-  for (let d = 6; d <= 24; d += 6) {
+  for (const [lx, lz] of [[-5, -5], [5, -5], [-5, 5], [5, 5]]) placeLamp(cx8 + lx, cz8 + lz);
+  for (let d = 6; d <= 20; d += 7) {
     // 东西主干道：两侧交替立灯
-    placeLamp(cx8 + d, cz8 + 3);
+    placeLamp(cx8 + d, cz8 + 2);
     placeLamp(cx8 - d, cz8 - 1);
-    // 南北主干道：两侧交替立灯
+    // 南北主干道：路侧点缀
     placeLamp(cx8 + 2, cz8 + d);
-    placeLamp(cx8 - 3, cz8 - d);
+    placeLamp(cx8 - 2, cz8 - d);
   }
 
   // 建立村庄自然干草垛堆群（原版风貌：在农田、粮仓与外围集聚成堆）
