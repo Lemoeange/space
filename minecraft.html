@@ -11751,27 +11751,79 @@ function buildVillage(c) {
   villageCenters.add(vk);
   villagePositions.push({ x: cx8, y: gy, z: cz8 });
 
-  // 按所在生物群系定制村道与桥梁材质
+  // 按所在生物群系定制村庄建筑与道路材质套系（新增完整沙漠村庄变种：砂岩/切制砂岩/彩陶瓦/金合欢木；兼顾寒带云杉村与经典平原村）
   const isDesertVil = (vBiome === 3 || vBiome === 9 || vBiome === 13 || vBiome === 16 || vBiome === 28);
   const isColdVil = (vBiome === 4 || vBiome === 14 || vBiome === 15 || vBiome === 22);
-  const bridgeDeckMat = isDesertVil ? B.ACACIA_PLANKS : (isColdVil ? B.SPRUCE_PLANKS : B.PLANKS);
-  const bridgePillarMat = isColdVil ? B.SPRUCE_LOG : B.LOG;
+  const VP = isDesertVil ? {
+    base: B.SANDSTONE,
+    floor: B.CUT_SANDSTONE,
+    wall: B.CUT_SANDSTONE,
+    wallAlt: B.SANDSTONE,
+    pillar: B.SANDSTONE,
+    trim: B.ORANGE_TERRACOTTA,
+    trim2: B.YELLOW_TERRACOTTA,
+    roof: B.CUT_SANDSTONE,
+    roofRim: B.ORANGE_TERRACOTTA,
+    planks: B.ACACIA_PLANKS,
+    log: B.ACACIA_LOG,
+    stoneWall: B.CUT_SANDSTONE,
+    churchWall: B.CUT_SANDSTONE,
+    churchTrim: B.ORANGE_TERRACOTTA,
+    lampPost: B.CUT_SANDSTONE,
+    ranchFloor: B.SAND,
+  } : isColdVil ? {
+    base: B.COBBLE,
+    floor: B.COBBLE,
+    wall: B.SPRUCE_PLANKS,
+    wallAlt: B.COBBLE,
+    pillar: B.SPRUCE_LOG,
+    trim: B.SPRUCE_LOG,
+    trim2: B.STONE_BRICK,
+    roof: B.SPRUCE_PLANKS,
+    roofRim: B.SPRUCE_LOG,
+    planks: B.SPRUCE_PLANKS,
+    log: B.SPRUCE_LOG,
+    stoneWall: B.COBBLE,
+    churchWall: B.STONE_BRICK,
+    churchTrim: B.COBBLE,
+    lampPost: B.SPRUCE_LOG,
+    ranchFloor: B.GRASS,
+  } : {
+    base: B.COBBLE,
+    floor: B.COBBLE,
+    wall: B.PLANKS,
+    wallAlt: B.COBBLE,
+    pillar: B.LOG,
+    trim: B.LOG,
+    trim2: B.QUARTZ,
+    roof: B.PLANKS,
+    roofRim: B.STONE_BRICK,
+    planks: B.PLANKS,
+    log: B.LOG,
+    stoneWall: B.COBBLE,
+    churchWall: B.STONE_BRICK,
+    churchTrim: B.QUARTZ,
+    lampPost: B.LOG,
+    ranchFloor: B.GRASS,
+  };
+  const bridgeDeckMat = VP.planks;
+  const bridgePillarMat = VP.lampPost;
   const loadedMinX = c.cx * 16 - 16, loadedMaxX = c.cx * 16 + 31;
   const loadedMinZ = c.cz * 16 - 16, loadedMaxZ = c.cz * 16 + 31;
   const inLoaded = (x, z) => x >= loadedMinX && x <= loadedMaxX && z >= loadedMinZ && z <= loadedMaxZ;
 
-  // —— 建筑基底填充函数：彻底根除建筑浮空问题，向下深填实心圆石支撑柱 ——
-  const fillFoundation = (minX, maxX, minZ, maxZ, floorY, floorMat = B.COBBLE) => {
+  // —— 建筑基底填充函数：彻底根除建筑浮空问题，向下深填实心基底支撑柱 ——
+  const fillFoundation = (minX, maxX, minZ, maxZ, floorY, floorMat = VP.floor, clearH = 7) => {
     for (let z = minZ; z <= maxZ; z++) {
       for (let x = minX; x <= maxX; x++) {
         world.setBlock(x, floorY - 1, z, floorMat);
-        for (let y = floorY; y <= floorY + 6; y++) {
+        for (let y = floorY; y <= floorY + clearH; y++) {
           world.setBlock(x, y, z, B.AIR);
         }
         for (let y = floorY - 2; y >= Math.max(1, floorY - 16); y--) {
           const cur = world.getBlock(x, y, z);
-          if (isSolid(cur) && cur !== B.LOG && cur !== B.PLANKS && cur !== B.DOOR && cur !== B.GLASS) break;
-          world.setBlock(x, y, z, B.COBBLE);
+          if (isSolid(cur) && cur !== B.LOG && cur !== B.ACACIA_LOG && cur !== B.SPRUCE_LOG && !isPlanks(cur) && cur !== B.DOOR && cur !== B.GLASS) break;
+          world.setBlock(x, y, z, VP.base);
         }
       }
     }
@@ -11793,8 +11845,8 @@ function buildVillage(c) {
         world.setBlock(ax, deckY, az, isDesertVil ? B.CUT_SANDSTONE : B.COBBLE);
         for (let y = deckY - 1; y >= Math.max(1, deckY - 12); y--) {
           const cur = world.getBlock(ax, y, az);
-          if (isSolid(cur) && cur !== B.LOG && cur !== B.PLANKS && cur !== B.DOOR && cur !== B.GLASS) break;
-          world.setBlock(ax, y, az, isDesertVil ? B.SANDSTONE : B.COBBLE);
+          if (isSolid(cur) && cur !== B.LOG && cur !== B.ACACIA_LOG && cur !== B.SPRUCE_LOG && !isPlanks(cur) && cur !== B.DOOR && cur !== B.GLASS) break;
+          world.setBlock(ax, y, az, VP.base);
         }
       }
     }
@@ -11825,10 +11877,10 @@ function buildVillage(c) {
 
   const isVillageStructBlock = (b) => (
     b === B.PLANKS || b === B.SPRUCE_PLANKS || b === B.ACACIA_PLANKS ||
-    b === B.STONE_BRICK || b === B.DOOR || b === B.GLASS || b === B.CHEST ||
+    b === B.STONE_BRICK || b === B.CUT_SANDSTONE || b === B.DOOR || b === B.GLASS || b === B.CHEST ||
     b === B.FURNACE || b === B.BLAST_FURNACE || b === B.ANVIL || b === B.GRINDSTONE ||
     b === B.BED || b === B.QUARTZ || b === B.BOOKSHELF || b === B.COMPOSTER ||
-    b === B.BELL || b === B.LANTERN || b === B.CAMPFIRE || b === B.HAY_BALE
+    b === B.BELL || b === B.LANTERN || b === B.CAMPFIRE || b === B.HAY_BALE || b === B.CRAFTING_TABLE
   );
 
   // 记录已铺设路面的真实标高，供支线道路与路灯无缝齐平对接
@@ -11970,99 +12022,116 @@ function buildVillage(c) {
     return profile[profile.length - 1];
   };
 
-  // 1. 中央集市广场与水井金钟 (Town Plaza & Well)
-  fillFoundation(cx8 - 4, cx8 + 4, cz8 - 4, cz8 + 4, gy, B.STONE_BRICK);
-  /* 广场铺装细节：外圈圆石镶边 + 四角石英镶嵌，
-     中间仍保持开阔石砖（水井随后覆盖中心 4×4）。 */
+  // 1. 中央集市广场与水井金钟 (Town Plaza & Well — 沙漠变种采用切制砂岩+橙黄陶瓦马赛克与砂岩绿洲水井)
+  fillFoundation(cx8 - 4, cx8 + 4, cz8 - 4, cz8 + 4, gy, isDesertVil ? B.CUT_SANDSTONE : B.STONE_BRICK);
   for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++) {
     const onEdge = (Math.abs(dx) === 4 || Math.abs(dz) === 4);
     const onCorner = (Math.abs(dx) >= 3 && Math.abs(dz) >= 3);
-    if (onEdge) world.setBlock(cx8 + dx, gy - 1, cz8 + dz, B.COBBLE);
-    else if (onCorner) world.setBlock(cx8 + dx, gy - 1, cz8 + dz, B.QUARTZ);
+    if (onEdge) world.setBlock(cx8 + dx, gy - 1, cz8 + dz, VP.base);
+    else if (onCorner) world.setBlock(cx8 + dx, gy - 1, cz8 + dz, isDesertVil ? B.ORANGE_TERRACOTTA : B.QUARTZ);
+    else if (isDesertVil && (Math.abs(dx) === 2 || Math.abs(dz) === 2)) world.setBlock(cx8 + dx, gy - 1, cz8 + dz, B.YELLOW_TERRACOTTA);
   }
   // 原版经典敞开式水井 (4x4 外部，2x2 内部开阔泉水井道，严禁堵塞)
   for (let dz = -1; dz <= 2; dz++) {
     for (let dx = -1; dx <= 2; dx++) {
       const isEdge = (dx === -1 || dx === 2 || dz === -1 || dz === 2);
-      // 井筒向下延伸深层水源井壁
       for (let y = gy - 4; y <= gy; y++) {
         if (isEdge || y === gy - 4) {
-          world.setBlock(cx8 + dx, y, cz8 + dz, B.COBBLE);
+          world.setBlock(cx8 + dx, y, cz8 + dz, VP.stoneWall);
         } else {
-          // 井道内部充盈清澈深水，上方直通空气
           world.setBlock(cx8 + dx, y, cz8 + dz, y <= gy - 1 ? B.WATER : B.AIR);
           if (y <= gy - 1) world.setWater(cx8 + dx, y, cz8 + dz, 8);
         }
       }
-      // 井沿（外圈圆石矮墙，内圈 2x2 保持完全通畅敞开）
-      world.setBlock(cx8 + dx, gy + 1, cz8 + dz, isEdge ? B.COBBLE : B.AIR);
+      world.setBlock(cx8 + dx, gy + 1, cz8 + dz, isEdge ? VP.stoneWall : B.AIR);
     }
   }
-  // 4 根井角原木立柱与铁艺照明提灯
+  // 4 根井角立柱与铁艺照明提灯
   for (const [px, pz] of [[-1, -1], [-1, 2], [2, -1], [2, 2]]) {
-    world.setBlock(cx8 + px, gy + 2, cz8 + pz, B.LOG);
-    world.setBlock(cx8 + px, gy + 3, cz8 + pz, B.LOG);
+    world.setBlock(cx8 + px, gy + 2, cz8 + pz, VP.pillar);
+    world.setBlock(cx8 + px, gy + 3, cz8 + pz, isDesertVil ? B.ORANGE_TERRACOTTA : VP.pillar);
     world.setBlock(cx8 + px, gy + 4, cz8 + pz, B.LANTERN);
   }
-  // 井盖顶棚（悬在上方，保持开阔通透，中心悬挂真正的村庄大钟）
+  // 井盖顶棚（沙漠为切制砂岩平顶檐，中心悬挂村庄大钟）
   for (let dz = -1; dz <= 2; dz++) {
     for (let dx = -1; dx <= 2; dx++) {
-      world.setBlock(cx8 + dx, gy + 4, cz8 + dz, B.COBBLE);
-      // 保证井棚内部净空无阻碍
+      world.setBlock(cx8 + dx, gy + 4, cz8 + dz, isDesertVil ? B.CUT_SANDSTONE : VP.base);
       if (dx !== -1 && dx !== 2 && dz !== -1 && dz !== 2) {
         world.setBlock(cx8 + dx, gy + 2, cz8 + dz, B.AIR);
         world.setBlock(cx8 + dx, gy + 3, cz8 + dz, B.AIR);
       }
     }
   }
-  // 村庄之钟（使用专用 B.BELL 方块，悬挂于水井顶棚下方中心）
   world.setBlock(cx8, gy + 3, cz8, B.BELL);
-  // 广场小营火与原木长椅
+  // 广场小营火与长椅
   world.setBlock(cx8 + 3, gy, cz8 + 2, B.CAMPFIRE);
-  world.setBlock(cx8 + 3, gy, cz8 + 3, B.LOG);
-  world.setBlock(cx8 + 3, gy, cz8 + 1, B.LOG);
+  world.setBlock(cx8 + 3, gy, cz8 + 3, VP.pillar);
+  world.setBlock(cx8 + 3, gy, cz8 + 1, VP.pillar);
 
-  // 露天集市货摊 1：果蔬粮点摊位
-  world.setBlock(cx8 - 3, gy, cz8 + 2, B.PLANKS);
+  // 露天集市货摊 1：果蔬粮点摊位（沙漠配橙黄彩布/陶瓦遮阳顶棚）
+  world.setBlock(cx8 - 3, gy, cz8 + 2, VP.planks);
   world.setBlock(cx8 - 3, gy + 1, cz8 + 2, B.HAY_BALE);
-  world.setBlock(cx8 - 3, gy, cz8 + 3, B.PLANKS);
+  world.setBlock(cx8 - 3, gy, cz8 + 3, VP.planks);
   world.setBlock(cx8 - 3, gy + 1, cz8 + 3, B.PUMPKIN);
   world.setBlock(cx8 - 3, gy + 2, cz8 + 2, B.TORCH);
+  if (isDesertVil) {
+    world.setBlock(cx8 - 3, gy + 3, cz8 + 2, B.ORANGE_TERRACOTTA);
+    world.setBlock(cx8 - 3, gy + 3, cz8 + 3, B.YELLOW_TERRACOTTA);
+  }
 
   // 露天集市货摊 2：炼金学者摊位
-  world.setBlock(cx8 - 3, gy, cz8 - 2, B.STONE_BRICK);
+  world.setBlock(cx8 - 3, gy, cz8 - 2, VP.churchWall);
   world.setBlock(cx8 - 3, gy + 1, cz8 - 2, B.BOOKSHELF);
-  world.setBlock(cx8 - 3, gy, cz8 - 3, B.STONE_BRICK);
+  world.setBlock(cx8 - 3, gy, cz8 - 3, VP.churchWall);
   world.setBlock(cx8 - 3, gy + 2, cz8 - 2, B.GLOWSTONE);
+  if (isDesertVil) {
+    world.setBlock(cx8 - 3, gy + 3, cz8 - 2, B.YELLOW_TERRACOTTA);
+    world.setBlock(cx8 - 3, gy + 3, cz8 - 3, B.ORANGE_TERRACOTTA);
+  }
 
-  // 2. 神圣大教堂与牧师圣殿 (Cathedral, 7x9) 在北侧
+  // 2. 神圣大教堂 / 沙漠砂岩神殿圣堂 (Cathedral / Desert Temple, 7x9) 在北侧
   const chX = cx8, chZ = cz8 + 13;
-  fillFoundation(chX - 3, chX + 3, chZ - 4, chZ + 4, gy, B.COBBLE);
+  fillFoundation(chX - 3, chX + 3, chZ - 4, chZ + 4, gy, VP.floor, 9);
   for (let dz = -4; dz <= 4; dz++) {
     for (let dx = -3; dx <= 3; dx++) {
+      const isCorner = (Math.abs(dx) === 3 && Math.abs(dz) === 4);
       const isWall = (Math.abs(dx) === 3 || dz === -4 || dz === 4);
       if (isWall) {
         for (let y = gy; y <= gy + 4; y++) {
           if (y === gy + 2 && (Math.abs(dz) === 1 || Math.abs(dz) === 2)) {
             world.setBlock(chX + dx, y, chZ + dz, B.GLASS);
+          } else if (isDesertVil && y === gy + 3) {
+            world.setBlock(chX + dx, y, chZ + dz, B.ORANGE_TERRACOTTA);
+          } else if (isDesertVil && isCorner) {
+            world.setBlock(chX + dx, y, chZ + dz, B.SANDSTONE);
           } else {
-            world.setBlock(chX + dx, y, chZ + dz, B.STONE_BRICK);
+            world.setBlock(chX + dx, y, chZ + dz, VP.churchWall);
           }
         }
       }
-      world.setBlock(chX + dx, gy + 5, chZ + dz, B.COBBLE);
+      world.setBlock(chX + dx, gy + 5, chZ + dz, isDesertVil ? B.CUT_SANDSTONE : VP.base);
+      // 沙漠神殿屋顶垛口与四角砂岩尖塔
+      if (isDesertVil && isWall) {
+        if (isCorner) {
+          world.setBlock(chX + dx, gy + 6, chZ + dz, B.CUT_SANDSTONE);
+          world.setBlock(chX + dx, gy + 7, chZ + dz, B.ORANGE_TERRACOTTA);
+          world.setBlock(chX + dx, gy + 8, chZ + dz, B.LANTERN);
+        } else if ((dx + dz) % 2 === 0) {
+          world.setBlock(chX + dx, gy + 6, chZ + dz, B.SANDSTONE);
+        }
+      }
     }
   }
-  // 教堂祭坛与神圣石英台
-  world.setBlock(chX, gy, chZ + 3, B.QUARTZ);
+  // 祭坛（沙漠神殿饰以青金石与金块，平原饰以石英与金块）
+  world.setBlock(chX, gy, chZ + 3, isDesertVil ? B.LAPIS_BLOCK : B.QUARTZ);
   world.setBlock(chX, gy + 1, chZ + 3, B.GOLD_BLOCK);
   world.setBlock(chX - 1, gy, chZ + 3, B.TORCH);
   world.setBlock(chX + 1, gy, chZ + 3, B.TORCH);
   // 祈祷长椅
-  world.setBlock(chX - 1, gy, chZ, B.PLANKS);
-  world.setBlock(chX + 1, gy, chZ, B.PLANKS);
-  world.setBlock(chX - 1, gy, chZ - 2, B.PLANKS);
-  world.setBlock(chX + 1, gy, chZ - 2, B.PLANKS);
+  world.setBlock(chX - 1, gy, chZ, VP.planks);
+  world.setBlock(chX + 1, gy, chZ, VP.planks);
+  world.setBlock(chX - 1, gy, chZ - 2, VP.planks);
+  world.setBlock(chX + 1, gy, chZ - 2, VP.planks);
   // 教堂双格高大门与门前畅通走廊
   world.setBlock(chX, gy, chZ - 4, B.DOOR);
   world.setBlock(chX, gy + 1, chZ - 4, B.DOOR);
@@ -12070,23 +12139,24 @@ function buildVillage(c) {
 
   // 3. 镇立图书馆与学者研习厅 (Library, 7x7) 在西北侧
   const libX = cx8 - 14, libZ = cz8 + 9;
-  fillFoundation(libX - 3, libX + 3, libZ - 3, libZ + 3, gy, B.COBBLE);
+  fillFoundation(libX - 3, libX + 3, libZ - 3, libZ + 3, gy, VP.floor);
   for (let dz = -3; dz <= 3; dz++) {
     for (let dx = -3; dx <= 3; dx++) {
       const isCorner = (Math.abs(dx) === 3 && Math.abs(dz) === 3);
       const isWall = (Math.abs(dx) === 3 || Math.abs(dz) === 3);
       if (isCorner) {
-        for (let y = gy; y <= gy + 3; y++) world.setBlock(libX + dx, y, libZ + dz, B.LOG);
+        for (let y = gy; y <= gy + 3; y++) world.setBlock(libX + dx, y, libZ + dz, VP.pillar);
       } else if (isWall) {
         for (let y = gy; y <= gy + 3; y++) {
           if (y === gy + 1 && Math.abs(dz) === 1) world.setBlock(libX + dx, y, libZ + dz, B.GLASS);
-          else world.setBlock(libX + dx, y, libZ + dz, B.PLANKS);
+          else if (isDesertVil && y === gy + 3) world.setBlock(libX + dx, y, libZ + dz, B.ORANGE_TERRACOTTA);
+          else world.setBlock(libX + dx, y, libZ + dz, VP.wall);
         }
       }
-      world.setBlock(libX + dx, gy + 4, libZ + dz, B.PLANKS);
+      world.setBlock(libX + dx, gy + 4, libZ + dz, VP.roof);
+      if (isDesertVil && isWall && (dx + dz) % 2 === 0) world.setBlock(libX + dx, gy + 5, libZ + dz, B.SANDSTONE);
     }
   }
-  // 图书馆书架墙与研读书台
   for (let dz = -2; dz <= 2; dz++) {
     world.setBlock(libX - 2, gy, libZ + dz, B.BOOKSHELF);
     world.setBlock(libX - 2, gy + 1, libZ + dz, B.BOOKSHELF);
@@ -12095,50 +12165,50 @@ function buildVillage(c) {
   world.setBlock(libX, gy + 1, libZ, B.TORCH);
   world.setBlock(libX - 1, gy, libZ + 2, B.CHEST);
   populateVillageChest(libX - 1, gy, libZ + 2, 'general');
-  // 图书馆双格木门与门前畅通走廊
   world.setBlock(libX + 3, gy, libZ, B.DOOR);
   world.setBlock(libX + 3, gy + 1, libZ, B.DOOR);
   clearDoorway(libX + 3, libZ, gy, 1, 0, 3);
 
   // 4. 重装铁匠工坊与高炉 (Blacksmith Forge, 7x7) 在东南侧
   const smithX = cx8 + 14, smithZ = cz8 - 5;
-  fillFoundation(smithX - 3, smithX + 3, smithZ - 3, smithZ + 3, gy, B.COBBLE);
+  fillFoundation(smithX - 3, smithX + 3, smithZ - 3, smithZ + 3, gy, VP.floor);
   for (let dz = -3; dz <= 3; dz++) {
     for (let dx = -3; dx <= 3; dx++) {
       const isWall = (Math.abs(dx) === 3 || Math.abs(dz) === 3);
       if (isWall) {
-        for (let y = gy; y <= gy + 2; y++) world.setBlock(smithX + dx, y, smithZ + dz, B.COBBLE);
+        for (let y = gy; y <= gy + 2; y++) {
+          world.setBlock(smithX + dx, y, smithZ + dz, (isDesertVil && y === gy + 2) ? B.ORANGE_TERRACOTTA : VP.stoneWall);
+        }
       }
-      world.setBlock(smithX + dx, gy + 3, smithZ + dz, B.STONE_BRICK);
+      world.setBlock(smithX + dx, gy + 3, smithZ + dz, isDesertVil ? B.CUT_SANDSTONE : B.STONE_BRICK);
+      if (isDesertVil && isWall && (dx + dz) % 2 === 0) world.setBlock(smithX + dx, gy + 4, smithZ + dz, B.SANDSTONE);
     }
   }
-  // 高炉、熔炉、专用铁砧、砂轮与宝箱
   world.setBlock(smithX + 2, gy, smithZ + 1, B.BLAST_FURNACE);
   world.setBlock(smithX + 2, gy, smithZ, B.FURNACE);
-  world.setBlock(smithX, gy, smithZ, B.ANVIL);           // 专用铁砧！可右键消耗铁锭修复
-  world.setBlock(smithX, gy, smithZ + 2, B.GRINDSTONE);  // 砂轮磨石！可右键免费磨修工具
+  world.setBlock(smithX, gy, smithZ, B.ANVIL);
+  world.setBlock(smithX, gy, smithZ + 2, B.GRINDSTONE);
   world.setBlock(smithX + 2, gy, smithZ - 2, B.CHEST);
   populateVillageChest(smithX + 2, gy, smithZ - 2, 'blacksmith');
   world.setBlock(smithX + 2, gy + 1, smithZ - 2, B.LANTERN);
-  // 铁匠铺双格木门与门前畅通走廊
   world.setBlock(smithX - 3, gy, smithZ, B.DOOR);
   world.setBlock(smithX - 3, gy + 1, smithZ, B.DOOR);
   clearDoorway(smithX - 3, smithZ, gy, -1, 0, 3);
 
-  // 5. 风车磨坊与水渠农田 (Granary & Vast Farmland, 11x9) 在南侧
+  // 5. 水渠农田 (Vast Farmland, 11x9 — 沙漠村庄采用砂岩围堰灌溉绿洲农田) 在南侧
   const farmX = cx8, farmZ = cz8 - 15;
-  fillFoundation(farmX - 5, farmX + 5, farmZ - 4, farmZ + 4, gy, B.DIRT);
+  fillFoundation(farmX - 5, farmX + 5, farmZ - 4, farmZ + 4, gy, isDesertVil ? B.SANDSTONE : B.DIRT);
   for (let dz = -4; dz <= 4; dz++) {
     for (let dx = -5; dx <= 5; dx++) {
       const isBorder = (Math.abs(dx) === 5 || Math.abs(dz) === 4);
       if (isBorder) {
-        world.setBlock(farmX + dx, gy, farmZ + dz, B.LOG);
+        world.setBlock(farmX + dx, gy, farmZ + dz, isDesertVil ? B.CUT_SANDSTONE : VP.log);
       } else if (dx === 0) {
         world.setBlock(farmX + dx, gy, farmZ + dz, B.WATER);
         world.setWater(farmX + dx, gy, farmZ + dz, 8);
         if (Math.abs(dz) === 2) world.setBlock(farmX + dx, gy + 1, farmZ + dz, B.LILY_PAD);
       } else {
-        world.setBlock(farmX + dx, gy, farmZ + dz, B.FARMLAND); // 专用湿润犁沟耕地！
+        world.setBlock(farmX + dx, gy, farmZ + dz, B.FARMLAND);
         const cropR = plantHash(farmX + dx, farmZ + dz);
         if (cropR < 0.6) world.setBlock(farmX + dx, gy + 1, farmZ + dz, B.WHEAT_CROP_MATURE);
         else if (cropR < 0.8) world.setBlock(farmX + dx, gy + 1, farmZ + dz, B.MELON);
@@ -12146,79 +12216,115 @@ function buildVillage(c) {
       }
     }
   }
-  // 农田入口旁放置农夫堆肥桶
   world.setBlock(farmX + 4, gy + 1, farmZ + 4, B.COMPOSTER);
-  // 农田中央稻草人（加速生长光环）
-  world.setBlock(farmX, gy, farmZ, B.LOG);
+  world.setBlock(farmX, gy, farmZ, VP.log);
   world.setBlock(farmX, gy + 1, farmZ, B.JACK_O_LANTERN);
-  world.setBlock(farmX - 1, gy + 1, farmZ, B.LOG);
-  world.setBlock(farmX + 1, gy + 1, farmZ, B.LOG);
+  world.setBlock(farmX - 1, gy + 1, farmZ, VP.log);
+  world.setBlock(farmX + 1, gy + 1, farmZ, VP.log);
 
   // 粮仓塔楼 (4x4)
   const granX = cx8 - 8, granZ = cz8 - 15;
-  fillFoundation(granX - 1, granX + 2, granZ - 1, granZ + 2, gy, B.COBBLE);
+  fillFoundation(granX - 1, granX + 2, granZ - 1, granZ + 2, gy, VP.floor);
   for (let dz = -1; dz <= 2; dz++) {
     for (let dx = -1; dx <= 2; dx++) {
       const isWall = (dx === -1 || dx === 2 || dz === -1 || dz === 2);
       if (isWall) {
-        for (let y = gy; y <= gy + 3; y++) world.setBlock(granX + dx, y, granZ + dz, B.LOG);
+        for (let y = gy; y <= gy + 3; y++) {
+          world.setBlock(granX + dx, y, granZ + dz, (isDesertVil && y === gy + 3) ? B.ORANGE_TERRACOTTA : (isDesertVil ? B.CUT_SANDSTONE : VP.log));
+        }
       } else {
         world.setBlock(granX + dx, gy, granZ + dz, B.HAY_BALE);
         world.setBlock(granX + dx, gy + 1, granZ + dz, B.HAY_BALE);
       }
-      world.setBlock(granX + dx, gy + 4, granZ + dz, B.PLANKS);
+      world.setBlock(granX + dx, gy + 4, granZ + dz, VP.roof);
     }
   }
+  // 粮仓留出北侧取粮门洞
+  world.setBlock(granX, gy, granZ + 2, B.AIR);
+  world.setBlock(granX, gy + 1, granZ + 2, B.AIR);
 
-  // 6. 温馨村民木屋 (Cottage, 7x7) 在西南侧
+  // 6. 温馨村民小屋 / 沙漠砂岩民居 (Cottage, 7x7) 在西南侧
   const cotX = cx8 - 14, cotZ = cz8 - 6;
-  fillFoundation(cotX - 3, cotX + 3, cotZ - 3, cotZ + 3, gy, B.COBBLE);
+  fillFoundation(cotX - 3, cotX + 3, cotZ - 3, cotZ + 3, gy, VP.floor);
   for (let dz = -3; dz <= 3; dz++) {
     for (let dx = -3; dx <= 3; dx++) {
       const isCorner = (Math.abs(dx) === 3 && Math.abs(dz) === 3);
       const isWall = (Math.abs(dx) === 3 || Math.abs(dz) === 3);
       if (isCorner) {
-        for (let y = gy; y <= gy + 2; y++) world.setBlock(cotX + dx, y, cotZ + dz, B.LOG);
+        for (let y = gy; y <= gy + 2; y++) world.setBlock(cotX + dx, y, cotZ + dz, VP.pillar);
       } else if (isWall) {
         for (let y = gy; y <= gy + 2; y++) {
           if (y === gy + 1 && Math.abs(dz) === 1) world.setBlock(cotX + dx, y, cotZ + dz, B.GLASS);
-          else world.setBlock(cotX + dx, y, cotZ + dz, B.PLANKS);
+          else if (isDesertVil && y === gy + 2) world.setBlock(cotX + dx, y, cotZ + dz, B.YELLOW_TERRACOTTA);
+          else world.setBlock(cotX + dx, y, cotZ + dz, VP.wall);
         }
       }
-      world.setBlock(cotX + dx, gy + 3, cotZ + dz, B.PLANKS);
+      world.setBlock(cotX + dx, gy + 3, cotZ + dz, VP.roof);
+      if (isDesertVil && isWall && (dx + dz) % 2 === 0) world.setBlock(cotX + dx, gy + 4, cotZ + dz, B.SANDSTONE);
     }
   }
   world.setBlock(cotX - 2, gy, cotZ - 1, B.BED);
   world.setBlock(cotX - 2, gy, cotZ + 1, B.CHEST);
   populateVillageChest(cotX - 2, gy, cotZ + 1, 'general');
   world.setBlock(cotX - 2, gy + 1, cotZ + 1, B.TORCH);
-  // 木屋双格门与门前畅通走廊
   world.setBlock(cotX + 3, gy, cotZ, B.DOOR);
   world.setBlock(cotX + 3, gy + 1, cotZ, B.DOOR);
   clearDoorway(cotX + 3, cotZ, gy, 1, 0, 3);
 
-  // 7. 双层村民洋房 (Two-Story Town House, 7x7) 在东北侧
+  // 7. 双层村民洋房 / 沙漠双层露台民居 (Two-Story Town House, 7x7，每层 3 格净高 + 完整室内阶梯与楼梯井直通二层！) 在东北侧
   const thX = cx8 + 14, thZ = cz8 + 10;
-  fillFoundation(thX - 3, thX + 3, thZ - 3, thZ + 3, gy, B.COBBLE);
+  fillFoundation(thX - 3, thX + 3, thZ - 3, thZ + 3, gy, VP.floor, 9);
   for (let dz = -3; dz <= 3; dz++) {
     for (let dx = -3; dx <= 3; dx++) {
       const isCorner = (Math.abs(dx) === 3 && Math.abs(dz) === 3);
       const isWall = (Math.abs(dx) === 3 || Math.abs(dz) === 3);
       if (isCorner) {
-        for (let y = gy; y <= gy + 5; y++) world.setBlock(thX + dx, y, thZ + dz, B.LOG);
+        for (let y = gy; y <= gy + 6; y++) world.setBlock(thX + dx, y, thZ + dz, VP.pillar);
       } else if (isWall) {
-        for (let y = gy; y <= gy + 5; y++) {
-          if ((y === gy + 1 || y === gy + 4) && Math.abs(dz) === 1) world.setBlock(thX + dx, y, thZ + dz, B.GLASS);
-          else world.setBlock(thX + dx, y, thZ + dz, B.PLANKS);
+        for (let y = gy; y <= gy + 6; y++) {
+          if ((y === gy + 1 || y === gy + 5) && Math.abs(dz) === 1) {
+            world.setBlock(thX + dx, y, thZ + dz, B.GLASS);
+          } else if (isDesertVil && (y === gy + 3 || y === gy + 6)) {
+            world.setBlock(thX + dx, y, thZ + dz, B.ORANGE_TERRACOTTA);
+          } else {
+            world.setBlock(thX + dx, y, thZ + dz, VP.wall);
+          }
         }
       }
-      world.setBlock(thX + dx, gy + 2, thZ + dz, B.PLANKS);
-      world.setBlock(thX + dx, gy + 5, thZ + dz, B.STONE_BRICK);
+      // 二层楼板 (y = gy + 3，室内满铺以保留外墙彩陶/原木立面条带) 与屋顶 (y = gy + 7)
+      if (!isWall) world.setBlock(thX + dx, gy + 3, thZ + dz, VP.planks);
+      world.setBlock(thX + dx, gy + 7, thZ + dz, isDesertVil ? B.CUT_SANDSTONE : VP.roofRim);
+      if (isDesertVil && isWall && (dx + dz) % 2 === 0) {
+        world.setBlock(thX + dx, gy + 8, thZ + dz, B.SANDSTONE);
+      }
     }
   }
-  world.setBlock(thX + 1, gy + 3, thZ - 1, B.BED);
-  world.setBlock(thX + 1, gy + 3, thZ + 1, B.CHEST);
-  populateVillageChest(thX + 1, gy + 3, thZ + 1, 'general');
+  // 室内实心阶梯（沿南墙 dz = -2 从一层平顺踏步直上二层，并在二层楼板 y = gy + 3 留出 3 格宽敞楼梯井！）
+  const stairMat = isDesertVil ? B.SANDSTONE : VP.planks;
+  // 第 1 阶 (dx = -1, y = gy)
+  world.setBlock(thX - 1, gy, thZ - 2, stairMat);
+  // 第 2 阶 (dx = 0, y = gy..gy+1)
+  world.setBlock(thX + 0, gy, thZ - 2, stairMat);
+  world.setBlock(thX + 0, gy + 1, thZ - 2, stairMat);
+  // 第 3 阶 (dx = +1, y = gy..gy+2)
+  world.setBlock(thX + 1, gy, thZ - 2, stairMat);
+  world.setBlock(thX + 1, gy + 1, thZ - 2, stairMat);
+  world.setBlock(thX + 1, gy + 2, thZ - 2, stairMat);
+  // 二层楼板楼梯井开口（dz = -2, dx = -1..+1 全部挖空，保证上楼 3 格挑空完全不碰头！）
+  for (let sdx = -1; sdx <= 1; sdx++) {
+    world.setBlock(thX + sdx, gy + 3, thZ - 2, B.AIR);
+    world.setBlock(thX + sdx, gy + 4, thZ - 2, B.AIR);
+    world.setBlock(thX + sdx, gy + 5, thZ - 2, B.AIR);
+  }
+  // 一层室内摆设（工作台 + 照明提灯）
+  world.setBlock(thX + 2, gy, thZ + 2, B.CRAFTING_TABLE);
+  world.setBlock(thX - 2, gy + 2, thZ + 2, B.LANTERN);
+  // 二层室内摆设（大床 + 储物箱 + 书架 + 照明火把，全部稳放于二层楼板 y = gy + 4）
+  world.setBlock(thX + 1, gy + 4, thZ + 1, B.BED);
+  world.setBlock(thX - 1, gy + 4, thZ + 2, B.CHEST);
+  populateVillageChest(thX - 1, gy + 4, thZ + 2, 'general');
+  world.setBlock(thX + 2, gy + 4, thZ + 2, B.BOOKSHELF);
+  world.setBlock(thX + 2, gy + 5, thZ + 2, B.TORCH);
   // 双层洋房双格门与门前畅通走廊
   world.setBlock(thX - 3, gy, thZ, B.DOOR);
   world.setBlock(thX - 3, gy + 1, thZ, B.DOOR);
@@ -12226,17 +12332,16 @@ function buildVillage(c) {
 
   // 8. 村庄畜牧场与牧场圈 (Livestock Ranch, 8x8) 在东南侧
   const ranX = cx8 + 14, ranZ = cz8 - 16;
-  fillFoundation(ranX - 3, ranX + 3, ranZ - 3, ranZ + 3, gy, B.GRASS);
+  fillFoundation(ranX - 3, ranX + 3, ranZ - 3, ranZ + 3, gy, VP.ranchFloor);
   for (let dz = -3; dz <= 3; dz++) {
     for (let dx = -3; dx <= 3; dx++) {
       const isBorder = (Math.abs(dx) === 3 || Math.abs(dz) === 3);
       if (isBorder && !(dx === -3 && dz === 0)) { // 门留空
-        world.setBlock(ranX + dx, gy, ranZ + dz, B.LOG);
-        world.setBlock(ranX + dx, gy + 1, ranZ + dz, B.LOG);
+        world.setBlock(ranX + dx, gy, ranZ + dz, isDesertVil ? B.SANDSTONE : VP.log);
+        world.setBlock(ranX + dx, gy + 1, ranZ + dz, isDesertVil ? B.CUT_SANDSTONE : VP.log);
       }
     }
   }
-  // 水槽与草料垛
   world.setBlock(ranX + 2, gy, ranZ, B.WATER);
   world.setWater(ranX + 2, gy, ranZ, 8);
   world.setBlock(ranX - 2, gy, ranZ + 2, B.HAY_BALE);
