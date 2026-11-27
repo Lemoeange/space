@@ -959,7 +959,13 @@ const B = {
   BEETROOT:359, BEETROOT_SOUP:360, POPPED_CHORUS_FRUIT:361,
   OCHRE_FROGLIGHT:362, VERDANT_FROGLIGHT:363, PEARLESCENT_FROGLIGHT:364,
   COPPER_BULB:365, COPPER_BULB_ON:366, SCAFFOLDING:367,
-  SMITHING_TABLE:368, STONECUTTER:369, HONEYCOMB_BLOCK:370, CHISELED_BOOKSHELF:371
+  SMITHING_TABLE:368, STONECUTTER:369, HONEYCOMB_BLOCK:370, CHISELED_BOOKSHELF:371,
+  NAUTILUS_SHELL:372, HEART_OF_THE_SEA:373, CONDUIT:374,
+  BRUSH:375, ECHO_SHARD:376, RECOVERY_COMPASS:377, DECORATED_POT:378,
+  IRON_BARS:379, TINTED_GLASS:380, CALCITE:381, TUFF:382, TUFF_BRICKS:383,
+  BONE_BLOCK:384, DRIED_KELP:385, DRIED_KELP_BLOCK:386,
+  CAULDRON:387, LECTERN:388, NETHER_STAR:389,
+  HARMING_SPLASH_POTION:390, HEALING_SPLASH_POTION:391
 };
 
 function mulberry32(a) {
@@ -1589,6 +1595,10 @@ function makeAtlas() {
   T.copperBulbOff = i++; T.copperBulbOn = i++; T.scaffoldingTop = i++; T.scaffoldingSide = i++;
   T.smithingTop = i++; T.smithingSide = i++; T.stonecutterTop = i++; T.stonecutterSide = i++;
   T.honeycombBlock = i++; T.chiseledBookshelfTop = i++; T.chiseledBookshelfFront = i++; T.chiseledBookshelfSide = i++;
+  T.conduit = i++; T.decoratedPotTop = i++; T.decoratedPotSide = i++;
+  T.ironBars = i++; T.tintedGlass = i++; T.calcite = i++; T.tuff = i++; T.tuffBricks = i++;
+  T.boneBlockTop = i++; T.boneBlockSide = i++; T.driedKelpBlock = i++;
+  T.cauldronTop = i++; T.cauldronSide = i++; T.lecternTop = i++; T.lecternSide = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -4319,6 +4329,108 @@ function makeAtlas() {
     }
   }
 
+  // 78. 潮涌核心（海晶贝壳外框 + 璀璨碧蓝海洋之眼核心）
+  fill(T.conduit, [168, 152, 132], 8, 515);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5));
+    if (d > 6.3) put(T.conduit, x, y, 108, 92, 78);
+    else if (d < 4.4) put(T.conduit, x, y, 36, 178, 196);
+    if (d < 2.6) put(T.conduit, x, y, 136, 246, 255);
+    if (x >= 7 && x <= 8 && y >= 6 && y <= 9) put(T.conduit, x, y, 22, 68, 96);
+  }
+  put(T.conduit, 7, 7, 255, 255, 255);
+
+  // 79. 饰纹陶罐（赤陶圆口 + 远古菱形图腾彩绘）
+  fill(T.decoratedPotTop, [146, 76, 56], 8, 518);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const d = Math.hypot(x - 7.5, y - 7.5);
+    if (d < 3.6) put(T.decoratedPotTop, x, y, 42, 24, 20);
+    else if (d < 5.4) put(T.decoratedPotTop, x, y, 178, 96, 68);
+  }
+  fill(T.decoratedPotSide, [154, 80, 58], 10, 519);
+  for (let x = 0; x < TILE; x++) { put(T.decoratedPotSide, x, 0, 120, 58, 42); put(T.decoratedPotSide, x, 1, 178, 98, 72); put(T.decoratedPotSide, x, 15, 114, 54, 38); }
+  for (let y = 4; y <= 12; y++) for (let x = 4; x <= 11; x++) {
+    if (Math.abs(x - 7.5) + Math.abs(y - 8) <= 3.6) put(T.decoratedPotSide, x, y, 118, 56, 40);
+    if (Math.abs(x - 7.5) + Math.abs(y - 8) <= 1.6) put(T.decoratedPotSide, x, y, 212, 148, 102);
+  }
+
+  // 80. 铁栏杆（透空深铁竖栅与横梁）
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const bar = (x === 3 || x === 4 || x === 11 || x === 12 || y === 3 || y === 12);
+    if (bar) put(T.ironBars, x, y, (x === 3 || x === 11 || y === 3) ? 132 : 84, (x === 3 || x === 11 || y === 3) ? 138 : 90, (x === 3 || x === 11 || y === 3) ? 146 : 98, 255);
+    else put(T.ironBars, x, y, 0, 0, 0, 0);
+  }
+
+  // 81. 遮光玻璃（深曜紫防光透视边框 + 晶面斜光）
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    if (x === 0 || x === 15 || y === 0 || y === 15) put(T.tintedGlass, x, y, 48, 36, 58, 255);
+    else if (x === 1 || x === 14 || y === 1 || y === 14) put(T.tintedGlass, x, y, 78, 58, 94, 210);
+    else if ((x + y === 6 || x + y === 7) && x >= 2 && x <= 6) put(T.tintedGlass, x, y, 132, 104, 158, 195);
+    else put(T.tintedGlass, x, y, 36, 26, 46, 130);
+  }
+
+  // 82. 方解石（温润大理石乳白 + 柔和浅灰纹）
+  fill(T.calcite, [224, 224, 218], 10, 524);
+  speck(T.calcite, [196, 196, 190], 26, 525);
+  speck(T.calcite, [244, 244, 240], 18, 526);
+
+  // 83. 凝灰岩 & 凝灰岩砖（青灰火山岩颗粒 & 规整砖缝）
+  fill(T.tuff, [106, 108, 102], 14, 528);
+  speck(T.tuff, [82, 84, 78], 24, 529);
+  speck(T.tuff, [132, 134, 126], 18, 530);
+  fill(T.tuffBricks, [104, 106, 100], 8, 532);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const seamH = (y === 0 || y === 8);
+    const seamV = (y < 8 ? (x === 0 || x === 8) : (x === 4 || x === 12));
+    if (seamH || seamV) put(T.tuffBricks, x, y, 74, 76, 72);
+    else if (y === 1 || y === 9) put(T.tuffBricks, x, y, 126, 128, 120);
+  }
+
+  // 84. 骨块（象牙白年轮截面 + 纵沟化石纹理）
+  fill(T.boneBlockTop, [224, 220, 198], 8, 535);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5));
+    if (d > 6.2 || (d > 3.2 && d < 4.2)) put(T.boneBlockTop, x, y, 186, 180, 158);
+    else if (d < 2.2) put(T.boneBlockTop, x, y, 168, 162, 140);
+  }
+  fill(T.boneBlockSide, [228, 224, 204], 6, 536);
+  for (let x = 0; x < TILE; x++) {
+    if (x % 4 === 0) for (let y = 0; y < TILE; y++) put(T.boneBlockSide, x, y, 190, 184, 162);
+    else if (x % 4 === 2) for (let y = 0; y < TILE; y++) put(T.boneBlockSide, x, y, 240, 236, 218);
+  }
+
+  // 85. 干海带块（深墨绿海带捆 + 麻绳绑带）
+  fill(T.driedKelpBlock, [42, 62, 34], 12, 538);
+  speck(T.driedKelpBlock, [62, 88, 46], 24, 539);
+  for (let x = 0; x < TILE; x++) {
+    put(T.driedKelpBlock, x, 4, 168, 146, 98); put(T.driedKelpBlock, x, 5, 134, 114, 74);
+    put(T.driedKelpBlock, x, 11, 168, 146, 98); put(T.driedKelpBlock, x, 12, 134, 114, 74);
+  }
+
+  // 86. 炼药锅（深铸铁厚壁 + 清澈锅水面）
+  fill(T.cauldronTop, [62, 64, 68], 6, 541);
+  for (let y = 2; y <= 13; y++) for (let x = 2; x <= 13; x++) put(T.cauldronTop, x, y, 42, 118, 178);
+  speck(T.cauldronTop, [94, 178, 228], 10, 542);
+  fill(T.cauldronSide, [64, 66, 70], 8, 543);
+  for (let x = 0; x < TILE; x++) { put(T.cauldronSide, x, 0, 88, 92, 98); put(T.cauldronSide, x, 2, 44, 46, 50); put(T.cauldronSide, x, 14, 44, 46, 50); }
+  for (let y = 13; y < 16; y++) for (let x = 4; x <= 11; x++) put(T.cauldronSide, x, y, 36, 38, 42);
+
+  // 87. 讲台（红绒斜书台面 + 橡木底座）
+  fill(T.lecternTop, [168, 130, 74], 8, 546);
+  for (let y = 2; y <= 13; y++) for (let x = 2; x <= 13; x++) {
+    put(T.lecternTop, x, y, (x === 7 || x === 8) ? 146 : 240, (x === 7 || x === 8) ? 48 : 232, (x === 7 || x === 8) ? 42 : 206);
+  }
+  for (let y = 4; y <= 11; y += 2) {
+    for (let x = 3; x <= 6; x++) put(T.lecternTop, x, y, 92, 78, 66);
+    for (let x = 9; x <= 12; x++) put(T.lecternTop, x, y, 92, 78, 66);
+  }
+  fill(T.lecternSide, [156, 118, 68], 8, 547);
+  for (let y = 0; y < 4; y++) for (let x = 0; x < TILE; x++) put(T.lecternSide, x, y, 176, 136, 78);
+  for (let y = 4; y < 13; y++) for (let x = 0; x < TILE; x++) {
+    if (x < 4 || x > 11) put(T.lecternSide, x, y, 108, 78, 44);
+  }
+  for (let y = 13; y < 16; y++) for (let x = 0; x < TILE; x++) put(T.lecternSide, x, y, 128, 94, 52);
+
   ctx.putImageData(img, 0, 0);
   // 3D 渲染改用 2D 纹理数组（每 tile 独立一层，配合 RepeatWrapping 可让单个 tile 跨大四边形循环）
   const layers = ATLAS_TILES;
@@ -4566,6 +4678,17 @@ function _tileOfRaw(id) {
     case B.STONECUTTER: return { top: atlas.T.stonecutterTop, side: atlas.T.stonecutterSide, bottom: atlas.T.stone };
     case B.HONEYCOMB_BLOCK: return { top: atlas.T.honeycombBlock, side: atlas.T.honeycombBlock, bottom: atlas.T.honeycombBlock };
     case B.CHISELED_BOOKSHELF: return { top: atlas.T.chiseledBookshelfTop, side: atlas.T.chiseledBookshelfFront, bottom: atlas.T.chiseledBookshelfTop };
+    case B.CONDUIT: return { top: atlas.T.conduit, side: atlas.T.conduit, bottom: atlas.T.conduit };
+    case B.DECORATED_POT: return { top: atlas.T.decoratedPotTop, side: atlas.T.decoratedPotSide, bottom: atlas.T.decoratedPotSide };
+    case B.IRON_BARS: return { top: atlas.T.ironBars, side: atlas.T.ironBars, bottom: atlas.T.ironBars };
+    case B.TINTED_GLASS: return { top: atlas.T.tintedGlass, side: atlas.T.tintedGlass, bottom: atlas.T.tintedGlass };
+    case B.CALCITE: return { top: atlas.T.calcite, side: atlas.T.calcite, bottom: atlas.T.calcite };
+    case B.TUFF: return { top: atlas.T.tuff, side: atlas.T.tuff, bottom: atlas.T.tuff };
+    case B.TUFF_BRICKS: return { top: atlas.T.tuffBricks, side: atlas.T.tuffBricks, bottom: atlas.T.tuffBricks };
+    case B.BONE_BLOCK: return { top: atlas.T.boneBlockTop, side: atlas.T.boneBlockSide, bottom: atlas.T.boneBlockTop };
+    case B.DRIED_KELP_BLOCK: return { top: atlas.T.driedKelpBlock, side: atlas.T.driedKelpBlock, bottom: atlas.T.driedKelpBlock };
+    case B.CAULDRON: return { top: atlas.T.cauldronTop, side: atlas.T.cauldronSide, bottom: atlas.T.cauldronSide };
+    case B.LECTERN: return { top: atlas.T.lecternTop, side: atlas.T.lecternSide, bottom: atlas.T.planks };
     case B.CAMPFIRE: return { top: atlas.T.campfireTop, side: atlas.T.campfireSide, bottom: atlas.T.campfireSide };
     case B.DOOR: return { top: atlas.T.doorTop, side: atlas.T.doorBottom, bottom: atlas.T.doorBottom };
     case B.COBWEB: return { top: atlas.T.cobweb, side: atlas.T.cobweb, bottom: atlas.T.cobweb };
@@ -7354,7 +7477,7 @@ function isDynamicLightBlock(id) {
   return id === B.TORCH || id === B.SOUL_TORCH || id === B.JACK_O_LANTERN || id === B.GLOWSTONE ||
     id === B.CAMPFIRE || id === B.SOUL_CAMPFIRE || id === B.SEA_LANTERN || id === B.REDSTONE_LAMP_ON ||
     id === B.LANTERN || id === B.SOUL_LANTERN || id === B.END_ROD || id === B.SHROOMLIGHT ||
-    id === B.OCHRE_FROGLIGHT || id === B.VERDANT_FROGLIGHT || id === B.PEARLESCENT_FROGLIGHT || id === B.COPPER_BULB_ON;
+    id === B.OCHRE_FROGLIGHT || id === B.VERDANT_FROGLIGHT || id === B.PEARLESCENT_FROGLIGHT || id === B.COPPER_BULB_ON || id === B.CONDUIT;
 }
 function restoreTorchLights(c) {
   const baseX = c.cx * 16, baseZ = c.cz * 16;
@@ -7502,6 +7625,7 @@ function saveWorld() {
       weatherTimer,
       dragonDefeated: !!dragonDefeated,
       bedSpawn: playerBedSpawn ? [playerBedSpawn.x, playerBedSpawn.y, playerBedSpawn.z] : null,
+      lastDeath: lastDeathPos ? [lastDeathPos.x, lastDeathPos.y, lastDeathPos.z, lastDeathPos.dim || 'overworld'] : null,
       respawnAnchors: keys.world ? Array.from(respawnAnchorCharges.entries()) : [],
       crops: keys.world ? Array.from(crops.entries()) : [],
       furnace: {
@@ -7608,6 +7732,9 @@ function loadWorld(profileOverride) {
       if (keys.world && typeof d.dragonDefeated === 'boolean') dragonDefeated = d.dragonDefeated;
       if (keys.world && Array.isArray(d.bedSpawn) && d.bedSpawn.length === 3) {
         playerBedSpawn = { x: d.bedSpawn[0] | 0, y: d.bedSpawn[1] | 0, z: d.bedSpawn[2] | 0 };
+      }
+      if (keys.world && Array.isArray(d.lastDeath) && d.lastDeath.length >= 3) {
+        lastDeathPos = { x: d.lastDeath[0] | 0, y: d.lastDeath[1] | 0, z: d.lastDeath[2] | 0, dim: d.lastDeath[3] || 'overworld' };
       }
       if (keys.world && Array.isArray(d.respawnAnchors)) {
         respawnAnchorCharges.clear();
@@ -8844,6 +8971,12 @@ const BLOCK_COLORS = {
   [B.OCHRE_FROGLIGHT]: 0xf8e094, [B.VERDANT_FROGLIGHT]: 0x9aeab0, [B.PEARLESCENT_FROGLIGHT]: 0xeac2ee,
   [B.COPPER_BULB]: 0xb06242, [B.COPPER_BULB_ON]: 0xf8d268, [B.SCAFFOLDING]: 0xceae62,
   [B.SMITHING_TABLE]: 0x42242a, [B.STONECUTTER]: 0x8e8e92, [B.HONEYCOMB_BLOCK]: 0xeea624, [B.CHISELED_BOOKSHELF]: 0x926e40,
+  [B.NAUTILUS_SHELL]: 0xd8c6b2, [B.HEART_OF_THE_SEA]: 0x2ec8e8, [B.CONDUIT]: 0x46dce8,
+  [B.BRUSH]: 0xd48c4a, [B.ECHO_SHARD]: 0x186e78, [B.RECOVERY_COMPASS]: 0x22a6b3, [B.DECORATED_POT]: 0x9c523c,
+  [B.IRON_BARS]: 0x767c84, [B.TINTED_GLASS]: 0x3a2a48, [B.CALCITE]: 0xe0e0da, [B.TUFF]: 0x6a6c66, [B.TUFF_BRICKS]: 0x666862,
+  [B.BONE_BLOCK]: 0xe2dec8, [B.DRIED_KELP]: 0x344a2a, [B.DRIED_KELP_BLOCK]: 0x2c4224,
+  [B.CAULDRON]: 0x424448, [B.LECTERN]: 0x9e7646, [B.NETHER_STAR]: 0xf8f6ff,
+  [B.HARMING_SPLASH_POTION]: 0x8a1c38, [B.HEALING_SPLASH_POTION]: 0xf84878,
 };
 function blockColor(id) { return BLOCK_COLORS[id] || 0x999999; }
 /* 材质池：粒子各自需要独立的 opacity，所以没法共用一个材质；
@@ -14397,6 +14530,7 @@ function explodeTnt(ex, ey, ez, customRadius = 6.4) {
             } else {
               if (isDynamicLightBlock(bid)) removeTorchLight(x, y, z);
               if (bid === B.BEACON) removeBeaconBeam(x, y, z);
+              if (bid === B.CONDUIT) removeConduitAura(x, y, z);
               if (bid === B.CHEST || bid === B.BARREL) dropChestItems(x, y, z);
               if (bid === B.DOOR) openDoors.delete(`${x},${y},${z}`);
               if (bid === B.RESPAWN_ANCHOR) respawnAnchorCharges.delete(`${x},${y},${z}`);
@@ -14795,6 +14929,138 @@ function updateWindCharges(dt) {
       if (hit) detonateWindCharge(wc.pos);
       scene.remove(wc.mesh);
       windCharges.splice(i, 1);
+    }
+  }
+}
+
+/* ============================ 🧪 喷溅药水投掷系统 (Splash Potions) ============================ */
+const splashPotions = [];
+const splashPotionGeo = new THREE.SphereGeometry(0.15, 8, 8);
+const splashHarmMat = new THREE.MeshBasicMaterial({ color: 0x9b1c48, transparent: true, opacity: 0.9 });
+const splashHealMat = new THREE.MeshBasicMaterial({ color: 0xff4d88, transparent: true, opacity: 0.9 });
+
+function launchSplashPotion(origin, dir, kind) {
+  const spawnPos = origin.clone().addScaledVector(dir, 0.5);
+  const mesh = new THREE.Mesh(splashPotionGeo, kind === 'heal' ? splashHealMat : splashHarmMat);
+  mesh.position.copy(spawnPos);
+  scene.add(mesh);
+  tone(480, 720, 0.10, 'sine', 0.16);
+  splashPotions.push({
+    mesh,
+    kind,
+    pos: spawnPos,
+    vel: dir.clone().multiplyScalar(15.5).add(new THREE.Vector3(0, 2.8, 0)),
+    life: 3.5
+  });
+}
+
+function shatterSplashPotion(pos, kind) {
+  tone(1100, 320, 0.18, 'triangle', 0.24);
+  burst(0.10, 0.18, 2800, 'highpass');
+  if (kind === 'heal') {
+    spawnParticles(pos.x, pos.y, pos.z, 0xff5e98, 28);
+    spawnParticles(pos.x, pos.y, pos.z, 0xffffff, 14);
+    const pDist = Math.hypot(player.pos.x - pos.x, (player.pos.y + 0.9) - pos.y, player.pos.z - pos.z);
+    if (pDist < 4.5 && player.hp < 20) {
+      player.hp = Math.min(20, player.hp + 8);
+      updateHearts();
+    }
+    let healedAllies = 0;
+    if (!inNether && !inEnd) {
+      for (const arr of [wolves, ironGolems, villagers]) {
+        for (const a of arr) {
+          if (Math.hypot(a.x - pos.x, (a.g.position.y + 0.8) - pos.y, a.z - pos.z) < 4.8) {
+            if (typeof a.hp === 'number') { a.hp = Math.min(a.maxHp || 30, a.hp + 8); healedAllies++; }
+          }
+        }
+      }
+    }
+    toast(`💖 喷溅治疗药水绽放！回复生命${healedAllies > 0 ? `并治愈 ${healedAllies} 名友方` : ''}！`);
+  } else {
+    spawnParticles(pos.x, pos.y, pos.z, 0x9b1c48, 28);
+    spawnParticles(pos.x, pos.y, pos.z, 0x4a0c24, 16);
+    let hitCount = 0;
+    if (inEnd && checkHitEndBossOrCrystal(pos, 10, 3.0)) hitCount++;
+    if (!inNether && !inEnd) {
+      const hostileLists = [
+        [zombies, killZombie], [creepers, killCreeper], [skeletons, killSkeleton],
+        [endermen, killEnderman], [spiders, killSpider], [pillagers, killPillager], [ravagers, killRavager]
+      ];
+      for (const [arr, killFn] of hostileLists) {
+        for (let idx = arr.length - 1; idx >= 0; idx--) {
+          const m = arr[idx];
+          if (Math.hypot(m.x - pos.x, (m.g.position.y + 0.8) - pos.y, m.z - pos.z) < 4.0) {
+            m.hp -= 10;
+            m.hurtT = 0.35;
+            hitCount++;
+            if (m.hp <= 0) killFn(idx);
+          }
+        }
+      }
+    }
+    toast(hitCount > 0 ? `☠️ 喷溅伤害药水碎裂！对 ${hitCount} 个目标造成 10 点穿透魔法伤害！` : '☠️ 喷溅伤害药水碎裂消散！');
+  }
+}
+
+function updateSplashPotions(dt) {
+  for (let i = splashPotions.length - 1; i >= 0; i--) {
+    const sp = splashPotions[i];
+    sp.life -= dt;
+    sp.vel.y -= 18.0 * dt;
+    sp.pos.addScaledVector(sp.vel, dt);
+    sp.mesh.position.copy(sp.pos);
+    sp.mesh.rotation.x += dt * 8;
+    if (Math.random() < 0.5) {
+      spawnParticles(sp.pos.x, sp.pos.y, sp.pos.z, sp.kind === 'heal' ? 0xff7aa8 : 0xa0244c, 1);
+    }
+    const bx = Math.floor(sp.pos.x), by = Math.floor(sp.pos.y), bz = Math.floor(sp.pos.z);
+    let hit = (by >= 0 && by < HEIGHT && isSolid(world.getBlock(bx, by, bz)));
+    if (!hit && !inNether && !inEnd) {
+      for (const arr of [zombies, creepers, skeletons, spiders, pillagers, ravagers]) {
+        for (let k = 0; k < arr.length; k++) {
+          const m = arr[k];
+          if (Math.hypot(m.x - sp.pos.x, (m.g.position.y + 0.8) - sp.pos.y, m.z - sp.pos.z) < 0.95) { hit = true; break; }
+        }
+        if (hit) break;
+      }
+    }
+    if (!hit && inEnd && checkHitEndBossOrCrystal(sp.pos, 10, 1.5)) hit = true;
+    if (hit || sp.life <= 0) {
+      shatterSplashPotion(sp.pos, sp.kind);
+      scene.remove(sp.mesh);
+      splashPotions.splice(i, 1);
+    }
+  }
+}
+
+/* ============================ 🌊 潮涌核心能量光环 (Conduit Power) ============================ */
+const activeConduits = new Map(); // "dim:x,y,z" -> { x, y, z, dim }
+let conduitAuraTimer = 0;
+function addConduitAura(x, y, z) {
+  const k = `${world.dim}:${x},${y},${z}`;
+  activeConduits.set(k, { x, y, z, dim: world.dim });
+  tone(480, 960, 0.28, 'sine', 0.22);
+  spawnParticles(x + 0.5, y + 0.5, z + 0.5, 0x38e8ff, 26);
+  toast('🌊 潮涌核心已激活！水中或雨天靠近 32 格可获永恒潮涌庇护（水肺+夜视+回血）！');
+}
+function removeConduitAura(x, y, z) {
+  activeConduits.delete(`${world.dim}:${x},${y},${z}`);
+}
+function updateConduits(dt) {
+  if (activeConduits.size === 0) return;
+  conduitAuraTimer += dt;
+  if (conduitAuraTimer < 1.0) return;
+  conduitAuraTimer = 0;
+  const wet = inWater() || feetInWater() || (!inNether && !inEnd && weather === 'rain');
+  if (!wet) return;
+  for (const c of activeConduits.values()) {
+    if (c.dim !== world.dim) continue;
+    if (Math.hypot(player.pos.x - (c.x + 0.5), player.pos.y - (c.y + 0.5), player.pos.z - (c.z + 0.5)) <= 32) {
+      player.waterBreathingTimer = Math.max(player.waterBreathingTimer || 0, 5);
+      player.nightVisionTimer = Math.max(player.nightVisionTimer || 0, 5);
+      if (player.hp < 20) { player.hp = Math.min(20, player.hp + 1); updateHearts(); }
+      spawnParticles(player.pos.x + (Math.random() - 0.5) * 0.8, player.pos.y + 1.0, player.pos.z + (Math.random() - 0.5) * 0.8, 0x46e8ff, 4);
+      break;
     }
   }
 }
@@ -17087,9 +17353,11 @@ function reelFishingRod() {
     if (r < 0.65) loot = B.RAW_FISH;
     else if (r < 0.78) loot = B.STRING;
     else if (r < 0.88) loot = B.BONE;
-    else if (r < 0.94) loot = B.BOW;
-    else if (r < 0.98) loot = B.GOLDEN_APPLE;
-    else loot = B.ENDER_PEARL;
+    else if (r < 0.88) loot = B.DRIED_KELP;
+    else if (r < 0.93) loot = B.NAUTILUS_SHELL;
+    else if (r < 0.96) loot = B.BOW;
+    else if (r < 0.985) loot = B.GOLDEN_APPLE;
+    else loot = B.HEART_OF_THE_SEA;
 
     dropItem(loot, b.pos.x, b.pos.y + 0.4, b.pos.z);
     toast('🎉 钓到了！获得了 ' + itemName(loot));
@@ -17360,6 +17628,7 @@ function updatePlayerModel(dt) {
   playerHead.rotation.x = Math.max(-0.55, Math.min(0.55, player.pitch * 0.6));
 }
 let playerBedSpawn = null; // 玩家绑定的主世界床重生点 { x, y, z }
+let lastDeathPos = null;   // 玩家上次死亡位置 { x, y, z, dim }（供追溯指针追踪）
 function findSpawn() {
   for (let r = 0; r < 200; r += 4) {
     for (let a = 0; a < 8; a++) {
@@ -17536,6 +17805,7 @@ function damagePlayer(dmg) {
       updateHearts();
       return;
     }
+    lastDeathPos = { x: Math.round(player.pos.x), y: Math.round(player.pos.y), z: Math.round(player.pos.z), dim: world.dim };
     player.hp = 20;                       // 重生
     player.hunger = 20;
     player.absorption = 0;
@@ -17741,7 +18011,7 @@ function isShield(id) { return id === B.SHIELD; }
 function isFishingRod(id) { return id === B.FISHING_ROD; }
 function isWool(id) { return id === B.WOOL || id === B.RED_WOOL || id === B.YELLOW_WOOL || id === B.BLUE_WOOL || id === B.GREEN_WOOL || id === B.BLACK_WOOL || id === B.PINK_WOOL; }
 function isPlanks(id) { return id === B.PLANKS || id === B.BIRCH_PLANKS || id === B.SPRUCE_PLANKS || id === B.CHERRY_PLANKS || id === B.CRIMSON_PLANKS || id === B.WARPED_PLANKS || id === B.JUNGLE_PLANKS || id === B.ACACIA_PLANKS || id === B.MAPLE_PLANKS; }
-function isTool(id) { return isPickaxe(id) || isAxe(id) || isShovel(id) || isSword(id) || isHoe(id) || id === B.BOW || isShield(id) || isFishingRod(id) || id === B.MACE; }
+function isTool(id) { return isPickaxe(id) || isAxe(id) || isShovel(id) || isSword(id) || isHoe(id) || id === B.BOW || isShield(id) || isFishingRod(id) || id === B.MACE || id === B.BRUSH; }
 function isWoodTier(id) { return id === B.WOOD_PICKAXE || id === B.WOOD_AXE || id === B.WOOD_SHOVEL || id === B.WOOD_SWORD || id === B.WOOD_HOE; }
 function isStoneTier(id) { return id === B.STONE_PICKAXE || id === B.STONE_AXE || id === B.STONE_SHOVEL || id === B.STONE_SWORD || id === B.STONE_HOE; }
 function isIronTier(id) { return id === B.IRON_PICKAXE || id === B.IRON_AXE || id === B.IRON_SHOVEL || id === B.IRON_SWORD || id === B.IRON_HOE; }
@@ -17756,12 +18026,12 @@ const TOOL_DURABILITY = {
   [B.IRON_PICKAXE]: 250, [B.IRON_AXE]: 250, [B.IRON_SHOVEL]: 250, [B.IRON_SWORD]: 250, [B.IRON_HOE]: 250,
   [B.DIAMOND_PICKAXE]: 1561, [B.DIAMOND_AXE]: 1561, [B.DIAMOND_SHOVEL]: 1561, [B.DIAMOND_SWORD]: 1561, [B.DIAMOND_HOE]: 1561,
   [B.NETHERITE_PICKAXE]: 2031, [B.NETHERITE_AXE]: 2031, [B.NETHERITE_SHOVEL]: 2031, [B.NETHERITE_SWORD]: 2031, [B.NETHERITE_HOE]: 2031,
-  [B.BOW]: 100, [B.SHIELD]: 180, [B.FISHING_ROD]: 64, [B.SHEARS]: 238, [B.MACE]: 500,
+  [B.BOW]: 100, [B.SHIELD]: 180, [B.FISHING_ROD]: 64, [B.SHEARS]: 238, [B.MACE]: 500, [B.BRUSH]: 64,
 };
 // 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌/材料物品不可放置）
 function isPlaceable(id) {
   if ((id >= 256 && id <= 271) || (id >= 288 && id <= 310) || (id >= 333 && id <= 340)) return false;
-  if (id === B.CHORUS_FRUIT || id === B.DRAGON_BREATH || id === B.END_CRYSTAL || id === B.END_PORTAL || id === B.END_PORTAL_FRAME_FILLED || id === B.BREEZE_ROD || id === B.WIND_CHARGE || id === B.POPPED_CHORUS_FRUIT) return false;
+  if (id === B.CHORUS_FRUIT || id === B.DRAGON_BREATH || id === B.END_CRYSTAL || id === B.END_PORTAL || id === B.END_PORTAL_FRAME_FILLED || id === B.BREEZE_ROD || id === B.WIND_CHARGE || id === B.POPPED_CHORUS_FRUIT || id === B.NAUTILUS_SHELL || id === B.HEART_OF_THE_SEA || id === B.ECHO_SHARD || id === B.RECOVERY_COMPASS || id === B.NETHER_STAR) return false;
   if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.COMPASS || id === B.CLOCK || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT || id === B.ELYTRA || id === B.NETHERITE_INGOT || id === B.NETHER_PORTAL || id === B.HONEYCOMB || id === B.BONE_MEAL || id === B.GOAT_HORN) return false;
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.MELON_SLICE) return false;
   if (isFood(id)) return false;   // 食物不可放置
@@ -17782,7 +18052,7 @@ function _fillTbl(fn) {
 
 // —— 原始判定逻辑（供建表用，保持单一事实来源；均为函数声明，不产生每次调用的闭包） ——
 function _crossRaw(i) { return i === B.FLOWER_RED || i === B.FLOWER_YELLOW || i === B.GRASS_TALL || i === B.MUSHROOM_RED || i === B.MUSHROOM_BROWN || i === B.FERN || i === B.WHEAT_CROP || i === B.WHEAT_CROP_MATURE || i === B.BAMBOO || i === B.SUGARCANE || i === B.COBWEB || i === B.POINTED_DRIPSTONE || i === B.SAPLING || i === B.MAPLE_SAPLING || i === B.CHERRY_SAPLING || i === B.WEEPING_VINES || i === B.TWISTING_VINES; }
-function _seeRaw(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || id === B.DOOR || _crossRaw(id) || id === B.TORCH || id === B.SOUL_TORCH || id === B.LILY_PAD || id === B.CHERRY_PETALS || id === B.LADDER || id === B.VINE || id === B.BED || id === B.NETHER_PORTAL || id === B.END_PORTAL || id === B.END_ROD || id === B.DRAGON_EGG || id === B.LIGHTNING_ROD || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.LEVER || id === B.BUTTON || id === B.CHAIN || id === B.BELL || id === B.GRINDSTONE || id === B.SCAFFOLDING; }
+function _seeRaw(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || id === B.DOOR || _crossRaw(id) || id === B.TORCH || id === B.SOUL_TORCH || id === B.LILY_PAD || id === B.CHERRY_PETALS || id === B.LADDER || id === B.VINE || id === B.BED || id === B.NETHER_PORTAL || id === B.END_PORTAL || id === B.END_ROD || id === B.DRAGON_EGG || id === B.LIGHTNING_ROD || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.LEVER || id === B.BUTTON || id === B.CHAIN || id === B.BELL || id === B.GRINDSTONE || id === B.SCAFFOLDING || id === B.IRON_BARS || id === B.TINTED_GLASS || id === B.CONDUIT; }
 function _solidRaw(id) { return id !== B.AIR && id !== B.WATER && !_crossRaw(id) && id !== B.TORCH && id !== B.SOUL_TORCH && id !== B.LILY_PAD && id !== B.CHERRY_PETALS && id !== B.LADDER && id !== B.VINE && id !== B.NETHER_PORTAL && id !== B.END_PORTAL && id !== B.LEVER && id !== B.BUTTON && id !== B.SCAFFOLDING; }
 function isClimbable(id) { return id === B.LADDER || id === B.VINE || id === B.WEEPING_VINES || id === B.TWISTING_VINES || id === B.SCAFFOLDING; }
 
@@ -19169,6 +19439,12 @@ const NAMES = {
   [B.OCHRE_FROGLIGHT]: '赭黄蛙明灯', [B.VERDANT_FROGLIGHT]: '青翠蛙明灯', [B.PEARLESCENT_FROGLIGHT]: '珠光蛙明灯',
   [B.COPPER_BULB]: '铜灯', [B.COPPER_BULB_ON]: '铜灯(亮)', [B.SCAFFOLDING]: '脚手架',
   [B.SMITHING_TABLE]: '锻造台', [B.STONECUTTER]: '切石机', [B.HONEYCOMB_BLOCK]: '蜜脾块', [B.CHISELED_BOOKSHELF]: '雕纹书架',
+  [B.NAUTILUS_SHELL]: '鹦鹉螺壳', [B.HEART_OF_THE_SEA]: '海洋之心', [B.CONDUIT]: '潮涌核心',
+  [B.BRUSH]: '考古刷子', [B.ECHO_SHARD]: '回响碎片', [B.RECOVERY_COMPASS]: '追溯指针', [B.DECORATED_POT]: '饰纹陶罐',
+  [B.IRON_BARS]: '铁栏杆', [B.TINTED_GLASS]: '遮光玻璃', [B.CALCITE]: '方解石', [B.TUFF]: '凝灰岩', [B.TUFF_BRICKS]: '凝灰岩砖',
+  [B.BONE_BLOCK]: '骨块', [B.DRIED_KELP]: '干海带', [B.DRIED_KELP_BLOCK]: '干海带块',
+  [B.CAULDRON]: '炼药锅', [B.LECTERN]: '讲台', [B.NETHER_STAR]: '下界之星',
+  [B.HARMING_SPLASH_POTION]: '喷溅伤害药水', [B.HEALING_SPLASH_POTION]: '喷溅治疗药水',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 function isHelmet(id) { return id === B.LEATHER_HELMET || id === B.GOLD_HELMET || id === B.IRON_HELMET || id === B.DIAMOND_HELMET || id === B.NETHERITE_HELMET || id === B.TURTLE_HELMET; }
@@ -19176,7 +19452,7 @@ function isChestplate(id) { return id === B.LEATHER_CHESTPLATE || id === B.GOLD_
 function isLeggings(id) { return id === B.LEATHER_LEGGINGS || id === B.GOLD_LEGGINGS || id === B.IRON_LEGGINGS || id === B.DIAMOND_LEGGINGS || id === B.NETHERITE_LEGGINGS; }
 function isBoots(id) { return id === B.LEATHER_BOOTS || id === B.GOLD_BOOTS || id === B.IRON_BOOTS || id === B.DIAMOND_BOOTS || id === B.NETHERITE_BOOTS; }
 function isArmor(id) { return isHelmet(id) || isChestplate(id) || isLeggings(id) || isBoots(id); }
-function isPotion(id) { return id === B.HEALING_POTION || id === B.SPEED_POTION || id === B.FIRE_RESISTANCE_POTION || id === B.STRENGTH_POTION || id === B.NIGHT_VISION_POTION || id === B.REGEN_POTION || id === B.JUMP_POTION || id === B.INVISIBILITY_POTION || id === B.SLOW_FALLING_POTION || id === B.WATER_BREATHING_POTION; }
+function isPotion(id) { return id === B.HEALING_POTION || id === B.SPEED_POTION || id === B.FIRE_RESISTANCE_POTION || id === B.STRENGTH_POTION || id === B.NIGHT_VISION_POTION || id === B.REGEN_POTION || id === B.JUMP_POTION || id === B.INVISIBILITY_POTION || id === B.SLOW_FALLING_POTION || id === B.WATER_BREATHING_POTION || id === B.HARMING_SPLASH_POTION || id === B.HEALING_SPLASH_POTION; }
 function getArmorPoints() {
   let pts = 0;
   if (!player.armor) return 0;
@@ -19283,7 +19559,7 @@ const FOOD = {
   [B.GOLDEN_APPLE]: 20, [B.SPIDER_EYE]: 2, [B.GOLDEN_CARROT]: 6, [B.ENCHANTED_GOLDEN_APPLE]: 20, [B.COOKIE]: 2, [B.CAKE]: 14,
   [B.MUSHROOM_STEW]: 6, [B.HONEY_BOTTLE]: 6, [B.SWEET_BERRIES]: 3, [B.GOLDEN_MELON]: 8,
   [B.CARROT]: 3, [B.POTATO]: 2, [B.BAKED_POTATO]: 5, [B.CHORUS_FRUIT]: 4,
-  [B.GLOW_BERRIES]: 3, [B.BEETROOT]: 2, [B.BEETROOT_SOUP]: 8,
+  [B.GLOW_BERRIES]: 3, [B.BEETROOT]: 2, [B.BEETROOT_SOUP]: 8, [B.DRIED_KELP]: 2,
 };
 function isFood(id) { return FOOD[id] !== undefined; }
 
@@ -19581,6 +19857,29 @@ const RECIPES = [
   { out: B.STONECUTTER, n: 1, need: [[B.IRON_INGOT, 1], [B.STONE, 3]] },
   { out: B.HONEYCOMB_BLOCK, n: 1, need: [[B.HONEYCOMB, 4]] },
   { out: B.CHISELED_BOOKSHELF, n: 1, need: [[B.PLANKS, 6], [B.BOOK, 3]] },
+  { out: B.NAUTILUS_SHELL, n: 1, need: [[B.PRISMARINE, 2], [B.BONE, 2]] },
+  { out: B.HEART_OF_THE_SEA, n: 1, need: [[B.DIAMOND, 2], [B.PRISMARINE, 4], [B.LAPIS_LAZULI, 4]] },
+  { out: B.CONDUIT, n: 1, need: [[B.NAUTILUS_SHELL, 8], [B.HEART_OF_THE_SEA, 1]] },
+  { out: B.BRUSH, n: 1, need: [[B.FEATHER, 1], [B.COPPER_INGOT, 1], [B.STICK, 1]] },
+  { out: B.ECHO_SHARD, n: 1, need: [[B.SCULK_BLOCK, 2], [B.AMETHYST_SHARD, 2]] },
+  { out: B.RECOVERY_COMPASS, n: 1, need: [[B.COMPASS, 1], [B.ECHO_SHARD, 8]] },
+  { out: B.DECORATED_POT, n: 1, need: [[B.BRICK_ITEM, 4]] },
+  { out: B.IRON_BARS, n: 16, need: [[B.IRON_INGOT, 6]] },
+  { out: B.TINTED_GLASS, n: 2, need: [[B.GLASS, 1], [B.AMETHYST_SHARD, 4]] },
+  { out: B.CALCITE, n: 4, need: [[B.QUARTZ, 2], [B.POLISHED_DIORITE, 2]] },
+  { out: B.TUFF, n: 4, need: [[B.DEEPSLATE, 2], [B.POLISHED_ANDESITE, 2]] },
+  { out: B.TUFF_BRICKS, n: 4, need: [[B.TUFF, 4]] },
+  { out: B.BONE_BLOCK, n: 1, need: [[B.BONE_MEAL, 9]] },
+  { out: B.BONE_MEAL, n: 9, need: [[B.BONE_BLOCK, 1]] },
+  { out: B.DRIED_KELP, n: 4, need: [[B.LILY_PAD, 2], [B.CHARCOAL, 1]] },
+  { out: B.DRIED_KELP_BLOCK, n: 1, need: [[B.DRIED_KELP, 9]] },
+  { out: B.DRIED_KELP, n: 9, need: [[B.DRIED_KELP_BLOCK, 1]] },
+  { out: B.CAULDRON, n: 1, need: [[B.IRON_INGOT, 7]] },
+  { out: B.LECTERN, n: 1, need: [[B.PLANKS, 4], [B.BOOKSHELF, 1]] },
+  { out: B.NETHER_STAR, n: 1, need: [[B.DIAMOND_BLOCK, 1], [B.BLAZE_POWDER, 4], [B.SOUL_SAND, 4]] },
+  { out: B.BEACON, n: 1, need: [[B.GLASS, 5], [B.OBSIDIAN, 3], [B.NETHER_STAR, 1]] },
+  { out: B.HARMING_SPLASH_POTION, n: 2, need: [[B.SPIDER_EYE, 1], [B.GUNPOWDER, 1], [B.GLASS_BOTTLE, 2]] },
+  { out: B.HEALING_SPLASH_POTION, n: 2, need: [[B.GOLDEN_MELON, 1], [B.GUNPOWDER, 1], [B.GLASS_BOTTLE, 2]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -19625,6 +19924,7 @@ function smeltOut(id) {
 }
 function fuelVal(id) {
   if (id === B.LAVA_BUCKET) return 100;
+  if (id === B.DRIED_KELP_BLOCK) return 20;
   if (id === B.COAL || id === B.CHARCOAL) return 8;
   if (isLog(id)) return 2;
   if (isPlanks(id)) return 1;
@@ -20868,6 +21168,58 @@ function makeItemIcon(id) {
     ctx.fillStyle = '#b474d6'; ctx.fillRect(10, 6, 12, 20); ctx.fillRect(6, 10, 20, 12);
     ctx.fillStyle = '#e8c4fa'; ctx.fillRect(11, 11, 10, 10);
     ctx.fillStyle = '#fff0ff'; ctx.fillRect(13, 13, 6, 6);
+  } else if (id === B.NAUTILUS_SHELL) {
+    // 鹦鹉螺壳：螺旋象牙色海螺纹
+    ctx.fillStyle = '#9c8672'; ctx.fillRect(7, 7, 18, 18);
+    ctx.fillStyle = '#e2d2be'; ctx.fillRect(8, 8, 16, 15);
+    ctx.fillStyle = '#c49678'; ctx.fillRect(10, 9, 12, 4); ctx.fillRect(17, 13, 5, 8);
+    ctx.fillStyle = '#6c5244'; ctx.fillRect(12, 13, 6, 6);
+    ctx.fillStyle = '#f8f0e4'; ctx.fillRect(13, 14, 3, 3);
+  } else if (id === B.HEART_OF_THE_SEA) {
+    // 海洋之心：湛蓝流光深海宝石
+    ctx.fillStyle = '#0e5c84'; ctx.fillRect(9, 7, 14, 18); ctx.fillRect(7, 9, 18, 14);
+    ctx.fillStyle = '#24b4dc'; ctx.fillRect(10, 8, 12, 16); ctx.fillRect(8, 10, 16, 12);
+    ctx.fillStyle = '#8ef4ff'; ctx.fillRect(11, 10, 7, 8);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(12, 11, 3, 3);
+  } else if (id === B.BRUSH) {
+    // 考古刷子：木柄 + 铜箍 + 柔软羽刷头
+    for (let k = 0; k < 10; k++) { ctx.fillStyle = '#8e5a32'; ctx.fillRect(6 + k, 24 - k, 3, 3); }
+    ctx.fillStyle = '#d47c44'; ctx.fillRect(15, 13, 5, 5);
+    ctx.fillStyle = '#c8b89a'; ctx.fillRect(18, 6, 8, 9);
+    ctx.fillStyle = '#efe4cc'; ctx.fillRect(19, 7, 6, 5);
+    ctx.fillStyle = '#7c6e58'; ctx.fillRect(20, 9, 1, 5); ctx.fillRect(23, 8, 1, 6);
+  } else if (id === B.ECHO_SHARD) {
+    // 回响碎片：深暗幽匿蓝晶棱片
+    ctx.fillStyle = '#0a2e38'; ctx.fillRect(10, 6, 12, 20);
+    ctx.fillStyle = '#146e7c'; ctx.fillRect(11, 8, 10, 16);
+    ctx.fillStyle = '#32d8d8'; ctx.fillRect(13, 10, 5, 11);
+    ctx.fillStyle = '#a8ffff'; ctx.fillRect(14, 11, 2, 5);
+  } else if (id === B.RECOVERY_COMPASS) {
+    // 追溯指针：幽匿青黑表盘 + 发光青蓝指针
+    ctx.fillStyle = '#223842'; ctx.fillRect(7, 7, 18, 18);
+    ctx.fillStyle = '#4c6670'; ctx.fillRect(8, 8, 16, 16);
+    ctx.fillStyle = '#0e1e26'; ctx.fillRect(10, 10, 12, 12);
+    ctx.fillStyle = '#2cf4ea'; ctx.fillRect(15, 11, 2, 7); ctx.fillRect(14, 13, 4, 2);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(15, 15, 2, 2);
+  } else if (id === B.DRIED_KELP) {
+    // 干海带：深墨绿烤干海藻叶片
+    ctx.fillStyle = '#22341c'; ctx.fillRect(8, 8, 16, 16);
+    ctx.fillStyle = '#38562c'; ctx.fillRect(9, 9, 14, 14);
+    ctx.fillStyle = '#547840'; ctx.fillRect(11, 10, 5, 11); ctx.fillRect(17, 12, 4, 9);
+  } else if (id === B.NETHER_STAR) {
+    // 下界之星：璀璨四角星芒圣星
+    ctx.fillStyle = '#d4c8ff'; ctx.fillRect(14, 4, 4, 24); ctx.fillRect(4, 14, 24, 4);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(15, 6, 2, 20); ctx.fillRect(6, 15, 20, 2);
+    ctx.fillStyle = '#f8f0ff'; ctx.fillRect(11, 11, 10, 10);
+    ctx.fillStyle = '#fff6a8'; ctx.fillRect(13, 13, 6, 6);
+  } else if (id === B.HARMING_SPLASH_POTION || id === B.HEALING_SPLASH_POTION) {
+    // 喷溅药水：广口圆腹投掷瓶（紫红伤害 / 粉红治疗）
+    const isHeal = (id === B.HEALING_SPLASH_POTION);
+    ctx.fillStyle = '#a06834'; ctx.fillRect(13, 4, 6, 3);
+    ctx.fillStyle = '#d8e8f8'; ctx.fillRect(11, 7, 10, 3); ctx.fillRect(8, 10, 16, 16);
+    ctx.fillStyle = isHeal ? '#e02868' : '#6c1030'; ctx.fillRect(9, 13, 14, 12);
+    ctx.fillStyle = isHeal ? '#ff6ea0' : '#a82252'; ctx.fillRect(10, 14, 8, 8);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(11, 12, 2, 4); ctx.fillRect(20, 7, 3, 2);
   }
   return cv;
 }
@@ -20886,8 +21238,8 @@ function makeIcon(id) {
   return cv;
 }
 function _makeIconRaw(id) {
-  if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD && id !== B.CROSSBOW && id !== B.SHEARS && id !== B.FLINT_AND_STEEL && id !== B.MACE)) return makeToolIcon(id);
-  if ((id >= 256 && id <= 271) || (id >= 288 && id <= 310) || (id >= 333 && id <= 340) || id === B.CHORUS_FRUIT || id === B.DRAGON_BREATH || id === B.END_CRYSTAL || id === B.BREEZE_ROD || id === B.WIND_CHARGE || id === B.MACE || id === B.POPPED_CHORUS_FRUIT) return makeItemIcon(id);
+  if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD && id !== B.CROSSBOW && id !== B.SHEARS && id !== B.FLINT_AND_STEEL && id !== B.MACE && id !== B.BRUSH)) return makeToolIcon(id);
+  if ((id >= 256 && id <= 271) || (id >= 288 && id <= 310) || (id >= 333 && id <= 340) || id === B.CHORUS_FRUIT || id === B.DRAGON_BREATH || id === B.END_CRYSTAL || id === B.BREEZE_ROD || id === B.WIND_CHARGE || id === B.MACE || id === B.POPPED_CHORUS_FRUIT || id === B.NAUTILUS_SHELL || id === B.HEART_OF_THE_SEA || id === B.BRUSH || id === B.ECHO_SHARD || id === B.RECOVERY_COMPASS || id === B.NETHER_STAR) return makeItemIcon(id);
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.GOLDEN_CARROT || id === B.COMPASS || id === B.CLOCK || id === B.ENCHANTED_GOLDEN_APPLE || id === B.COOKIE || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT || id === B.ELYTRA || id === B.NETHERITE_INGOT || id === B.HONEYCOMB || id === B.BONE_MEAL || id === B.GOAT_HORN) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
   return makeIconCanvas(id);
@@ -21153,7 +21505,7 @@ function creativeCategoryOf(id) {
     id === B.TRIDENT || id === B.ELYTRA || id === B.SPYGLASS ||
     id === B.COMPASS || id === B.CLOCK || id === B.SADDLE ||
     id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.MILK_BUCKET ||
-    id === B.ARROW || id === B.SPECTRAL_ARROW || id === B.TOTEM_OF_UNDYING || id === B.GOAT_HORN || id === B.WIND_CHARGE
+    id === B.ARROW || id === B.SPECTRAL_ARROW || id === B.TOTEM_OF_UNDYING || id === B.GOAT_HORN || id === B.WIND_CHARGE || id === B.RECOVERY_COMPASS
   ) return 'tools';
   if (
     id === B.GRASS || id === B.DIRT || id === B.SAND || id === B.RED_SAND || id === B.WHITE_SAND ||
@@ -21180,7 +21532,7 @@ function creativeGiveCount(id) {
     id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL ||
     id === B.TRIDENT || id === B.ELYTRA || id === B.SPYGLASS || id === B.SADDLE ||
     id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.MILK_BUCKET ||
-    id === B.MUSIC_DISC || id === B.GOAT_HORN || id === B.TOTEM_OF_UNDYING || id === B.BED
+    id === B.MUSIC_DISC || id === B.GOAT_HORN || id === B.TOTEM_OF_UNDYING || id === B.BED || id === B.RECOVERY_COMPASS
   ) return 1;
   return MAX_STACK;
 }
@@ -22079,6 +22431,9 @@ const HARDNESS = {
   [B.HEAVY_CORE]: 10.0, [B.OCHRE_FROGLIGHT]: 0.4, [B.VERDANT_FROGLIGHT]: 0.4, [B.PEARLESCENT_FROGLIGHT]: 0.4,
   [B.COPPER_BULB]: 2.6, [B.COPPER_BULB_ON]: 2.6, [B.SCAFFOLDING]: 0.15,
   [B.SMITHING_TABLE]: 2.0, [B.STONECUTTER]: 2.5, [B.HONEYCOMB_BLOCK]: 0.6, [B.CHISELED_BOOKSHELF]: 1.2,
+  [B.CONDUIT]: 2.5, [B.DECORATED_POT]: 0.4, [B.IRON_BARS]: 3.0, [B.TINTED_GLASS]: 0.5,
+  [B.CALCITE]: 1.2, [B.TUFF]: 1.6, [B.TUFF_BRICKS]: 1.8, [B.BONE_BLOCK]: 1.8,
+  [B.DRIED_KELP_BLOCK]: 0.5, [B.CAULDRON]: 2.2, [B.LECTERN]: 1.4,
 };
 function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
 // 破坏掉落物
@@ -22230,6 +22585,7 @@ function updateBreaking(dt) {
     stopBreaking();
     if (isDynamicLightBlock(bid)) removeTorchLight(bx, by, bz);
     if (bid === B.BEACON) removeBeaconBeam(bx, by, bz);
+    if (bid === B.CONDUIT) removeConduitAura(bx, by, bz);
     if (bid === B.RESPAWN_ANCHOR) respawnAnchorCharges.delete(`${bx},${by},${bz}`);
     if (bid === B.DOOR) {
       openDoors.delete(`${bx},${by},${bz}`);
@@ -23276,6 +23632,8 @@ function onMousedown(btn) {
           [B.QUARTZ]: B.QUARTZ_PILLAR,
           [B.END_STONE]: B.END_STONE_BRICKS,
           [B.PURPUR_BLOCK]: B.PURPUR_PILLAR,
+          [B.TUFF]: B.TUFF_BRICKS,
+          [B.CALCITE]: B.QUARTZ_PILLAR,
         };
         if (sel && cutMap[sel.id]) {
           const outId = cutMap[sel.id];
@@ -23292,6 +23650,78 @@ function onMousedown(btn) {
           return;
         }
         toast('🪚 切石机：手持石头/圆石/砂岩/深板岩/黑石/石英/末地石/紫珀块右键可无损 1:1 精切！');
+        return;
+      }
+      // 手持考古刷子右键沙子/红沙/白沙/砾石/泥巴/黏土 → 考古发掘远古宝藏
+      if (sel && sel.id === B.BRUSH && (hit.id === B.SAND || hit.id === B.RED_SAND || hit.id === B.WHITE_SAND || hit.id === B.GRAVEL || hit.id === B.MUD || hit.id === B.CLAY)) {
+        const nowBrush = performance.now();
+        if (nowBrush - (player._lastBrush || 0) < 420) return;
+        player._lastBrush = nowBrush;
+        tone(320, 460, 0.12, 'triangle', 0.12);
+        burst(0.08, 0.10, 1500, 'bandpass');
+        spawnParticles(hit.x + 0.5, hit.y + 0.8, hit.z + 0.5, blockColor(hit.id), 14);
+        if (!player.fly && sel.dur !== undefined) {
+          sel.dur--;
+          if (sel.dur <= 0) { hotbar[selected] = null; playBreak(); toast('🖌️ 考古刷子已磨损殆尽！'); }
+          refreshHotbar();
+        }
+        if (Math.random() < 0.38) {
+          const rArch = Math.random();
+          let relic = B.BRICK_ITEM;
+          if (rArch < 0.22) relic = B.BRICK_ITEM;
+          else if (rArch < 0.40) relic = B.BONE;
+          else if (rArch < 0.56) relic = B.AMETHYST_SHARD;
+          else if (rArch < 0.70) relic = B.GOLD_INGOT;
+          else if (rArch < 0.82) relic = B.EMERALD;
+          else if (rArch < 0.91) relic = B.NAUTILUS_SHELL;
+          else if (rArch < 0.97) relic = B.ECHO_SHARD;
+          else relic = B.DIAMOND;
+          world.setBlock(hit.x, hit.y, hit.z, B.DIRT);
+          enqueueAround(hit.x, hit.y, hit.z);
+          dropItem(relic, hit.x, hit.y + 0.8, hit.z);
+          tone(520, 880, 0.18, 'sine', 0.20);
+          spawnParticles(hit.x + 0.5, hit.y + 0.9, hit.z + 0.5, 0xffd700, 18);
+          toast(`🏺 考古发现！轻刷泥沙出土了远古珍宝【${itemName(relic)}】！`);
+        } else {
+          toast('🖌️ 细细扫去表层浮沙，似乎还能继续发掘...');
+        }
+        return;
+      }
+      // 右键炼药锅 → 清水降温回血 / 装水 / 倒水
+      if (hit.id === B.CAULDRON) {
+        if (sel && sel.id === B.BUCKET) {
+          replaceBucketSlot(B.WATER_BUCKET);
+          tone(420, 280, 0.14, 'sine', 0.22);
+          toast('🪣 从炼药锅中舀起了一桶清水！');
+          return;
+        }
+        if (sel && sel.id === B.WATER_BUCKET) {
+          if (!player.fly) replaceBucketSlot(B.BUCKET);
+          tone(280, 480, 0.16, 'sine', 0.22);
+          spawnParticles(hit.x + 0.5, hit.y + 0.9, hit.z + 0.5, 0x38bdf8, 18);
+          toast('💧 向炼药锅注入了清澈泉水！');
+          return;
+        }
+        player.hp = Math.min(20, player.hp + 2);
+        updateHearts();
+        tone(380, 560, 0.16, 'sine', 0.18);
+        spawnParticles(hit.x + 0.5, hit.y + 0.9, hit.z + 0.5, 0x60d8ff, 16);
+        toast('🧪 掬起炼药锅中的甘冽清泉洗去疲惫（+2 生命）！');
+        return;
+      }
+      // 右键饰纹陶罐 → 轻叩古陶清响
+      if (hit.id === B.DECORATED_POT) {
+        tone(260, 190, 0.18, 'sine', 0.20);
+        spawnParticles(hit.x + 0.5, hit.y + 0.8, hit.z + 0.5, 0xd49464, 10);
+        toast('🏺 轻叩饰纹陶罐，回荡着古朴悠远的陶韵清声。');
+        return;
+      }
+      // 右键讲台 → 播报冒险编年史（种子/维度/经验/屠龙/重生点）
+      if (hit.id === B.LECTERN) {
+        playClick();
+        const dimLabel = inNether ? '下界' : (inEnd ? '末地' : '主世界');
+        const bedStr = playerBedSpawn ? `已绑定(${playerBedSpawn.x},${playerBedSpawn.y},${playerBedSpawn.z})` : '未绑定';
+        toast(`📜 冒险志 · ${dimLabel} · Lv.${player.level} · 末影龙:${dragonDefeated ? '已讨伐' : '盘踞中'} · 床:${bedStr}`);
         return;
       }
       // 右键雕纹书架 → 翻阅书架典籍获得实用冒险提示
@@ -23952,6 +24382,38 @@ function onMousedown(btn) {
       return;
     }
 
+    // 手持追溯指针右键 → 播报上次死亡地点坐标、维度与距离
+    if (sel && sel.id === B.RECOVERY_COMPASS) {
+      tone(540, 760, 0.16, 'sine', 0.20);
+      if (!lastDeathPos) {
+        toast('🧭 追溯指针静静悬浮：你在本世界尚未倒下过，安然无恙！');
+      } else {
+        const dDim = lastDeathPos.dim === 'nether' ? '下界' : (lastDeathPos.dim === 'end' ? '末地' : '主世界');
+        const dist = (lastDeathPos.dim === world.dim)
+          ? `（直线距离 ${Math.round(Math.hypot(lastDeathPos.x - player.pos.x, lastDeathPos.z - player.pos.z))} 格）`
+          : '（位于另一维度）';
+        spawnParticles(player.pos.x, player.pos.y + 1.1, player.pos.z, 0x2cf4ea, 16);
+        toast(`🧭 追溯指针共鸣！上次倒下地点：【${dDim}】(${lastDeathPos.x}, ${lastDeathPos.y}, ${lastDeathPos.z})${dist}`);
+      }
+      return;
+    }
+
+    // 手持喷溅伤害药水投掷
+    if (sel && sel.id === B.HARMING_SPLASH_POTION) {
+      if (!player.fly) removeItem(B.HARMING_SPLASH_POTION, 1);
+      refreshHotbar();
+      launchSplashPotion(origin, dir, 'harm');
+      return;
+    }
+
+    // 手持喷溅治疗药水投掷
+    if (sel && sel.id === B.HEALING_SPLASH_POTION) {
+      if (!player.fly) removeItem(B.HEALING_SPLASH_POTION, 1);
+      refreshHotbar();
+      launchSplashPotion(origin, dir, 'heal');
+      return;
+    }
+
     // 手持风弹发射（零破坏风压弹 + 朝脚下发射触发经典风弹超级跳）
     if (sel && sel.id === B.WIND_CHARGE) {
       if (!player.fly) removeItem(B.WIND_CHARGE, 1);
@@ -24263,6 +24725,7 @@ function onMousedown(btn) {
     else world.setBlock(px, py, pz, sid);
     if (isDynamicLightBlock(sid)) addTorchLight(px, py, pz);
     if (sid === B.BEACON) addBeaconBeam(px, py, pz);
+    if (sid === B.CONDUIT) addConduitAura(px, py, pz);
     if (isSapling(sid)) {
       plantedSaplings.set(`${px},${py},${pz}`, { x: px, y: py, z: pz, id: sid, growAt: performance.now() + 15000 + Math.random() * 15000 });
       toast('🌱 树苗已播种入土，片刻后将长成大树（可用骨粉催熟）');
@@ -24506,6 +24969,8 @@ function animate() {
     updateSnowballs(dt);
     updateFireCharges(dt);
     updateWindCharges(dt);
+    updateSplashPotions(dt);
+    updateConduits(dt);
     updateFireworks(dt);
     updateEnderPearls(dt);
     updateEnderEyes(dt);
@@ -25101,6 +25566,8 @@ function reloadActiveWorld(seed, opts = {}) {
     torchLights.clear();
     for (const b of activeBeacons.values()) if (b && b.group) scene.remove(b.group);
     activeBeacons.clear();
+    activeConduits.clear();
+    lastDeathPos = null;
     respawnAnchorCharges.clear();
     waterQ.length = 0; waterHead = 0; waterSet.clear();
     groundCache.clear();
