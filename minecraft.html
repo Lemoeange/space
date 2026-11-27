@@ -1326,8 +1326,8 @@ const END_PILLARS = (() => {
 
 function endBiomeAt(x, z) {
   const dist = Math.hypot(x, z);
-  if (dist < 78) return 1; // 末地主岛
-  if (dist < 126) return 3; // 末地虚空荒原带
+  if (dist < 78) return 1;  // 末地主岛
+  if (dist < 380) return 3; // 广袤末地虚空鸿沟（隔绝外岛，防止未屠龙提前搭桥抵达）
   const isl = P.terrain.fbm2((x + WX) * 0.0085 + 9100, (z + WZ) * 0.0085 + 9100, 3);
   if (isl > 0.24) return 4; // 末地城高地
   if (isl > 0.02) return 2; // 末地高地（紫颂林）
@@ -1354,8 +1354,8 @@ function endColumnAt(x, z) {
     }
     return { hasLand: false, topY: 0, botY: 0, isMain: false, islandN: 0 };
   }
-  // 2) 中间虚空鸿沟（r ∈ [72, 128)）
-  if (dist < 128) return { hasLand: false, topY: 0, botY: 0, isMain: false, islandN: 0 };
+  // 2) 中间广袤虚空鸿沟（r ∈ [72, 384)，距离外岛拉远 2 倍以上，防止未屠龙提前前往）
+  if (dist < 384) return { hasLand: false, topY: 0, botY: 0, isMain: false, islandN: 0 };
   // 3) 末地外岛群（无限浮空末地石群岛，含紫颂果树林与宏伟末地城高地）
   const wx = x + WX, wz = z + WZ;
   const isl = P.terrain.fbm2(wx * 0.0085 + 9100, wz * 0.0085 + 9100, 3);
@@ -5615,7 +5615,7 @@ class World {
 
     // 第四遍：外岛紫颂果树林（CHORUS_PLANT 枝干 + CHORUS_FLOWER 顶端花朵）
     const centerDist = Math.hypot(baseX + 8, baseZ + 8);
-    if (centerDist >= 126) {
+    if (centerDist >= 382) {
       const eRnd = mulberry32((c.cx * 524287 + c.cz * 131071) ^ 0x6e4b2a91);
       for (let lz = 2; lz < 14; lz++) {
         for (let lx = 2; lx < 14; lx++) {
@@ -5642,13 +5642,13 @@ class World {
         }
       }
 
-      // 第五遍：外岛宏伟末地城塔楼 & 浮空末地船（4×4 区块网格，含潜影盒、末地烛与鞘翅宝箱！）
+      // 第五遍：外岛宏伟末地城塔楼 & 浮空末地船（4×4 区块网格，适度稀有，含潜影盒、末地烛与鞘翅宝箱！）
       const ex = Math.floor(c.cx / 4), ez = Math.floor(c.cz / 4);
       const rx = ((c.cx % 4) + 4) % 4, rz = ((c.cz % 4) + 4) % 4;
       const cityHubRx = 1 + ((plantHash(ex * 31 + 7, ez * 43 + 11) * 2) | 0);
       const cityHubRz = 1 + ((plantHash(ex * 53 + 3, ez * 29 + 19) * 2) | 0);
       const centerTop = colTop[8 * 16 + 8];
-      if (rx === cityHubRx && rz === cityHubRz && centerTop >= 56 && centerTop <= 88 && plantHash(ex * 89 + 13, ez * 97 + 23) < 0.48) {
+      if (rx === cityHubRx && rz === cityHubRz && centerTop >= 56 && centerTop <= 88 && plantHash(ex * 89 + 13, ez * 97 + 23) < 0.33) {
         const y0 = centerTop;
         // 1) 三层末地城主塔（底座 10×10 末地石砖 + 紫珀塔身 + 末地烛照明 + 潜影盒与珍宝库）
         const towerH = 18;
@@ -15623,7 +15623,7 @@ function spawnEnderDragon() {
     state: 'orbit', stateTimer: 9.0,
     angle: 0,
     beamLine, healCrystal: null,
-    fireballCd: 4.5, hurtT: 0, attackCd: 0
+    fireballCd: 9.5, hurtT: 0, attackCd: 0
   };
   playDragonRoar();
   updateDragonHUD();
@@ -15782,30 +15782,35 @@ function teleportToEnd() {
     // 末地内部折跃门 OR 返回主世界
     const bx = Math.floor(player.pos.x), bz = Math.floor(player.pos.z);
     if (Math.hypot(bx - 56, bz) <= 4) {
-      // 主岛折跃门 → 外岛高地 (176, y, 0)
-      const ocx = Math.floor(176 / CHUNK), ocz = 0;
+      // 主岛折跃门 → 跨越 384+ 格广袤虚空直达外岛高地（自动定位实心外岛落脚点）
+      let destX = 420;
+      for (let tx = 412; tx <= 560; tx += 4) {
+        const cTest = endColumnAt(tx, 0);
+        if (cTest.hasLand && cTest.topY >= 58) { destX = tx; break; }
+      }
+      const ocx = Math.floor(destX / CHUNK), ocz = 0;
       for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) world.ensureChunk(ocx + dx, ocz + dz);
-      const col = endColumnAt(176, 0);
+      const col = endColumnAt(destX, 0);
       const landY = col.hasLand ? col.topY : 66;
       for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
-        world.setBlock(176 + dx, landY, dz, B.END_STONE);
-        for (let dy = 1; dy <= 4; dy++) world.setBlock(176 + dx, landY + dy, dz, B.AIR);
+        world.setBlock(destX + dx, landY, dz, B.END_STONE);
+        for (let dy = 1; dy <= 4; dy++) world.setBlock(destX + dx, landY + dy, dz, B.AIR);
       }
-      // 在外岛抵达点旁边竖立返程末地折跃门 (172, landY + 2, 0)
-      world.setBlock(172, landY + 1, 0, B.BEDROCK);
-      world.setBlock(172, landY + 2, 0, B.END_PORTAL);
-      world.setBlock(172, landY + 3, 0, B.BEDROCK);
+      // 在外岛抵达点旁边竖立返程末地折跃门 (destX - 4, landY + 2, 0)
+      world.setBlock(destX - 4, landY + 1, 0, B.BEDROCK);
+      world.setBlock(destX - 4, landY + 2, 0, B.END_PORTAL);
+      world.setBlock(destX - 4, landY + 3, 0, B.BEDROCK);
       for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
         const cc = world.chunks.get(key(ocx + dx, ocz + dz));
         if (cc) buildChunkMeshes(cc);
       }
-      player.pos.set(176.5, landY + 1.2, 0.5);
+      player.pos.set(destX + 0.5, landY + 1.2, 0.5);
       player.vel.set(0, 0, 0);
-      spawnParticles(176.5, landY + 2, 0.5, 0x38f8d0, 42);
-      toast('🏝️ 穿越末地折跃门，抵达【末地外岛群】！探索紫颂林、末地城与浮空末地船！');
+      spawnParticles(destX + 0.5, landY + 2, 0.5, 0x38f8d0, 42);
+      toast('🏝️ 穿越末地折跃门，抵达遥远的【末地外岛群】！探索紫颂林、末地城与浮空末地船！');
       return;
     }
-    if (Math.hypot(bx - 172, bz) <= 4) {
+    if (Math.hypot(bx, bz) >= 350) {
       // 外岛返程折跃门 → 主岛东缘 (52, 65, 0)
       const mcx = Math.floor(52 / CHUNK);
       for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) world.ensureChunk(mcx + dx, dz);
@@ -15871,7 +15876,7 @@ function updateEndDimension(dt) {
     c.inner.rotation.z = nowT * 1.5;
   }
 
-  // 4) 末影龙 AI（盘旋充电 → 俯冲吐息 → 祭坛盘踞）
+  // 4) 末影龙 AI（盘旋充电 → 俯冲吐息 → 祭坛长时间盘踞输出窗口；不锁定创造模式玩家）
   if (enderDragon && enderDragon.hp > 0) {
     const d = enderDragon;
     d.stateTimer -= dt;
@@ -15909,33 +15914,39 @@ function updateEndDimension(dt) {
       spd = 17;
       if (d.stateTimer <= 0) {
         const playerOnIsland = Math.hypot(player.pos.x, player.pos.z) < 72;
-        d.state = (playerOnIsland && Math.random() < 0.62) ? 'swoop' : 'perch';
-        d.stateTimer = d.state === 'swoop' ? 5.5 : 7.0;
-        if (d.state === 'swoop') playDragonRoar();
+        // 创造模式玩家不被锁定俯冲；生存玩家下 45% 俯冲、55% 盘踞祭坛（盘踞时间翻倍至 14 秒方便近战输出）
+        const doSwoop = (!player.fly && playerOnIsland && Math.random() < 0.45);
+        d.state = doSwoop ? 'swoop' : 'perch';
+        d.stateTimer = doSwoop ? 5.0 : 14.0;
+        if (doSwoop) playDragonRoar();
       }
     } else if (d.state === 'swoop') {
-      tx = player.pos.x;
-      ty = Math.max(66, player.pos.y + 4.5);
-      tz = player.pos.z;
-      spd = 23;
-      const distP = Math.hypot(player.pos.x - d.x, player.pos.y + 1 - d.y, player.pos.z - d.z);
-      if (distP < 5.5 && d.attackCd <= 0) {
-        d.attackCd = 1.6;
-        if (!player.fly) {
+      // 若玩家中途切入创造模式，立刻解除锁定返回盘旋
+      if (player.fly) {
+        d.state = 'orbit';
+        d.stateTimer = 7.0;
+      } else {
+        tx = player.pos.x;
+        ty = Math.max(66, player.pos.y + 4.5);
+        tz = player.pos.z;
+        spd = 23;
+        const distP = Math.hypot(player.pos.x - d.x, player.pos.y + 1 - d.y, player.pos.z - d.z);
+        if (distP < 5.5 && d.attackCd <= 0) {
+          d.attackCd = 1.6;
           damagePlayer(4);
           player.vel.y = 9.5;
           const kb = Math.max(0.01, Math.hypot(player.pos.x - d.x, player.pos.z - d.z));
           player.vel.x += ((player.pos.x - d.x) / kb) * 10;
           player.vel.z += ((player.pos.z - d.z) / kb) * 10;
           toast('🐉 末影龙振翼重击！');
+          d.state = 'orbit';
+          d.stateTimer = 7.5;
         }
-        d.state = 'orbit';
-        d.stateTimer = 7.5;
+        if (d.stateTimer <= 0) { d.state = 'orbit'; d.stateTimer = 7.0; }
       }
-      if (d.stateTimer <= 0) { d.state = 'orbit'; d.stateTimer = 7.0; }
     } else if (d.state === 'perch') {
-      tx = 0.5; ty = 68.5; tz = 0.5; spd = 14;
-      if (d.stateTimer <= 0) { d.state = 'orbit'; d.stateTimer = 8.5; }
+      tx = 0.5; ty = 66.8; tz = 0.5; spd = 14;
+      if (d.stateTimer <= 0) { d.state = 'orbit'; d.stateTimer = 8.0; }
     }
 
     // 平滑飞向目标并转向
@@ -15963,19 +15974,21 @@ function updateEndDimension(dt) {
       d.tailSegs[i].position.x = Math.cos(nowT * 3.2 - i * 0.55) * 0.22;
     }
 
-    // 喷吐紫焰龙息火球
-    if (d.fireballCd <= 0 && Math.hypot(player.pos.x - d.x, player.pos.z - d.z) < 62) {
-      d.fireballCd = 5.5 + Math.random() * 3.0;
-      const fbMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.42, 10, 10),
-        new THREE.MeshBasicMaterial({ color: 0xe84aff })
-      );
-      const start = new THREE.Vector3(d.x + Math.sin(d.yaw) * 4.5, d.y, d.z + Math.cos(d.yaw) * 4.5);
-      fbMesh.position.copy(start);
-      scene.add(fbMesh);
-      const toP = new THREE.Vector3(player.pos.x - start.x, (player.pos.y + 0.8) - start.y, player.pos.z - start.z).normalize();
-      dragonFireballs.push({ mesh: fbMesh, pos: start, vel: toP.multiplyScalar(22), life: 4.5 });
-      tone(210, 110, 0.28, 'sawtooth', 0.16);
+    // 喷吐紫焰龙息火球（大幅降低喷吐频率与概率，且不锁定创造模式玩家）
+    if (!player.fly && d.fireballCd <= 0 && Math.hypot(player.pos.x - d.x, player.pos.z - d.z) < 62) {
+      d.fireballCd = 12.5 + Math.random() * 6.5;
+      if (Math.random() < 0.60) {
+        const fbMesh = new THREE.Mesh(
+          new THREE.SphereGeometry(0.42, 10, 10),
+          new THREE.MeshBasicMaterial({ color: 0xe84aff })
+        );
+        const start = new THREE.Vector3(d.x + Math.sin(d.yaw) * 4.5, d.y, d.z + Math.cos(d.yaw) * 4.5);
+        fbMesh.position.copy(start);
+        scene.add(fbMesh);
+        const toP = new THREE.Vector3(player.pos.x - start.x, (player.pos.y + 0.8) - start.y, player.pos.z - start.z).normalize();
+        dragonFireballs.push({ mesh: fbMesh, pos: start, vel: toP.multiplyScalar(22), life: 4.5 });
+        tone(210, 110, 0.28, 'sawtooth', 0.16);
+      }
     }
     updateDragonHUD();
   }
