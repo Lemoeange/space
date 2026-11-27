@@ -845,9 +845,9 @@
 
 <!-- ============ 纯噪声与地形生成（无 DOM / 无依赖） ============ -->
 <script>
-const HEIGHT = 96;      // 世界高度
-const SEA = 34;         // 主世界海平面
-const NETHER_SEA = 28;  // 下界岩浆海平面
+const HEIGHT = 160;     // 世界高度（支持 60~135+ 地表起伏与多层大型地下结构）
+const SEA = 64;         // 主世界海平面
+const NETHER_SEA = 42;  // 下界岩浆海平面
 const B = {
   AIR:0, GRASS:1, DIRT:2, STONE:3, COBBLE:4, SAND:5, GRAVEL:6,
   LOG:7, LEAVES:8, PLANKS:9, BEDROCK:10, WATER:11, SNOW:12,
@@ -1061,22 +1061,19 @@ function surfaceHeightAt(x, z, cl) {
   const cont = P.terrain.fbm2(wx * 0.0022 + 120, wz * 0.0022 + 120, 3); // 大陆/海洋
   const hills = P.terrain.fbm2(wx * 0.012, wz * 0.012, 4);            // ~80 块起伏
   const mtn = P.terrain.fbm2(wx * 0.004 + 60, wz * 0.004 + 60, 3);    // ~250 块山体
-  const u = Math.max(0, mtn - 0.05);                                  // 山体抬升
-  const landH = SEA + 2 + hills * 18 + Math.max(0, cont) * 10 + u * 50 + u * u * 40;
-  const oceanH = Math.max(2, SEA - 4 + cont * 18);                    // 海洋（近岸浅、远岸深）
+  const u = Math.max(0, mtn - 0.04);                                  // 山体抬升
+  // 主世界陆地主体抬升至 y = 66~105+，雄伟山峰与高山群系可绵延至 y = 115~144，地下预留 60+ 格多层洞窟与大型遗迹空间
+  const landH = SEA + 5 + hills * 20 + Math.max(0, cont) * 16 + u * 58 + u * u * 46;
+  const oceanH = Math.max(24, SEA - 6 + cont * 26);                   // 海洋（近岸浅、远岸深，海底之下仍留足 30+ 格岩层与地下洞窟）
 
-  /* 海陆过渡：原来以 cont = -0.03 硬切换，两侧高度差可达 6~7 格，
-     导致每条海岸线都变成垂直断崖（实测单格最大跳变 47.8 格）。
-     改成在 cont ∈ [-0.13, 0.03] 的过渡带内平滑插值，自然形成沙滩缓坡。 */
+  /* 海陆过渡：在 cont ∈ [-0.10, 0.02] 过渡带内平滑插值，自然形成沙滩缓坡，绝无垂直断崖。 */
   const shore = smoothstep01((cont + 0.10) / 0.12);
   let h = oceanH + (landH - oceanH) * shore;
 
-  // 沼泽低洼湿地：地势平缓贴近海平面(地平线)，带有天然浅水塘与泥潭，与周边地形平滑过渡
+  // 沼泽低洼湿地：地势平缓贴近海平面(y ≈ 64)，带有天然浅水塘与泥潭，与周边地形平滑过渡
   const sw = swampWeightAt(cl);
   if (sw > 0) {
-    // 沼泽内部微地形：温和波动的浅水洼、泥滩与低土丘
     const poolNoise = P.terrain.fbm2(wx * 0.020 + 77, wz * 0.020 + 77, 3);
-    // 目标高度：SEA 在 34，poolNoise (-0.5 ~ +0.5) 映射出平滑浅水塘与湿泥洲
     const hSwamp = SEA + 0.6 + poolNoise * 2.2;
     h = h * (1.0 - sw) + hSwamp * sw;
   }
@@ -1089,43 +1086,49 @@ function surfaceHeightAt(x, z, cl) {
     const alpineW = wt * wm * ww * smoothstep01((shore - 0.35) / 0.45);
     if (alpineW > 0) {
       const ridge = 1.0 - Math.abs(P.terrain.fbm2(wx * 0.016 + 310, wz * 0.016 + 310, 3) * 2.0);
-      h += alpineW * (10 + Math.max(0, ridge) * 14);
+      h += alpineW * (16 + Math.max(0, ridge) * 20);
     }
   }
 
-  return Math.max(2, Math.min(HEIGHT - 6, h));
+  return Math.max(8, Math.min(HEIGHT - 8, h));
 }
 function surfaceHeight(x, z) { return surfaceHeightAt(x, z, climateAt(x, z)); }
 
-// 3D 洞穴系统：连贯的长隧道 + 中深层的大洞穴
-//   旧版是「|噪声| < 阈值」的薄片叠加小团块，挖出来全是零散小坑、又密又碎，也没有能走进去的大洞。
-//   隧道改成两个噪声场取交集（交集是一维曲线，所以隧道是连贯的长条），
-//   再叠一层低频噪声挖出成片的大空腔。
+// 多层 3D 洞穴系统（适配 160 格世界高度与 60+ 格深邃地层）：
+//   1) 连贯长隧道（双 3D 噪声场交集，从浅层一路蜿蜒通向深板岩层）
+//   2) 中深层巨型溶洞空腔（y = 10..56，低频宽阔大厅，自然保留岩柱与拱顶）
+//   3) 深层地下大裂谷（y = 8..48，狭长陡峭裂隙贯通多层洞窟）
 function isCave(x, y, z) {
   if (y < 5) return false;
   x += WX; z += WZ;
-  /* 洞穴生成概率减少一半：宏观区域噪声遮罩（仅部分区域允许生成连贯洞穴网络）。
-     注意 fbm2 的第三个参数 oct 必须传：漏传会让循环不执行、返回 NaN，
-     而 `NaN < 阈值` 恒为 false —— 遮罩就完全失效了（这里原来正是这个 bug）。 */
-  const caveMask = P.cave.fbm2(x * 0.015, z * 0.015, 2);
-  if (caveMask < 0.02) return false;   // 约 45% 的区域不生成洞穴，形成区域性留白
+  const caveMask = P.cave.fbm2(x * 0.013, z * 0.013, 2);
+  if (caveMask < 0.01) return false;    // 约 50% 区域保留完整岩层，其余区域形成壮阔多层地下洞网
 
-  const depth = Math.min(1, Math.max(0, (76 - y) / 54));   // 0 = 浅, 1 = 深
-  // 1) 长隧道
-  const f = 0.021;
-  const n1 = P.cave.fbm3(x * f, y * f * 1.25, z * f, 3);
-  const n2 = P.cave.fbm3(x * f + 131, y * f * 1.25 + 57, z * f + 89, 3);
-  const t = 0.055 + 0.040 * depth;                         // 越深隧道越宽
+  const depth = Math.min(1, Math.max(0, (108 - y) / 96));  // 0 = 浅层山腹, 1 = 深层深板岩
+  // 1) 连贯蜿蜒长隧道
+  const f = 0.019;
+  const n1 = P.cave.fbm3(x * f, y * f * 1.18, z * f, 3);
+  const n2 = P.cave.fbm3(x * f + 131, y * f * 1.18 + 57, z * f + 89, 3);
+  const t = 0.050 + 0.042 * depth;
   if (Math.abs(n1) < t && Math.abs(n2) < t) return true;
-  // 2) 大洞穴：低频 + 横向更宽，只在中深层出现
-  if (y < 52) {
-    const big = P.cave.fbm3(x * 0.016, y * 0.030, z * 0.016, 3);
-    if (big > 0.40 - 0.06 * depth) return true;
+
+  // 2) 中深层巨型溶洞空腔（y = 10..56，横向开阔、纵向有穹顶层次）
+  if (y >= 10 && y <= 56) {
+    const verticalEnv = 1.0 - Math.abs(y - 31) / 28; // 在 y ≈ 31 附近最宽阔
+    const big = P.cave.fbm3(x * 0.013 + 37, y * 0.024 + 19, z * 0.013 + 71, 3);
+    if (big > 0.41 - 0.07 * Math.max(0, verticalEnv)) return true;
+  }
+
+  // 3) 深层地下大裂谷（狭长高耸的纵向断层裂隙，串联浅层与深层巨洞）
+  if (y >= 8 && y <= 48 && caveMask > 0.16) {
+    const rav = P.cave.fbm2(x * 0.009 + 410, z * 0.009 + 290, 2);
+    const twist = P.cave.noise3(x * 0.028, y * 0.015, z * 0.028) * 0.020;
+    if (Math.abs(rav + twist) < 0.016) return true;
   }
   return false;
 }
 
-// 矿脉独立分布系统：各矿种空间互斥独立生成，安全中心定距，彻底杜绝多种不同矿物同处一窝、层层相叠的现象
+// 矿脉独立分布系统（按 160 格世界深度重新分层：深层钻/红石、中层金/青金石/紫水晶、中高层铁/铜/煤、高山绿宝石）
 function oreNoise(x, y, z) { x += WX; z += WZ; return P.ore.fbm3(x * 0.13 + 700, y * 0.13 + 700, z * 0.13 + 700, 2); }
 function oreFor(wx, y, wz) {
   const CELL_XZ = 10, CELL_Y = 8;
@@ -1133,22 +1136,22 @@ function oreFor(wx, y, wz) {
   const cy = Math.floor(y / CELL_Y);
   const cz = Math.floor(wz / CELL_XZ);
 
-  // 区域专属哈希（用 Math.imul 保证 32 位乘法精度：普通 `*` 会因超过 2^53 而丢失低位）
+  // 区域专属哈希（用 Math.imul 保证 32 位乘法精度）
   let h = (Math.imul(cx, 73856093) ^ Math.imul(cy, 19349663) ^ Math.imul(cz, 83492791) ^ Math.imul(WX + 17, 31) ^ WZ) >>> 0;
   h = Math.imul(h ^ (h >>> 16), 0x45d9f3b) >>> 0;
   h = Math.imul(h ^ (h >>> 16), 0x45d9f3b) >>> 0;
   const hash = ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 
   let targetOre = B.STONE;
-  if (y < 16 && hash < 0.05) targetOre = B.DIAMOND;
-  else if (y < 22 && hash >= 0.05 && hash < 0.11) targetOre = B.REDSTONE_ORE;
-  else if (y < 30 && hash >= 0.11 && hash < 0.16) targetOre = B.GOLD;
-  else if (y < 34 && hash >= 0.16 && hash < 0.20) targetOre = B.LAPIS_ORE;
-  else if (y < 38 && hash >= 0.20 && hash < 0.24) targetOre = B.EMERALD_ORE;
-  else if (y < 56 && hash >= 0.24 && hash < 0.40) targetOre = B.IRON;
-  else if (y < 68 && hash >= 0.40 && hash < 0.54) targetOre = B.COPPER_ORE;
-  else if (y < 85 && hash >= 0.54 && hash < 0.74) targetOre = B.COAL;
-  else if (y >= 8 && y <= 28 && hash >= 0.945 && hash < 0.985) targetOre = B.AMETHYST_BLOCK;
+  if (y < 24 && hash < 0.055) targetOre = B.DIAMOND;
+  else if (y < 32 && hash >= 0.055 && hash < 0.12) targetOre = B.REDSTONE_ORE;
+  else if (y < 46 && hash >= 0.12 && hash < 0.175) targetOre = B.GOLD;
+  else if (y < 52 && hash >= 0.175 && hash < 0.22) targetOre = B.LAPIS_ORE;
+  else if ((y < 58 || y > 86) && hash >= 0.22 && hash < 0.26) targetOre = B.EMERALD_ORE;
+  else if (y < 92 && hash >= 0.26 && hash < 0.43) targetOre = B.IRON;
+  else if (y < 108 && hash >= 0.43 && hash < 0.57) targetOre = B.COPPER_ORE;
+  else if (y < 140 && hash >= 0.57 && hash < 0.77) targetOre = B.COAL;
+  else if (y >= 12 && y <= 46 && hash >= 0.945 && hash < 0.985) targetOre = B.AMETHYST_BLOCK;
 
   if (targetOre === B.STONE) return B.STONE;
 
@@ -1254,8 +1257,8 @@ function netherColumnAt(x, z) {
   const basin = P.terrain.fbm2(wx * 0.0072 + 2300, wz * 0.0072 + 2300, 3);
   const detail = P.terrain.fbm2(wx * 0.024 + 3100, wz * 0.024 + 3100, 3);
   const ceilN = P.terrain.fbm2(wx * 0.015 + 6400, wz * 0.015 + 6400, 3);
-  const floorH = Math.max(10, Math.min(58, Math.floor(29.5 + basin * 34 + detail * 13)));
-  const ceilH = Math.max(66, Math.min(87, Math.floor(77 + ceilN * 14)));
+  const floorH = Math.max(14, Math.min(92, Math.floor(46 + basin * 48 + detail * 16)));
+  const ceilH = Math.max(114, Math.min(148, Math.floor(132 + ceilN * 18)));
   const patch = P.terrain.fbm2(wx * 0.065 + 7200, wz * 0.065 + 7200, 2);
   return { floorH, ceilH, patch };
 }
@@ -1272,9 +1275,9 @@ function netherOreFor(wx, y, wz) {
   h = Math.imul(h ^ (h >>> 16), 0x45d9f3b) >>> 0;
   const hash = ((h ^ (h >>> 16)) >>> 0) / 4294967296;
   let target = B.NETHERRACK;
-  if (y >= 6 && y <= 26 && hash >= 0.92 && hash < 0.985) target = B.ANCIENT_DEBRIS;
-  else if (y >= 8 && y <= 84 && hash < 0.22) target = B.NETHER_QUARTZ_ORE;
-  else if (y >= 10 && y <= 80 && hash >= 0.22 && hash < 0.34) target = B.NETHER_GOLD_ORE;
+  if (y >= 8 && y <= 34 && hash >= 0.92 && hash < 0.985) target = B.ANCIENT_DEBRIS;
+  else if (y >= 10 && y <= 146 && hash < 0.22) target = B.NETHER_QUARTZ_ORE;
+  else if (y >= 12 && y <= 138 && hash >= 0.22 && hash < 0.34) target = B.NETHER_GOLD_ORE;
   if (target === B.NETHERRACK) return B.NETHERRACK;
   const hx = ((h * 17) % 1000) / 1000;
   const hy = ((h * 41) % 1000) / 1000;
@@ -4704,7 +4707,7 @@ const sun = new THREE.DirectionalLight(0xffe9c8, 2.0);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);   // 分辨率提上来 + 视锥收紧，单方块能分到多得多的阴影纹素
 const sc = sun.shadow.camera;
-sc.left = -96; sc.right = 96; sc.top = 96; sc.bottom = -96; sc.near = 1; sc.far = 400;
+sc.left = -96; sc.right = 96; sc.top = 96; sc.bottom = -96; sc.near = 1; sc.far = 480;
 sc.updateProjectionMatrix();
 sun.shadow.bias = 0.00004;            // 极微小正偏移，彻底消除大面积自阴影锯齿与摩尔纹
 sun.shadow.normalBias = 0.042;        // 严丝合缝的法线偏移，避免阴影悬浮脱离方块（Peter Panning）
@@ -4716,7 +4719,7 @@ const moon = new THREE.DirectionalLight(0x93a7c4, 0.0);
 moon.castShadow = true;
 moon.shadow.mapSize.set(2048, 2048);
 const mc = moon.shadow.camera;
-mc.left = -96; mc.right = 96; mc.top = 96; mc.bottom = -96; mc.near = 1; mc.far = 400;
+mc.left = -96; mc.right = 96; mc.top = 96; mc.bottom = -96; mc.near = 1; mc.far = 480;
 mc.updateProjectionMatrix();
 moon.shadow.bias = 0.00004;
 moon.shadow.normalBias = 0.042;
@@ -4922,7 +4925,7 @@ cloudMat.color = cloudMat.uniforms.uColor.value;
 const cloudGeo = new THREE.PlaneGeometry(3200, 3200);
 cloudGeo.rotateX(-Math.PI / 2);
 const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
-cloudMesh.position.y = 138; // 主积云层
+cloudMesh.position.y = 186; // 主积云层（高于 160 格世界最高雪峰）
 cloudMesh.frustumCulled = false;
 scene.add(cloudMesh);
 
@@ -4934,7 +4937,7 @@ cloudMatHigh.uniforms.uSunDir.value = sunDir;
 cloudMatHigh.uniforms.uRepeat.value.set(4.2, 4.2);
 cloudMatHigh.uniforms.uOpacity.value = 0.34;
 const cloudMeshHigh = new THREE.Mesh(cloudGeo, cloudMatHigh);
-cloudMeshHigh.position.y = 162;
+cloudMeshHigh.position.y = 214;
 cloudMeshHigh.frustumCulled = false;
 scene.add(cloudMeshHigh);
 
@@ -5105,26 +5108,78 @@ function populateBiomeChest(x, y, z, theme = 'prismarine') {
 // —— 储物箱数据存储与地牢宝箱生成 ——
 const chestStorages = new Map();
 function populateDungeonChest(x, y, z) {
+  return populateUndergroundChest(x, y, z, 'dungeon');
+}
+function populateUndergroundChest(x, y, z, theme = 'dungeon') {
   const ck = `${x},${y},${z}`;
   if (chestStorages.has(ck)) return;
   const slots = new Array(27).fill(null);
-  const rnd = mulberry32(x * 10007 + y * 313 + z);
-  const possibleLoot = [
-    { id: B.DIAMOND, count: 1 + Math.floor(rnd() * 2), prob: 0.35 },
-    { id: B.GOLDEN_APPLE, count: 1, prob: 0.30 },
-    { id: B.IRON_INGOT, count: 2 + Math.floor(rnd() * 4), prob: 0.70 },
-    { id: B.GOLD_INGOT, count: 1 + Math.floor(rnd() * 3), prob: 0.55 },
-    { id: B.BREAD, count: 2 + Math.floor(rnd() * 3), prob: 0.75 },
-    { id: B.ARROW, count: 4 + Math.floor(rnd() * 8), prob: 0.65 },
-    { id: B.GUNPOWDER, count: 2 + Math.floor(rnd() * 4), prob: 0.60 },
-    { id: B.TNT, count: 1, prob: 0.25 },
-    { id: B.ENDER_PEARL, count: 1 + Math.floor(rnd() * 2), prob: 0.40 },
-    { id: B.STRING, count: 2 + Math.floor(rnd() * 4), prob: 0.70 },
-  ];
+  const rnd = mulberry32((x * 10007 + y * 313 + z * 4999) ^ (theme === 'stronghold' ? 0x5a3c9e17 : (theme === 'mineshaft' ? 0x2f7b1d45 : (theme === 'sculk' ? 0x19e3c47b : 0x10203040))));
+  let possibleLoot;
+  if (theme === 'mineshaft') {
+    possibleLoot = [
+      { id: B.IRON_INGOT, count: 3 + Math.floor(rnd() * 6), prob: 0.85 },
+      { id: B.GOLD_INGOT, count: 2 + Math.floor(rnd() * 4), prob: 0.55 },
+      { id: B.COPPER_INGOT, count: 4 + Math.floor(rnd() * 8), prob: 0.72 },
+      { id: B.COAL, count: 6 + Math.floor(rnd() * 10), prob: 0.82 },
+      { id: B.TORCH, count: 8 + Math.floor(rnd() * 12), prob: 0.90 },
+      { id: B.BREAD, count: 3 + Math.floor(rnd() * 4), prob: 0.75 },
+      { id: B.IRON_PICKAXE, count: 1, prob: 0.42 },
+      { id: B.DIAMOND, count: 1 + Math.floor(rnd() * 2), prob: 0.28 },
+      { id: B.LAPIS_LAZULI, count: 4 + Math.floor(rnd() * 7), prob: 0.50 },
+      { id: B.REDSTONE, count: 4 + Math.floor(rnd() * 8), prob: 0.52 },
+      { id: B.TNT, count: 1 + Math.floor(rnd() * 2), prob: 0.34 },
+      { id: B.GOLDEN_APPLE, count: 1, prob: 0.22 },
+    ];
+  } else if (theme === 'stronghold') {
+    possibleLoot = [
+      { id: B.ENDER_EYE, count: 1 + Math.floor(rnd() * 2), prob: 0.65 },
+      { id: B.ENDER_PEARL, count: 2 + Math.floor(rnd() * 4), prob: 0.82 },
+      { id: B.DIAMOND, count: 2 + Math.floor(rnd() * 4), prob: 0.75 },
+      { id: B.EMERALD, count: 3 + Math.floor(rnd() * 5), prob: 0.72 },
+      { id: B.GOLDEN_APPLE, count: 1 + Math.floor(rnd() * 2), prob: 0.55 },
+      { id: B.ENCHANTED_GOLDEN_APPLE, count: 1, prob: 0.16 },
+      { id: B.BOOK, count: 3 + Math.floor(rnd() * 6), prob: 0.85 },
+      { id: B.EXPERIENCE_BOTTLE, count: 3 + Math.floor(rnd() * 5), prob: 0.65 },
+      { id: B.DIAMOND_SWORD, count: 1, prob: 0.28 },
+      { id: B.DIAMOND_PICKAXE, count: 1, prob: 0.25 },
+      { id: B.NIGHT_VISION_POTION, count: 1, prob: 0.45 },
+      { id: B.REGEN_POTION, count: 1, prob: 0.38 },
+      { id: B.IRON_INGOT, count: 4 + Math.floor(rnd() * 6), prob: 0.80 },
+    ];
+  } else if (theme === 'sculk') {
+    possibleLoot = [
+      { id: B.DIAMOND, count: 2 + Math.floor(rnd() * 4), prob: 0.78 },
+      { id: B.EXPERIENCE_BOTTLE, count: 4 + Math.floor(rnd() * 6), prob: 0.85 },
+      { id: B.AMETHYST_SHARD, count: 4 + Math.floor(rnd() * 8), prob: 0.75 },
+      { id: B.GOLDEN_APPLE, count: 1 + Math.floor(rnd() * 2), prob: 0.55 },
+      { id: B.ENCHANTED_GOLDEN_APPLE, count: 1, prob: 0.22 },
+      { id: B.NETHERITE_SCRAP, count: 1, prob: 0.25 },
+      { id: B.TOTEM_OF_UNDYING, count: 1, prob: 0.14 },
+      { id: B.SOUL_LANTERN, count: 2 + Math.floor(rnd() * 3), prob: 0.70 },
+      { id: B.REDSTONE, count: 6 + Math.floor(rnd() * 8), prob: 0.68 },
+      { id: B.LAPIS_LAZULI, count: 5 + Math.floor(rnd() * 8), prob: 0.65 },
+      { id: B.NIGHT_VISION_POTION, count: 1, prob: 0.45 },
+    ];
+  } else {
+    possibleLoot = [
+      { id: B.DIAMOND, count: 1 + Math.floor(rnd() * 2), prob: 0.38 },
+      { id: B.GOLDEN_APPLE, count: 1, prob: 0.32 },
+      { id: B.IRON_INGOT, count: 2 + Math.floor(rnd() * 4), prob: 0.72 },
+      { id: B.GOLD_INGOT, count: 1 + Math.floor(rnd() * 3), prob: 0.58 },
+      { id: B.BREAD, count: 2 + Math.floor(rnd() * 3), prob: 0.75 },
+      { id: B.ARROW, count: 4 + Math.floor(rnd() * 8), prob: 0.65 },
+      { id: B.GUNPOWDER, count: 2 + Math.floor(rnd() * 4), prob: 0.60 },
+      { id: B.TNT, count: 1, prob: 0.28 },
+      { id: B.ENDER_PEARL, count: 1 + Math.floor(rnd() * 2), prob: 0.42 },
+      { id: B.STRING, count: 2 + Math.floor(rnd() * 4), prob: 0.70 },
+      { id: B.AMETHYST_SHARD, count: 2 + Math.floor(rnd() * 4), prob: 0.35 },
+    ];
+  }
   let slotIdx = 0;
   for (const item of possibleLoot) {
     if (rnd() < item.prob && slotIdx < 27) {
-      slots[slotIdx++] = { id: item.id, count: item.count };
+      slots[slotIdx++] = { id: item.id, count: item.count, dur: isTool(item.id) ? TOOL_DURABILITY[item.id] : undefined };
     }
   }
   chestStorages.set(ck, slots);
@@ -5250,7 +5305,7 @@ class World {
             } else if (bm === 6) {
               // 黑石堡垒荒原：黑石、磨制黑石与嵌金岩层
               id = patch > 0.24 ? B.POLISHED_BLACKSTONE : (patch < -0.26 ? B.BASALT : B.BLACKSTONE);
-              if (y >= 10 && y <= 55 && plantHash(wx * 13 + y * 5, wz * 17 + y * 3) < 0.032) id = B.NETHER_GOLD_ORE;
+              if (y >= 14 && y <= 96 && plantHash(wx * 13 + y * 5, wz * 17 + y * 3) < 0.032) id = B.NETHER_GOLD_ORE;
             } else if (bm === 7) {
               // 石英晶窟：富集下界石英矿与纯白石英岩脉
               if (patch > 0.30 && y > NETHER_SEA - 2) id = B.QUARTZ;
@@ -5679,6 +5734,7 @@ class World {
         if (isVillageChunk(c.cx + dx, c.cz + dz)) { nearVillage = true; break; }
       }
     }
+    let minSurf = HEIGHT;
     for (let lz = 0; lz < CHUNK; lz++) {
       const wz = baseZ + lz;
       for (let lx = 0; lx < CHUNK; lx++) {
@@ -5686,6 +5742,7 @@ class World {
         // 同一列只算一次气候场：surfaceHeight 与 biomeOf 共用，省掉两次重复的 fbm 采样
         const cl = climateAt(wx, wz);
         const surf = Math.floor(surfaceHeightAt(wx, wz, cl));
+        if (surf < minSurf) minSurf = surf;
         const beach = surf <= SEA + 2;
         const bm = biomeOfClimate(cl);
         const badlands = bm === 9 && !beach;                  // 恶地：分层砂岩/红砖
@@ -5719,8 +5776,8 @@ class World {
           if (y <= 2) {
             id = B.BEDROCK;
           } else if (y < surf - 3) {
-            // 地下深层（y <= 14，并在 12~16 格间自然交错过渡）改用深板岩
-            if (y <= 12 || (y <= 16 && plantHash(wx * 5 + y * 13, wz * 7 + y * 11) < (17 - y) * 0.2)) {
+            // 地下深层（y <= 26，并在 27~32 格间自然交错过渡）改用深板岩
+            if (y <= 26 || (y <= 32 && plantHash(wx * 5 + y * 13, wz * 7 + y * 11) < (33 - y) * 0.16)) {
               id = B.DEEPSLATE;
             } else {
               id = B.STONE;
@@ -5757,7 +5814,7 @@ class World {
             if (endBarrens) {
               id = patchNoise > 0.26 ? B.END_STONE_BRICKS : B.END_STONE;
             } else if (alpinePeaks) {
-              if (surf >= 53) id = B.SNOW;
+              if (surf >= 96) id = B.SNOW;
               else if (patchNoise > 0.34) id = B.POLISHED_DIORITE;
               else if (patchNoise > 0.05) id = B.STONE;
               else id = B.GRASS;
@@ -5785,7 +5842,7 @@ class World {
               id = patchNoise > 0.36 ? B.BLUE_ICE : (patchNoise > 0.04 ? B.PACKED_ICE : B.SNOW);
             } else if (gravelly) {
               id = B.GRAVEL;
-            } else if (iceSpike || snowy || surf > 72) {
+            } else if (iceSpike || snowy || surf > 112) {
               id = B.SNOW;
             } else if (taiga) {
               id = patchNoise > 0.22 ? B.PODZOL : B.GRASS;
@@ -5882,7 +5939,7 @@ class World {
           else if (pr < 0.065) c.blocks[(surf + 1) * 256 + lz * 16 + lx] = B.PUMPKIN;
         }
         // 苍翠高山（27）：山腰岩面偶现绿宝石矿露头
-        if (alpinePeaks && surf >= SEA + 8 && surf <= 56 && c.blocks[surf * 256 + lz * 16 + lx] === B.STONE) {
+        if (alpinePeaks && surf >= SEA + 14 && surf <= 104 && c.blocks[surf * 256 + lz * 16 + lx] === B.STONE) {
           if (plantHash(wx * 29 + 3, wz * 37 + 11) < 0.018) c.blocks[surf * 256 + lz * 16 + lx] = B.EMERALD_ORE;
         }
         // 丹霞红岩原（28）：风蚀切制砂岩/花岗岩石柱与金色小神龛
@@ -6046,22 +6103,46 @@ class World {
                 const pr = plantHash(wx * 11 + y, wz * 17);
                 if (pr < 0.009) c.blocks[y * 256 + lz * 16 + lx] = (pr < 0.0045 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
               }
-              // 地下喀斯特溶洞：天花板偶生滴水石块与倒悬尖锥钟乳石
-              if ((above === B.STONE || above === B.DEEPSLATE) && y < surf - 6 && y > 8) {
+              // 地下喀斯特溶洞：天花板倒悬钟乳石 + 地面石笋
+              if ((above === B.STONE || above === B.DEEPSLATE) && y < surf - 6 && y > 10) {
                 const dp = plantHash(wx * 19 + y * 3, wz * 23 + 7);
-                if (dp < 0.016 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
+                if (dp < 0.018 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
                   c.blocks[(y + 1) * 256 + lz * 16 + lx] = B.DRIPSTONE_BLOCK;
                   c.blocks[y * 256 + lz * 16 + lx] = B.POINTED_DRIPSTONE;
                 }
               }
-              // 深暗之域幽匿窟（y <= 16 深层洞穴地面蔓延幽匿方块、幽匿感测体与深板岩砖遗迹）
-              if (y <= 16 && (below === B.DEEPSLATE || below === B.STONE)) {
+              if ((below === B.STONE || below === B.DEEPSLATE) && y < surf - 6 && y > 10) {
+                const sm = plantHash(wx * 23 + y * 5, wz * 17 + 11);
+                if (sm < 0.012 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
+                  c.blocks[(y - 1) * 256 + lz * 16 + lx] = B.DRIPSTONE_BLOCK;
+                  c.blocks[y * 256 + lz * 16 + lx] = B.POINTED_DRIPSTONE;
+                }
+              }
+              // 繁茂微光溶洞（y = 28..56 中层洞窟苔石、黏土与荧光穹顶藤蔓）
+              if (y >= 28 && y <= 56) {
+                const lushZone = P.terrain.fbm2((wx + WX) * 0.016 + 5200, (wz + WZ) * 0.016 + 5200, 2);
+                if (lushZone > 0.24) {
+                  const lp = plantHash(wx * 13 + y * 7, wz * 19 + 5);
+                  if ((below === B.STONE || below === B.DEEPSLATE) && lp < 0.34) {
+                    c.blocks[(y - 1) * 256 + lz * 16 + lx] = (lp < 0.14) ? B.CLAY : B.MOSSY_COBBLE;
+                  }
+                  if ((above === B.STONE || above === B.DEEPSLATE) && lp > 0.965 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
+                    c.blocks[(y + 1) * 256 + lz * 16 + lx] = B.GLOWSTONE;
+                  } else if ((above === B.STONE || above === B.MOSSY_COBBLE) && lp > 0.92 && lp <= 0.965 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
+                    c.blocks[y * 256 + lz * 16 + lx] = B.VINE;
+                  }
+                }
+              }
+              // 深暗之域幽匿窟（y <= 28 深层洞穴地面蔓延幽匿方块、幽匿感测体、深板岩砖遗迹与灵魂提灯）
+              if (y <= 28 && (below === B.DEEPSLATE || below === B.STONE)) {
                 const sculkZone = P.terrain.fbm2((wx + WX) * 0.018 + 8100, (wz + WZ) * 0.018 + 8100, 2);
-                if (sculkZone > 0.24) {
+                if (sculkZone > 0.22) {
                   const sp = plantHash(wx * 29 + y, wz * 31 + 13);
-                  c.blocks[(y - 1) * 256 + lz * 16 + lx] = (sp < 0.14) ? B.DEEPSLATE_BRICKS : B.SCULK_BLOCK;
-                  if (sp > 0.965 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
+                  c.blocks[(y - 1) * 256 + lz * 16 + lx] = (sp < 0.16) ? B.DEEPSLATE_BRICKS : B.SCULK_BLOCK;
+                  if (sp > 0.972 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
                     c.blocks[y * 256 + lz * 16 + lx] = B.SCULK_SENSOR;
+                  } else if (sp > 0.962 && sp <= 0.972 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
+                    c.blocks[y * 256 + lz * 16 + lx] = B.SOUL_LANTERN;
                   }
                 }
               }
@@ -6101,32 +6182,389 @@ class World {
         }
       }
     }
-    // 地下洞穴地牢遗迹与藏宝箱生成
-    const dungeonRnd = plantHash(c.cx * 43 + 7, c.cz * 61 + 13);
-    if (dungeonRnd < 0.065) {
-      const dungeonY = 16 + Math.floor(plantHash(c.cx * 19, c.cz * 31) * 14); // y: 16 ~ 29
-      const cx8 = baseX + 8, cz8 = baseZ + 8;
-      if (isCave(cx8, dungeonY, cz8)) {
-        let floorY = dungeonY;
-        while (floorY > 4 && isCave(cx8, floorY - 1, cz8)) floorY--;
-        if (floorY > 4 && floorY < HEIGHT - 6) {
-          for (let dz = -1; dz <= 1; dz++) {
-            for (let dx = -1; dx <= 1; dx++) {
-              c.blocks[(floorY - 1) * 256 + (8 + dz) * 16 + (8 + dx)] = (dx === 0 && dz === 0 ? B.MOSSY : (plantHash(cx8 + dx, cz8 + dz) < 0.5 ? B.MOSSY : B.COBBLE));
-              c.blocks[floorY * 256 + (8 + dz) * 16 + (8 + dx)] = B.AIR;
-              c.blocks[(floorY + 1) * 256 + (8 + dz) * 16 + (8 + dx)] = B.AIR;
+    // ================== 大型地下结构群（跨区块废弃矿井 / 大型地下要塞大厅 / 巨型紫水晶晶洞 / 深层地牢与幽匿圣殿）==================
+    const setU = (lx, y, lz, id) => {
+      if (lx < 0 || lx >= 16 || lz < 0 || lz >= 16 || y <= 3 || y >= HEIGHT - 4) return;
+      const ii = y * 256 + lz * 16 + lx;
+      c.blocks[ii] = id;
+      c.water[ii] = 0;
+    };
+    const getU = (lx, y, lz) => {
+      if (lx < 0 || lx >= 16 || lz < 0 || lz >= 16 || y < 0 || y >= HEIGHT) return B.BEDROCK;
+      return c.blocks[y * 256 + lz * 16 + lx];
+    };
+    let hasMajorUnderground = false;
+
+    // 1) 跨区块大型废弃矿井（4×4 宏观网格，中心大厅 12×12×6 + 四向连贯木架矿道，跨越相邻区块长达 48×48 格）
+    {
+      const mx = Math.floor(c.cx / 4), mz = Math.floor(c.cz / 4);
+      const rx = ((c.cx % 4) + 4) % 4, rz = ((c.cz % 4) + 4) % 4;
+      const mSeed = plantHash(mx * 97 + 19, mz * 131 + 43);
+      if (mSeed < 0.34) {
+        const hubRx = 1 + ((plantHash(mx * 31 + 5, mz * 47 + 9) * 2) | 0);
+        const hubRz = 1 + ((plantHash(mx * 53 + 11, mz * 29 + 3) * 2) | 0);
+        const mineY = 30 + ((plantHash(mx * 71 + 13, mz * 83 + 7) * 16) | 0); // y: 30..45
+        const isMineHub = (rx === hubRx && rz === hubRz);
+        const isMineWingX = (rz === hubRz && Math.abs(rx - hubRx) === 1);
+        const isMineWingZ = (rx === hubRx && Math.abs(rz - hubRz) === 1);
+        if ((isMineHub || isMineWingX || isMineWingZ) && mineY + 7 < minSurf - 5) {
+          hasMajorUnderground = true;
+          const buildMineTunnelX = (x0, x1) => {
+            for (let lx = x0; lx <= x1; lx++) {
+              for (let lz = 6; lz <= 9; lz++) {
+                // 铺木板轨道地面（悬空洞穴上方自动架设木柱桥墩）
+                const belowB = getU(lx, mineY - 1, lz);
+                setU(lx, mineY - 1, lz, B.PLANKS);
+                if (belowB === B.AIR && (lz === 6 || lz === 9) && lx % 3 === 0) {
+                  for (let py = mineY - 2; py >= 5 && getU(lx, py, lz) === B.AIR; py--) setU(lx, py, lz, B.LOG);
+                }
+                for (let dy = 0; dy <= 3; dy++) setU(lx, mineY + dy, lz, B.AIR);
+                if (getU(lx, mineY + 4, lz) === B.AIR) setU(lx, mineY + 4, lz, B.PLANKS);
+              }
+              // 每隔 4 格搭设经典原木支护门架、火把与蛛网
+              if (lx % 4 === 1) {
+                for (let dy = 0; dy <= 3; dy++) {
+                  setU(lx, mineY + dy, 6, B.LOG);
+                  setU(lx, mineY + dy, 9, B.LOG);
+                }
+                for (let lz = 6; lz <= 9; lz++) setU(lx, mineY + 3, lz, B.PLANKS);
+                if (lx % 8 === 1) setU(lx, mineY + 2, 7, B.TORCH);
+                if (plantHash(baseX + lx, baseZ + 6) < 0.45) setU(lx, mineY + 2, 8, B.COBWEB);
+              }
             }
+          };
+          const buildMineTunnelZ = (z0, z1) => {
+            for (let lz = z0; lz <= z1; lz++) {
+              for (let lx = 6; lx <= 9; lx++) {
+                const belowB = getU(lx, mineY - 1, lz);
+                setU(lx, mineY - 1, lz, B.PLANKS);
+                if (belowB === B.AIR && (lx === 6 || lx === 9) && lz % 3 === 0) {
+                  for (let py = mineY - 2; py >= 5 && getU(lx, py, lz) === B.AIR; py--) setU(lx, py, lz, B.LOG);
+                }
+                for (let dy = 0; dy <= 3; dy++) setU(lx, mineY + dy, lz, B.AIR);
+                if (getU(lx, mineY + 4, lz) === B.AIR) setU(lx, mineY + 4, lz, B.PLANKS);
+              }
+              if (lz % 4 === 1) {
+                for (let dy = 0; dy <= 3; dy++) {
+                  setU(6, mineY + dy, lz, B.LOG);
+                  setU(9, mineY + dy, lz, B.LOG);
+                }
+                for (let lx = 6; lx <= 9; lx++) setU(lx, mineY + 3, lz, B.PLANKS);
+                if (lz % 8 === 1) setU(7, mineY + 2, lz, B.TORCH);
+                if (plantHash(baseX + 8, baseZ + lz) < 0.45) setU(8, mineY + 2, lz, B.COBWEB);
+              }
+            }
+          };
+
+          if (isMineHub) {
+            // 12×12×6 矿井中心调度大厅
+            for (let lz = 2; lz <= 13; lz++) {
+              for (let lx = 2; lx <= 13; lx++) {
+                const isRim = (lx === 2 || lx === 13 || lz === 2 || lz === 13);
+                const isDoor = ((lx >= 6 && lx <= 9) || (lz >= 6 && lz <= 9));
+                setU(lx, mineY - 1, lz, ((lx + lz) % 3 === 0) ? B.COBBLE : B.PLANKS);
+                for (let dy = 0; dy <= 5; dy++) {
+                  if (isRim && !isDoor) {
+                    setU(lx, mineY + dy, lz, ((lx === 2 || lx === 13) && (lz === 2 || lz === 13)) ? B.LOG : (dy === 0 ? B.COBBLE : B.STONE_BRICK));
+                  } else {
+                    setU(lx, mineY + dy, lz, B.AIR);
+                  }
+                }
+                // 穹顶木梁与封闭岩顶
+                setU(lx, mineY + 6, lz, (lx % 3 === 2 || lz % 3 === 2) ? B.LOG : B.PLANKS);
+              }
+            }
+            // 四根中庭支撑原木柱与二层木质栈桥边缘
+            for (const [px, pz] of [[4, 4], [11, 4], [4, 11], [11, 11]]) {
+              for (let dy = 0; dy <= 5; dy++) setU(px, mineY + dy, pz, B.LOG);
+              setU(px, mineY + 2, pz === 4 ? 5 : 10, B.TORCH);
+            }
+            // 大厅中央吊链提灯
+            setU(7, mineY + 5, 7, B.CHAIN); setU(7, mineY + 4, 7, B.LANTERN);
+            setU(8, mineY + 5, 8, B.CHAIN); setU(8, mineY + 4, 8, B.LANTERN);
+            // 矿工补给工坊与双矿井宝箱
+            setU(3, mineY, 3, B.CRAFTING_TABLE);
+            setU(4, mineY, 3, B.FURNACE);
+            setU(3, mineY, 4, B.BARREL);
+            setU(12, mineY, 3, B.CHEST); populateUndergroundChest(baseX + 12, mineY, baseZ + 3, 'mineshaft');
+            setU(3, mineY, 12, B.CHEST); populateUndergroundChest(baseX + 3, mineY, baseZ + 12, 'mineshaft');
+            setU(12, mineY + 4, 12, B.COBWEB); setU(11, mineY + 4, 12, B.COBWEB);
+            // 四向主矿道直通区块边缘，与邻块无缝拼接
+            buildMineTunnelX(0, 2); buildMineTunnelX(13, 15);
+            buildMineTunnelZ(0, 2); buildMineTunnelZ(13, 15);
+          } else if (isMineWingX) {
+            buildMineTunnelX(0, 15);
+            // 侧壁矿车补给壁龛
+            for (let lx = 6; lx <= 9; lx++) {
+              for (let dy = 0; dy <= 2; dy++) setU(lx, mineY + dy, 5, B.AIR);
+              setU(lx, mineY - 1, 5, B.PLANKS);
+            }
+            setU(7, mineY, 5, B.CHEST); populateUndergroundChest(baseX + 7, mineY, baseZ + 5, 'mineshaft');
+            setU(8, mineY, 5, B.BARREL);
+          } else if (isMineWingZ) {
+            buildMineTunnelZ(0, 15);
+            for (let lz = 6; lz <= 9; lz++) {
+              for (let dy = 0; dy <= 2; dy++) setU(5, mineY + dy, lz, B.AIR);
+              setU(5, mineY - 1, lz, B.PLANKS);
+            }
+            setU(5, mineY, 7, B.CHEST); populateUndergroundChest(baseX + 5, mineY, baseZ + 7, 'mineshaft');
+            setU(5, mineY, 8, B.BARREL);
           }
-          // 地牢角落结网
-          for (let dz = -1; dz <= 1; dz++) {
-            for (let dx = -1; dx <= 1; dx++) {
-              if (Math.abs(dx) + Math.abs(dz) === 2 && plantHash(cx8 + dx * 3, cz8 + dz * 7) < 0.6) {
-                c.blocks[floorY * 256 + (8 + dz) * 16 + (8 + dx)] = B.COBWEB;
+        }
+      }
+    }
+
+    // 2) 跨区块大型地下要塞大厅 / 古图书馆（5×5 宏观网格，深层 y = 10..20，14×14×9 宏伟石砖殿堂 + 四向要塞长廊）
+    {
+      const sx = Math.floor(c.cx / 5), sz = Math.floor(c.cz / 5);
+      const rx = ((c.cx % 5) + 5) % 5, rz = ((c.cz % 5) + 5) % 5;
+      const sSeed = plantHash(sx * 149 + 31, sz * 173 + 59);
+      if (sSeed < 0.44) {
+        const hubRx = 1 + ((plantHash(sx * 37 + 17, sz * 43 + 11) * 3) | 0);
+        const hubRz = 1 + ((plantHash(sx * 61 + 23, sz * 29 + 7) * 3) | 0);
+        const stY = 10 + ((plantHash(sx * 89 + 5, sz * 101 + 13) * 11) | 0); // y: 10..20
+        const isStHub = (rx === hubRx && rz === hubRz);
+        const isStWingX = (rz === hubRz && Math.abs(rx - hubRx) === 1);
+        const isStWingZ = (rx === hubRx && Math.abs(rz - hubRz) === 1);
+        if ((isStHub || isStWingX || isStWingZ) && stY + 10 < minSurf - 6) {
+          hasMajorUnderground = true;
+          const brickAt = (x, y, z) => {
+            const r = plantHash(x * 11 + y * 5, z * 13 + y * 7);
+            if (r < 0.22) return B.MOSSY;
+            if (r < 0.34) return B.DEEPSLATE_BRICKS;
+            if (r < 0.42) return B.CHISELED_STONE_BRICKS;
+            return B.STONE_BRICK;
+          };
+          const buildStrongholdCorrX = (x0, x1) => {
+            for (let lx = x0; lx <= x1; lx++) {
+              for (let lz = 5; lz <= 10; lz++) {
+                const isWall = (lz === 5 || lz === 10);
+                setU(lx, stY - 1, lz, brickAt(baseX + lx, stY - 1, baseZ + lz));
+                for (let dy = 0; dy <= 4; dy++) {
+                  if (isWall) setU(lx, stY + dy, lz, (lx % 4 === 0) ? B.CHISELED_STONE_BRICKS : brickAt(baseX + lx, stY + dy, baseZ + lz));
+                  else setU(lx, stY + dy, lz, B.AIR);
+                }
+                setU(lx, stY + 5, lz, brickAt(baseX + lx, stY + 5, baseZ + lz));
+              }
+              if (lx % 5 === 2) {
+                setU(lx, stY + 4, 7, B.CHAIN);
+                setU(lx, stY + 3, 7, B.SOUL_LANTERN);
+              }
+            }
+          };
+          const buildStrongholdCorrZ = (z0, z1) => {
+            for (let lz = z0; lz <= z1; lz++) {
+              for (let lx = 5; lx <= 10; lx++) {
+                const isWall = (lx === 5 || lx === 10);
+                setU(lx, stY - 1, lz, brickAt(baseX + lx, stY - 1, baseZ + lz));
+                for (let dy = 0; dy <= 4; dy++) {
+                  if (isWall) setU(lx, stY + dy, lz, (lz % 4 === 0) ? B.CHISELED_STONE_BRICKS : brickAt(baseX + lx, stY + dy, baseZ + lz));
+                  else setU(lx, stY + dy, lz, B.AIR);
+                }
+                setU(lx, stY + 5, lz, brickAt(baseX + lx, stY + 5, lz));
+              }
+              if (lz % 5 === 2) {
+                setU(7, stY + 4, lz, B.CHAIN);
+                setU(7, stY + 3, lz, B.SOUL_LANTERN);
+              }
+            }
+          };
+
+          if (isStHub) {
+            const isLibrary = plantHash(sx * 19 + 3, sz * 73 + 9) < 0.45;
+            // 14×14×9 宏伟要塞石砖殿堂
+            for (let lz = 1; lz <= 14; lz++) {
+              for (let lx = 1; lx <= 14; lx++) {
+                const isWall = (lx === 1 || lx === 14 || lz === 1 || lz === 14);
+                const isGate = ((lx >= 6 && lx <= 9) || (lz >= 6 && lz <= 9));
+                // 殿堂大理石纹/石砖拼花地板
+                const isCross = (lx === 7 || lx === 8 || lz === 7 || lz === 8);
+                setU(lx, stY - 1, lz, isCross ? B.DEEPSLATE_BRICKS : brickAt(baseX + lx, stY - 1, baseZ + lz));
+                for (let dy = 0; dy <= 7; dy++) {
+                  if (isWall && !(isGate && dy <= 4)) {
+                    setU(lx, stY + dy, lz, (dy === 0 || dy === 7) ? B.DEEPSLATE_BRICKS : brickAt(baseX + lx, stY + dy, baseZ + lz));
+                  } else {
+                    setU(lx, stY + dy, lz, B.AIR);
+                  }
+                }
+                // 拱顶屋盖
+                setU(lx, stY + 8, lz, B.DEEPSLATE_BRICKS);
+              }
+            }
+            // 四根巨型殿堂承重立柱与悬链吊灯
+            for (const [px, pz] of [[4, 4], [11, 4], [4, 11], [11, 11]]) {
+              for (let dy = 0; dy <= 7; dy++) {
+                setU(px, stY + dy, pz, (dy === 0 || dy === 4 || dy === 7) ? B.CHISELED_STONE_BRICKS : B.DEEPSLATE_BRICKS);
+              }
+              setU(px, stY + 7, pz === 4 ? 5 : 10, B.CHAIN);
+              setU(px, stY + 6, pz === 4 ? 5 : 10, isLibrary ? B.LANTERN : B.SOUL_LANTERN);
+            }
+            if (isLibrary) {
+              // 变体 B：两层地下古图书馆（高耸书架阵列 + 二层木质回廊 + 吊灯 + 双珍宝库）
+              for (let lx = 2; lx <= 13; lx++) {
+                if (lx >= 6 && lx <= 9) continue;
+                for (let dy = 0; dy <= 5; dy++) {
+                  if (dy === 3) continue;
+                  setU(lx, stY + dy, 2, B.BOOKSHELF);
+                  setU(lx, stY + dy, 13, B.BOOKSHELF);
+                }
+                // 二层走廊木板
+                setU(lx, stY + 3, 3, B.PLANKS);
+                setU(lx, stY + 3, 12, B.PLANKS);
+              }
+              for (let lz = 3; lz <= 12; lz++) {
+                setU(3, stY + 3, lz, B.PLANKS);
+                setU(12, stY + 3, lz, B.PLANKS);
+              }
+              // 上下二层爬梯
+              for (let dy = 0; dy <= 3; dy++) setU(4, stY + dy, 5, B.LADDER);
+              // 中央阅读祭台与吊灯
+              setU(7, stY, 7, B.ENCHANTING_TABLE);
+              setU(8, stY, 7, B.BOOKSHELF);
+              setU(7, stY + 7, 7, B.CHAIN); setU(7, stY + 6, 7, B.CHAIN); setU(7, stY + 5, 7, B.LANTERN);
+              setU(8, stY + 7, 8, B.CHAIN); setU(8, stY + 6, 8, B.CHAIN); setU(8, stY + 5, 8, B.LANTERN);
+              setU(2, stY, 3, B.CHEST); populateUndergroundChest(baseX + 2, stY, baseZ + 3, 'stronghold');
+              setU(13, stY + 4, 12, B.CHEST); populateUndergroundChest(baseX + 13, stY + 4, baseZ + 12, 'stronghold');
+              setU(2, stY + 6, 2, B.COBWEB); setU(13, stY + 6, 13, B.COBWEB);
+            } else {
+              // 变体 A：远古星陨要塞圣坛（末地石砖+紫珀阶梯祭坛、附魔台、书架壁龛、双要塞珍宝箱）
+              for (let dz = -2; dz <= 2; dz++) {
+                for (let dx = -2; dx <= 2; dx++) {
+                  const rim = (Math.abs(dx) === 2 || Math.abs(dz) === 2);
+                  setU(7 + dx, stY, 7 + dz, rim ? B.END_STONE_BRICKS : B.PURPUR_BLOCK);
+                }
+              }
+              setU(7, stY + 1, 7, B.ENCHANTING_TABLE);
+              for (const [qx, qz] of [[5, 5], [9, 5], [5, 9], [9, 9]]) {
+                setU(qx, stY + 1, qz, B.QUARTZ_PILLAR);
+                setU(qx, stY + 2, qz, B.QUARTZ_PILLAR);
+                setU(qx, stY + 3, qz, B.SEA_LANTERN);
+              }
+              // 四角书架与工作遗物
+              for (let dy = 0; dy <= 2; dy++) {
+                setU(2, stY + dy, 2, B.BOOKSHELF); setU(3, stY + dy, 2, B.BOOKSHELF);
+                setU(13, stY + dy, 13, B.BOOKSHELF); setU(12, stY + dy, 13, B.BOOKSHELF);
+              }
+              setU(13, stY, 2, B.ANVIL);
+              setU(2, stY, 13, B.CHEST); populateUndergroundChest(baseX + 2, stY, baseZ + 13, 'stronghold');
+              setU(13, stY, 3, B.CHEST); populateUndergroundChest(baseX + 13, stY, baseZ + 3, 'stronghold');
+              setU(7, stY + 7, 7, B.CHAIN); setU(7, stY + 6, 7, B.CHAIN); setU(7, stY + 5, 7, B.SOUL_LANTERN);
+            }
+            // 四向要塞石砖走廊直通邻块边界
+            buildStrongholdCorrX(0, 1); buildStrongholdCorrX(14, 15);
+            buildStrongholdCorrZ(0, 1); buildStrongholdCorrZ(14, 15);
+          } else if (isStWingX) {
+            buildStrongholdCorrX(0, 15);
+            // 卫兵密室侧龛
+            for (let lx = 6; lx <= 9; lx++) {
+              for (let dy = 0; dy <= 3; dy++) setU(lx, stY + dy, 4, B.AIR);
+              setU(lx, stY - 1, 4, B.DEEPSLATE_BRICKS);
+              setU(lx, stY + 4, 4, B.STONE_BRICK);
+              setU(lx, stY, 3, B.STONE_BRICK); setU(lx, stY + 1, 3, B.STONE_BRICK); setU(lx, stY + 2, 3, B.STONE_BRICK);
+            }
+            setU(7, stY, 4, B.CHEST); populateUndergroundChest(baseX + 7, stY, baseZ + 4, 'stronghold');
+            setU(8, stY, 4, B.ANVIL);
+          } else if (isStWingZ) {
+            buildStrongholdCorrZ(0, 15);
+            for (let lz = 6; lz <= 9; lz++) {
+              for (let dy = 0; dy <= 3; dy++) setU(4, stY + dy, lz, B.AIR);
+              setU(4, stY - 1, lz, B.DEEPSLATE_BRICKS);
+              setU(4, stY + 4, lz, B.STONE_BRICK);
+              setU(3, stY, lz, B.STONE_BRICK); setU(3, stY + 1, lz, B.STONE_BRICK); setU(3, stY + 2, lz, B.STONE_BRICK);
+            }
+            setU(4, stY, 7, B.CHEST); populateUndergroundChest(baseX + 4, stY, baseZ + 7, 'stronghold');
+            setU(4, stY, 8, B.BOOKSHELF);
+          }
+        }
+      }
+    }
+
+    // 3) 巨型中空紫水晶晶洞（直径 10~11 格三层球壳：黑玄武岩外壳 -> 纯白石英/闪长岩中层 -> 璀璨紫水晶内壁与晶簇）
+    if (!hasMajorUnderground) {
+      const geoRnd = plantHash(c.cx * 73 + 29, c.cz * 89 + 41);
+      if (geoRnd < 0.085) {
+        const gy = 14 + ((plantHash(c.cx * 23 + 7, c.cz * 37 + 11) * 28) | 0); // y: 14..41
+        const R = 4.6 + plantHash(c.cx * 11, c.cz * 17) * 0.9; // 半径 4.6..5.5
+        if (gy - 6 > 4 && gy + 6 < minSurf - 5) {
+          hasMajorUnderground = true;
+          const gcx = 8, gcz = 8;
+          for (let dy = -6; dy <= 6; dy++) {
+            for (let dz = -6; dz <= 6; dz++) {
+              for (let dx = -6; dx <= 6; dx++) {
+                const lx = gcx + dx, lz = gcz + dz, yy = gy + dy;
+                if (lx < 1 || lx > 14 || lz < 1 || lz > 14 || yy <= 4 || yy >= minSurf - 4) continue;
+                const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (d > R) continue;
+                // 在一侧留出天然晶洞裂口，方便探洞玩家一眼发现晶洞
+                const crack = (dx > 2 && Math.abs(dy) <= 1 && Math.abs(dz) <= 1);
+                if (crack) {
+                  setU(lx, yy, lz, B.AIR);
+                } else if (d >= R - 0.95) {
+                  setU(lx, yy, lz, ((dx + dy + dz) & 1) ? B.BASALT : B.DEEPSLATE);
+                } else if (d >= R - 1.95) {
+                  setU(lx, yy, lz, ((dx * 3 + dy + dz) & 1) ? B.QUARTZ : B.POLISHED_DIORITE);
+                } else if (d >= R - 2.95) {
+                  const glint = plantHash((baseX + lx) * 17 + yy, (baseZ + lz) * 19);
+                  setU(lx, yy, lz, glint < 0.035 ? B.SEA_LANTERN : B.AMETHYST_BLOCK);
+                } else {
+                  // 晶洞中空内腔 + 偶发内突紫水晶晶芽
+                  const bud = (d >= R - 3.65 && plantHash((baseX + lx) * 29 + yy * 3, (baseZ + lz) * 31) < 0.16);
+                  setU(lx, yy, lz, bud ? B.AMETHYST_BLOCK : B.AIR);
+                }
               }
             }
           }
-          c.blocks[floorY * 256 + 8 * 16 + 8] = B.CHEST;
-          populateDungeonChest(cx8, floorY, cz8);
+        }
+      }
+    }
+
+    // 4) 升级版 7×7×5 深层地牢与深暗幽匿圣殿密室（y = 14..48，y <= 26 升级为幽匿圣殿，y > 26 为苔石地牢）
+    if (!hasMajorUnderground) {
+      const dungeonRnd = plantHash(c.cx * 43 + 7, c.cz * 61 + 13);
+      if (dungeonRnd < 0.095) {
+        const dungeonY = 14 + Math.floor(plantHash(c.cx * 19, c.cz * 31) * 34); // y: 14 ~ 47
+        const cx8 = baseX + 8, cz8 = baseZ + 8;
+        if (dungeonY + 6 < minSurf - 5 && (isCave(cx8, dungeonY, cz8) || dungeonRnd < 0.045)) {
+          let floorY = dungeonY;
+          while (floorY > 6 && isCave(cx8, floorY - 1, cz8)) floorY--;
+          if (floorY > 5 && floorY + 6 < minSurf - 4) {
+            const isSculk = (floorY <= 26);
+            for (let dz = -3; dz <= 3; dz++) {
+              for (let dx = -3; dx <= 3; dx++) {
+                const lx = 8 + dx, lz = 8 + dz;
+                const isWall = (Math.abs(dx) === 3 || Math.abs(dz) === 3);
+                const isDoor = ((dx === 0 || dz === 0) && Math.abs(dx) + Math.abs(dz) === 3);
+                const hRnd = plantHash(cx8 + dx * 5, cz8 + dz * 7);
+                const floorB = isSculk
+                  ? (hRnd < 0.45 ? B.SCULK_BLOCK : B.DEEPSLATE_BRICKS)
+                  : (hRnd < 0.55 ? B.MOSSY_COBBLE : (hRnd < 0.8 ? B.MOSSY : B.COBBLE));
+                setU(lx, floorY - 1, lz, floorB);
+                for (let dy = 0; dy <= 3; dy++) {
+                  if (isWall && !(isDoor && dy <= 2)) {
+                    const wallB = isSculk
+                      ? ((Math.abs(dx) === 3 && Math.abs(dz) === 3) ? B.CHISELED_STONE_BRICKS : B.DEEPSLATE_BRICKS)
+                      : ((hRnd < 0.5) ? B.MOSSY_COBBLE : B.STONE_BRICK);
+                    setU(lx, floorY + dy, lz, wallB);
+                  } else {
+                    setU(lx, floorY + dy, lz, B.AIR);
+                  }
+                }
+                setU(lx, floorY + 4, lz, isSculk ? B.DEEPSLATE_BRICKS : B.COBBLE);
+              }
+            }
+            // 四角装饰（幽匿圣殿放灵魂提灯与幽匿感测体；苔石地牢挂蛛网与火把）
+            for (const [cdx, cdz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) {
+              if (isSculk) {
+                setU(8 + cdx, floorY, 8 + cdz, (cdx === -2 && cdz === -2) ? B.SCULK_SENSOR : B.DEEPSLATE_BRICKS);
+                if (!(cdx === -2 && cdz === -2)) setU(8 + cdx, floorY + 1, 8 + cdz, B.SOUL_LANTERN);
+              } else {
+                setU(8 + cdx, floorY, 8 + cdz, B.COBWEB);
+                setU(8 + cdx, floorY + 2, 8 + cdz, B.TORCH);
+              }
+            }
+            setU(8, floorY, 8, B.CHEST);
+            populateUndergroundChest(cx8, floorY, cz8, isSculk ? 'sculk' : 'dungeon');
+          }
         }
       }
     }
@@ -6588,7 +7026,7 @@ function plantTrees(c) {
 
       if (bm === 3 || bm === 9 || bm === 10 || bm === 12 || bm === 13 || bm === 14 || bm === 20 || bm === 22 || bm === 24 || bm === 25 || bm === 26 || bm === 28 || bm === 30) continue;   // 沙漠/恶地/蘑菇岛/砾石平原/白沙丘/冰刺平原/火山/极地冰川/紫晶裂谷/喀斯特石林/沧海神殿湾/丹霞红岩原/星陨末地遗境不种普通树
       // 苍翠高山：高海拔雪顶不长树，山麓疏落长云杉
-      if (bm === 27 && surf >= 52) continue;
+      if (bm === 27 && surf >= 94) continue;
       // 雪地：多层厚雪块的地方不长树；再叠一层 24x24 分区的林线遮罩，让雪原出现大片纯粹的空旷雪野
       if (bm === 4) {
         if (ground === B.SNOW && world.getBlock(wx, surf - 1, wz) === B.SNOW) continue;
@@ -14276,7 +14714,7 @@ function teleportDimension() {
     toast('🔥 穿越维度裂隙，抵达熔岩翻涌的【下界】！');
   } else {
     // 下界 → 主世界
-    const target = overworldPortalPos || { x: 0, y: 70, z: 0 };
+    const target = overworldPortalPos || { x: 0, y: Math.floor(surfaceHeight(0, 0)) + 2, z: 0 };
     switchDimension(false);
     const ocx = Math.floor(target.x / CHUNK), ocz = Math.floor(target.z / CHUNK);
     for (let dz = -2; dz <= 2; dz++) {
@@ -21912,7 +22350,7 @@ function animate() {
   const underground = !inNether && !submerged && player.pos.y < surfHere - 2;
 
   // 幽邃洞穴神秘回响氛围音
-  if (locked && underground && player.pos.y < 32) {
+  if (locked && underground && player.pos.y < SEA - 6) {
     caveAmbienceTimer -= dt;
     if (caveAmbienceTimer <= 0) {
       caveAmbienceTimer = 22 + Math.random() * 25;
