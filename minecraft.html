@@ -5565,6 +5565,10 @@ function populateBiomeChest(x, y, z, theme = 'prismarine') {
     { id: B.SPONGE, count: 1 + Math.floor(rnd() * 2), prob: 0.45 },
     { id: B.REGEN_POTION, count: 1, prob: 0.35 },
     { id: B.TRIDENT, count: 1, prob: 0.18 },
+    { id: B.NAUTILUS_SHELL, count: 1 + Math.floor(rnd() * 3), prob: 0.68 },
+    { id: B.HEART_OF_THE_SEA, count: 1, prob: 0.28 },
+    { id: B.WATER_BREATHING_POTION, count: 1, prob: 0.52 },
+    { id: B.DRIED_KELP, count: 4 + Math.floor(rnd() * 6), prob: 0.65 },
     { id: B.COOKED_FISH, count: 3 + Math.floor(rnd() * 4), prob: 0.75 },
   ];
   let idx = 0;
@@ -5600,6 +5604,8 @@ function populateUndergroundChest(x, y, z, theme = 'dungeon') {
       { id: B.LAPIS_LAZULI, count: 4 + Math.floor(rnd() * 7), prob: 0.50 },
       { id: B.REDSTONE, count: 4 + Math.floor(rnd() * 8), prob: 0.52 },
       { id: B.TNT, count: 1 + Math.floor(rnd() * 2), prob: 0.34 },
+      { id: B.BRUSH, count: 1, prob: 0.36 },
+      { id: B.GLOW_BERRIES, count: 3 + Math.floor(rnd() * 4), prob: 0.55 },
       { id: B.GOLDEN_APPLE, count: 1, prob: 0.22 },
     ];
   } else if (theme === 'stronghold') {
@@ -5616,6 +5622,10 @@ function populateUndergroundChest(x, y, z, theme = 'dungeon') {
       { id: B.DIAMOND_PICKAXE, count: 1, prob: 0.25 },
       { id: B.NIGHT_VISION_POTION, count: 1, prob: 0.45 },
       { id: B.REGEN_POTION, count: 1, prob: 0.38 },
+      { id: B.SLOW_FALLING_POTION, count: 1, prob: 0.42 },
+      { id: B.WIND_CHARGE, count: 4 + Math.floor(rnd() * 5), prob: 0.48 },
+      { id: B.BREEZE_ROD, count: 1 + Math.floor(rnd() * 2), prob: 0.32 },
+      { id: B.HEALING_SPLASH_POTION, count: 1 + Math.floor(rnd() * 2), prob: 0.35 },
       { id: B.IRON_INGOT, count: 4 + Math.floor(rnd() * 6), prob: 0.80 },
     ];
   } else if (theme === 'sculk') {
@@ -5630,6 +5640,10 @@ function populateUndergroundChest(x, y, z, theme = 'dungeon') {
       { id: B.SOUL_LANTERN, count: 2 + Math.floor(rnd() * 3), prob: 0.70 },
       { id: B.REDSTONE, count: 6 + Math.floor(rnd() * 8), prob: 0.68 },
       { id: B.LAPIS_LAZULI, count: 5 + Math.floor(rnd() * 8), prob: 0.65 },
+      { id: B.ECHO_SHARD, count: 2 + Math.floor(rnd() * 4), prob: 0.78 },
+      { id: B.HEAVY_CORE, count: 1, prob: 0.20 },
+      { id: B.BREEZE_ROD, count: 1 + Math.floor(rnd() * 2), prob: 0.35 },
+      { id: B.HARMING_SPLASH_POTION, count: 2, prob: 0.42 },
       { id: B.NIGHT_VISION_POTION, count: 1, prob: 0.45 },
     ];
   } else if (theme === 'end_ship') {
@@ -5673,6 +5687,9 @@ function populateUndergroundChest(x, y, z, theme = 'dungeon') {
       { id: B.ENDER_PEARL, count: 1 + Math.floor(rnd() * 2), prob: 0.42 },
       { id: B.STRING, count: 2 + Math.floor(rnd() * 4), prob: 0.70 },
       { id: B.AMETHYST_SHARD, count: 2 + Math.floor(rnd() * 4), prob: 0.35 },
+      { id: B.BRUSH, count: 1, prob: 0.30 },
+      { id: B.WIND_CHARGE, count: 3 + Math.floor(rnd() * 4), prob: 0.35 },
+      { id: B.HARMING_SPLASH_POTION, count: 1, prob: 0.28 },
     ];
   }
   let slotIdx = 0;
@@ -5706,6 +5723,10 @@ function populateVillageChest(x, y, z, type = 'general') {
       { id: B.APPLE, count: 2 + Math.floor(rnd() * 4), prob: 0.75 },
       { id: B.WHEAT, count: 4 + Math.floor(rnd() * 8), prob: 0.80 },
       { id: B.EMERALD, count: 1 + Math.floor(rnd() * 3), prob: 0.65 },
+      { id: B.CARROT, count: 2 + Math.floor(rnd() * 4), prob: 0.65 },
+      { id: B.POTATO, count: 2 + Math.floor(rnd() * 4), prob: 0.65 },
+      { id: B.BEETROOT, count: 2 + Math.floor(rnd() * 4), prob: 0.55 },
+      { id: B.HONEYCOMB, count: 2 + Math.floor(rnd() * 3), prob: 0.35 },
       { id: B.TORCH, count: 4 + Math.floor(rnd() * 6), prob: 0.60 },
       { id: B.PLANKS, count: 6 + Math.floor(rnd() * 10), prob: 0.50 },
     ];
@@ -5713,7 +5734,7 @@ function populateVillageChest(x, y, z, type = 'general') {
   let slotIdx = 0;
   for (const item of possibleLoot) {
     if (rnd() < item.prob && slotIdx < 27) {
-      slots[slotIdx++] = { id: item.id, count: item.count };
+      slots[slotIdx++] = { id: item.id, count: item.count, dur: isTool(item.id) ? TOOL_DURABILITY[item.id] : undefined };
     }
   }
   chestStorages.set(ck, slots);
@@ -23302,7 +23323,10 @@ function onMousedown(btn) {
       // 右键蜂箱 → 使用剪刀采集蜜脾
       if (hit.id === B.BEEHIVE) {
         if (sel && sel.id === B.SHEARS) {
-          if (!player.fly) sel.dur = (sel.dur !== undefined ? sel.dur : TOOL_DURABILITY[B.SHEARS]) - 1;
+          if (!player.fly) {
+            sel.dur = (sel.dur !== undefined ? sel.dur : TOOL_DURABILITY[B.SHEARS]) - 1;
+            if (sel.dur <= 0) { hotbar[selected] = null; playBreak(); toast('✂️ 剪刀已磨损损坏！'); }
+          }
           addItem(B.HONEYCOMB, 3);
           refreshHotbar();
           burst(0.18, 0.22, 1200);
