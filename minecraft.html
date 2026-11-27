@@ -7215,10 +7215,15 @@ function stashEditedChunk(c) {
 }
 
 /* 恢复区块里的火把/末地烛光源：否则读档后火把还在，却不再发光 */
+function isDynamicLightBlock(id) {
+  return id === B.TORCH || id === B.SOUL_TORCH || id === B.JACK_O_LANTERN || id === B.GLOWSTONE ||
+    id === B.CAMPFIRE || id === B.SOUL_CAMPFIRE || id === B.SEA_LANTERN || id === B.REDSTONE_LAMP_ON ||
+    id === B.LANTERN || id === B.SOUL_LANTERN || id === B.END_ROD || id === B.SHROOMLIGHT;
+}
 function restoreTorchLights(c) {
   const baseX = c.cx * 16, baseZ = c.cz * 16;
   for (let i = 0; i < c.blocks.length; i++) {
-    if (c.blocks[i] !== B.TORCH && c.blocks[i] !== B.SOUL_TORCH && c.blocks[i] !== B.END_ROD) continue;
+    if (!isDynamicLightBlock(c.blocks[i])) continue;
     const y = Math.floor(i / 256);
     const tz = baseZ + Math.floor((i % 256) / 16);
     const tx = baseX + (i % 16);
@@ -7348,11 +7353,20 @@ function saveWorld() {
       inv: inv.map((s) => (s ? [s.id, s.count, s.dur || 0] : null)),
       selected,
       hunger: player.hunger,
+      armor: player.armor ? {
+        helmet: player.armor.helmet || null,
+        chestplate: player.armor.chestplate || null,
+        leggings: player.armor.leggings || null,
+        boots: player.armor.boots || null,
+      } : null,
+      xp: player.xp || 0,
+      level: player.level || 0,
       timeOfDay,
       weather,
       weatherTimer,
       dragonDefeated: !!dragonDefeated,
       bedSpawn: playerBedSpawn ? [playerBedSpawn.x, playerBedSpawn.y, playerBedSpawn.z] : null,
+      respawnAnchors: keys.world ? Array.from(respawnAnchorCharges.entries()) : [],
       crops: keys.world ? Array.from(crops.entries()) : [],
       furnace: {
         input: furnace.input ? [furnace.input.id, furnace.input.count, furnace.input.dur || 0] : null,
@@ -7445,9 +7459,23 @@ function loadWorld(profileOverride) {
       if (Array.isArray(d.inv)) d.inv.forEach((s, i) => { inv[i] = restore(s); });
       if (typeof d.selected === 'number' && d.selected >= 0 && d.selected < HOTBAR_SIZE) selected = d.selected;
       if (typeof d.hunger === 'number') player.hunger = Math.max(0, Math.min(20, d.hunger));
+      if (d.armor && typeof d.armor === 'object' && player.armor) {
+        player.armor.helmet = d.armor.helmet || null;
+        player.armor.chestplate = d.armor.chestplate || null;
+        player.armor.leggings = d.armor.leggings || null;
+        player.armor.boots = d.armor.boots || null;
+        if (typeof updateArmorBar === 'function') updateArmorBar();
+      }
+      if (typeof d.xp === 'number' && isFinite(d.xp)) player.xp = Math.max(0, d.xp);
+      if (typeof d.level === 'number' && isFinite(d.level)) player.level = Math.max(0, d.level | 0);
+      if (typeof updateXpBar === 'function') updateXpBar();
       if (keys.world && typeof d.dragonDefeated === 'boolean') dragonDefeated = d.dragonDefeated;
       if (keys.world && Array.isArray(d.bedSpawn) && d.bedSpawn.length === 3) {
         playerBedSpawn = { x: d.bedSpawn[0] | 0, y: d.bedSpawn[1] | 0, z: d.bedSpawn[2] | 0 };
+      }
+      if (keys.world && Array.isArray(d.respawnAnchors)) {
+        respawnAnchorCharges.clear();
+        d.respawnAnchors.forEach(([k, v]) => { if (typeof v === 'number' && v > 0) respawnAnchorCharges.set(k, v); });
       }
       if (keys.world && typeof d.timeOfDay === 'number' && isFinite(d.timeOfDay)) timeOfDay = ((d.timeOfDay % 1) + 1) % 1;
       if (keys.world && typeof d.weather === 'string') weather = d.weather;
@@ -7730,6 +7758,7 @@ function growTree(wx, surf, wz, saplingId) {
 }
 
 function updatePlantedSaplings() {
+  if (inNether || inEnd) return;
   const now = performance.now();
   for (const [key, s] of plantedSaplings.entries()) {
     if (now >= s.growAt) {
@@ -8783,7 +8812,7 @@ function rainChance(bm) {
   return 0.40;                                             // 其余
 }
 function updateWeather(dt) {
-  if (inNether) {
+  if (inNether || inEnd) {
     rain.lines.visible = false;
     snow.lines.visible = false;
     precip = 0;
@@ -13307,9 +13336,18 @@ function updateRavagers(dt) {
         setTimeout(() => { if (r.headGroup) r.headGroup.position.z = -0.95; }, 350);
 
         if (target.isPlayer) {
-          if (isBlocking) {
+          const selShield = hotbar[selected];
+          if (player.blocking && selShield && selShield.id === B.SHIELD) {
             playShieldBlock();
-            applyShieldDurability(3);
+            if (!player.fly) {
+              selShield.dur = (selShield.dur !== undefined ? selShield.dur : TOOL_DURABILITY[B.SHIELD]) - 3;
+              if (selShield.dur <= 0) {
+                hotbar[selected] = null;
+                playBreak();
+                toast('🛡️ 盾牌在剧烈冲撞中碎裂了！');
+              }
+              refreshHotbar();
+            }
             r.stunned = 2.8;
             tone(500, 200, 0.35, 'sawtooth', 0.3);
             spawnParticles(r.x, r.y + 2.2, r.z, 0x5dade2, 20);
@@ -14190,8 +14228,12 @@ function explodeTnt(ex, ey, ez, customRadius = 6.4) {
               const chainFuse = 0.70 + Math.random() * 0.30;
               primeTnt(x, y, z, chainFuse, flingX, flingY, flingZ);
             } else {
+              if (isDynamicLightBlock(bid)) removeTorchLight(x, y, z);
+              if (bid === B.BEACON) removeBeaconBeam(x, y, z);
+              if (bid === B.CHEST || bid === B.BARREL) dropChestItems(x, y, z);
+              if (bid === B.DOOR) openDoors.delete(`${x},${y},${z}`);
+              if (bid === B.RESPAWN_ANCHOR) respawnAnchorCharges.delete(`${x},${y},${z}`);
               world.setBlock(x, y, z, B.AIR);
-              if (bid === B.TORCH || bid === B.JACK_O_LANTERN || bid === B.GLOWSTONE) removeTorchLight(x, y, z);
               if (Math.random() < 0.45) {
                 const d = dropOf(bid);
                 if (d) dropItem(d, x, y, z);
@@ -14521,7 +14563,7 @@ function updateFireworks(dt) {
       const c2 = colors[Math.floor(Math.random() * colors.length)];
       spawnParticles(fw.pos.x, fw.pos.y, fw.pos.z, c1, 40);
       spawnParticles(fw.pos.x, fw.pos.y, fw.pos.z, c2, 35);
-      playLevelUp();
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, idx) => tone(f, f * 1.04, 0.28, 'sine', 0.12, idx * 0.045));
       scene.remove(fw.mesh);
       fireworks.splice(i, 1);
     }
@@ -15216,6 +15258,10 @@ function playPortalTravel() {
 }
 
 function tryLightNetherPortal(hit) {
+  if (inEnd) {
+    toast('⚠️ 末地维度无法激活下界传送门！');
+    return false;
+  }
   const [nx, ny, nz] = hit.normal;
   const startX = hit.x + (hit.id === B.OBSIDIAN ? nx : 0);
   const startY = hit.y + (hit.id === B.OBSIDIAN ? ny : 0);
@@ -15379,8 +15425,11 @@ function switchDimension(targetDim) {
   world.chunks = inNether ? world.netherChunks : (inEnd ? world.endChunks : world.overworldChunks);
   editedChunks = inNether ? netherEdited : (inEnd ? endEdited : overworldEdited);
 
-  // 4. 隐藏/恢复主世界生物（避免主世界动物/村民悬浮在下界或末地虚空中）
+  // 4. 隐藏/恢复主世界生物与跨维度信标光柱（避免主世界实体/光柱悬浮在异维度虚空中）
   setOverworldEntitiesVisible(dim === 'overworld');
+  for (const b of activeBeacons.values()) {
+    if (b && b.group) b.group.visible = (b.dim === dim);
+  }
 
   // 5. 立即同步环境光照、星幕天穹与迷雾
   updateEnvironment(timeOfDay);
@@ -15451,7 +15500,7 @@ function teleportDimension() {
 }
 
 function updateNetherPortal(dt) {
-  if (!locked) return;
+  if (!locked || inEnd) return;
   const bx = Math.floor(player.pos.x);
   const by = Math.floor(player.pos.y);
   const bz = Math.floor(player.pos.z);
@@ -15616,8 +15665,7 @@ function destroyEndCrystal(idx, byPlayer = true) {
   c.alive = false;
   if (c.g) scene.remove(c.g);
   endCrystals.splice(idx, 1);
-  if (typeof playExplosion === 'function') playExplosion();
-  else tone(95, 34, 0.45, 'sawtooth', 0.35);
+  playExplosionSound();
   screenShake = Math.max(screenShake, 0.55);
   spawnParticles(c.x, c.y, c.z, 0xf058ff, 34);
   spawnParticles(c.x, c.y, c.z, 0xffc844, 24);
@@ -16231,7 +16279,7 @@ function updateTridents(dt) {
       if (!hit && checkHitEndBossOrCrystal(tri.pos, 18, 1.4)) {
         hit = true;
       }
-      if (!hit) {
+      if (!hit && !inNether && !inEnd) {
         for (let zi = zombies.length - 1; zi >= 0; zi--) {
           const z = zombies[zi];
           if (Math.hypot(z.x - tri.pos.x, (z.g.position.y + 0.8) - tri.pos.y, z.z - tri.pos.z) < 0.9) {
@@ -16244,7 +16292,7 @@ function updateTridents(dt) {
           }
         }
       }
-      if (!hit) {
+      if (!hit && !inNether && !inEnd) {
         for (let si = skeletons.length - 1; si >= 0; si--) {
           const sk = skeletons[si];
           if (Math.hypot(sk.x - tri.pos.x, (sk.g.position.y + 0.8) - tri.pos.y, sk.z - tri.pos.z) < 0.9) {
@@ -16258,7 +16306,7 @@ function updateTridents(dt) {
       }
 
       if (hit || tri.life <= 3.0) {
-        if (hit && weather === 'rain') {
+        if (hit && !inNether && !inEnd && weather === 'rain') {
           spawnLightning(tri.pos.x, tri.pos.y, tri.pos.z);
           toast('⚡ 苍穹引雷！暴雨中三叉戟引召九天神雷轰顶！');
         }
@@ -16312,7 +16360,7 @@ const beaconCoreMat = new THREE.MeshBasicMaterial({
 });
 
 function addBeaconBeam(bx, by, bz) {
-  const k = `${bx},${by},${bz}`;
+  const k = `${world.dim}:${bx},${by},${bz}`;
   if (activeBeacons.has(k)) return;
   const group = new THREE.Group();
   const beam = new THREE.Mesh(beaconBeamGeo, beaconBeamMat);
@@ -16321,13 +16369,13 @@ function addBeaconBeam(bx, by, bz) {
   group.add(core);
   group.position.set(bx + 0.5, by + 1.0, bz + 0.5);
   scene.add(group);
-  activeBeacons.set(k, { group, x: bx, y: by, z: bz });
+  activeBeacons.set(k, { group, x: bx, y: by, z: bz, dim: world.dim });
   tone(520, 1040, 0.3, 'sine', 0.25);
   toast('🌟 信标已激活！璀璨通天光柱直插云霄，赐予庇护恩典！');
 }
 
 function removeBeaconBeam(bx, by, bz) {
-  const k = `${bx},${by},${bz}`;
+  const k = `${world.dim}:${bx},${by},${bz}`;
   const b = activeBeacons.get(k);
   if (b) {
     scene.remove(b.group);
@@ -16340,11 +16388,12 @@ function updateBeacons(dt) {
   if (activeBeacons.size === 0) return;
   beaconAuraTimer += dt;
   for (const b of activeBeacons.values()) {
-    b.group.rotation.y += 0.8 * dt;
+    if (b.dim === world.dim) b.group.rotation.y += 0.8 * dt;
   }
-  // 检查玩家是否处于任意信标 32 格光环范围内
+  // 检查玩家是否处于当前维度任意信标 32 格光环范围内
   let inRange = false;
   for (const b of activeBeacons.values()) {
+    if (b.dim !== world.dim) continue;
     const dist = Math.hypot(player.pos.x - (b.x + 0.5), player.pos.z - (b.z + 0.5));
     if (dist <= 32) {
       inRange = true;
@@ -16565,7 +16614,8 @@ function updateArrows(dt) {
           hitMob = true;
           playArrowHitMob();
         }
-        if (!hitMob) for (let zi = zombies.length - 1; zi >= 0; zi--) {
+        const canHitOverworld = !inNether && !inEnd;
+        if (!hitMob && canHitOverworld) for (let zi = zombies.length - 1; zi >= 0; zi--) {
           const z = zombies[zi];
           if (Math.hypot(z.x - a.pos.x, (z.g.position.y + 0.9) - a.pos.y, z.z - a.pos.z) < 0.85) {
             hitMob = true;
@@ -16577,7 +16627,7 @@ function updateArrows(dt) {
             break;
           }
         }
-        if (!hitMob) for (let ci = creepers.length - 1; ci >= 0; ci--) {
+        if (!hitMob && canHitOverworld) for (let ci = creepers.length - 1; ci >= 0; ci--) {
           const c = creepers[ci];
           if (Math.hypot(c.x - a.pos.x, (c.g.position.y + 0.7) - a.pos.y, c.z - a.pos.z) < 0.85) {
             hitMob = true;
@@ -16589,7 +16639,7 @@ function updateArrows(dt) {
             break;
           }
         }
-        if (!hitMob) for (let si = skeletons.length - 1; si >= 0; si--) {
+        if (!hitMob && canHitOverworld) for (let si = skeletons.length - 1; si >= 0; si--) {
           const s = skeletons[si];
           if (Math.hypot(s.x - a.pos.x, (s.g.position.y + 0.9) - a.pos.y, s.z - a.pos.z) < 0.85) {
             hitMob = true;
@@ -16601,7 +16651,7 @@ function updateArrows(dt) {
             break;
           }
         }
-        if (!hitMob) for (let ei = endermen.length - 1; ei >= 0; ei--) {
+        if (!hitMob && canHitOverworld) for (let ei = endermen.length - 1; ei >= 0; ei--) {
           const e = endermen[ei];
           if (Math.hypot(e.x - a.pos.x, (e.g.position.y + 1.2) - a.pos.y, e.z - a.pos.z) < 1.8) {
             teleportEnderman(e);
@@ -16610,7 +16660,7 @@ function updateArrows(dt) {
             break;
           }
         }
-        if (!hitMob) for (let si = spiders.length - 1; si >= 0; si--) {
+        if (!hitMob && canHitOverworld) for (let si = spiders.length - 1; si >= 0; si--) {
           const sp = spiders[si];
           if (Math.hypot(sp.x - a.pos.x, (sp.g.position.y + 0.4) - a.pos.y, sp.z - a.pos.z) < 0.85) {
             hitMob = true;
@@ -16622,7 +16672,7 @@ function updateArrows(dt) {
             break;
           }
         }
-        if (!hitMob) for (let pi = pillagers.length - 1; pi >= 0; pi--) {
+        if (!hitMob && canHitOverworld) for (let pi = pillagers.length - 1; pi >= 0; pi--) {
           const p = pillagers[pi];
           if (Math.hypot(p.x - a.pos.x, (p.g.position.y + 0.9) - a.pos.y, p.z - a.pos.z) < 0.85) {
             hitMob = true;
@@ -16634,7 +16684,7 @@ function updateArrows(dt) {
             break;
           }
         }
-        if (!hitMob) for (let ri = ravagers.length - 1; ri >= 0; ri--) {
+        if (!hitMob && canHitOverworld) for (let ri = ravagers.length - 1; ri >= 0; ri--) {
           const r = ravagers[ri];
           if (Math.hypot(r.x - a.pos.x, (r.g.position.y + 1.0) - a.pos.y, r.z - a.pos.z) < 1.35) {
             hitMob = true;
@@ -16646,7 +16696,7 @@ function updateArrows(dt) {
             break;
           }
         }
-        if (!hitMob) for (let ai = animals.length - 1; ai >= 0; ai--) {
+        if (!hitMob && canHitOverworld) for (let ai = animals.length - 1; ai >= 0; ai--) {
           const m = animals[ai];
           if (Math.hypot(m.x - a.pos.x, (m.g.position.y + 0.5) - a.pos.y, m.z - a.pos.z) < 0.85) {
             hitMob = true;
@@ -17808,11 +17858,11 @@ function updatePlayer(dt) {
 
       // 粘液块物理：弹性反弹 + 完全免疫摔落伤害
       if (landBlock === B.SLIME_BLOCK) {
-        if (!keys['Shift'] && fallVel < -2.5) {
+        if (!(keys['ShiftLeft'] || keys['ShiftRight']) && fallVel < -2.5) {
           const bounce = Math.min(22, Math.abs(fallVel) * 0.85);
           player.vel.y = bounce;
           player.onGround = false;
-          maxFallY = player.pos.y + bounce;
+          maxFallY = null;
           tone(240, 520, 0.16, 'triangle', 0.22);
           burst(0.08, 0.12, 620, 'lowpass');
           spawnParticles(player.pos.x, player.pos.y + 0.1, player.pos.z, 0x7bed9f, 24);
@@ -18514,6 +18564,16 @@ function updateAmbience(dt) {
     }
     return;
   }
+  if (inEnd) {
+    // 末地专属环境音：深空虚空低鸣与星辰共振余韵
+    if (Math.random() < 0.5) {
+      tone(92 + Math.random() * 24, 64 + Math.random() * 18, 1.8, 'sine', 0.032);
+    } else {
+      const f = 310 + Math.random() * 220;
+      tone(f, f * 0.96, 1.2, 'triangle', 0.024);
+    }
+    return;
+  }
   const surf = surfaceHeight(Math.floor(px), Math.floor(pz));
   const underground = py < surf - 3 && !inWater();
 
@@ -18548,8 +18608,8 @@ function updateAmbience(dt) {
     if (Math.random() < 0.55) { playVillageChatter(); return; }
   }
 
-  // 高空：风啸（世界高度上限 96，84 以上即算高空）
-  if (py > 84) { playWindGust(); return; }
+  // 高空：风啸（世界高度上限 160，122 以上即算高空山巅）
+  if (py > 122) { playWindGust(); return; }
 
   // 水边：轻拍水声（真正检查 6 格外是否存在低于海平面的水体，而不是只看高度）
   if (py > SEA && py < SEA + 4) {
@@ -19270,7 +19330,7 @@ function plantWheat(px, py, pz, sel) {
   playPop();
 }
 function updateCrops(dt) {
-  if (crops.size === 0) return;
+  if (inNether || inEnd || crops.size === 0) return;
   const grown = [];
   for (const [k, age] of crops) {
     const p = k.split(',');
@@ -21760,8 +21820,9 @@ function updateBreaking(dt) {
   if (breaking.progress >= h) {
     const bx = breaking.x, by = breaking.y, bz = breaking.z, bid = breaking.id;
     stopBreaking();
-    if (bid === B.TORCH || bid === B.JACK_O_LANTERN || bid === B.GLOWSTONE || bid === B.CAMPFIRE || bid === B.SOUL_CAMPFIRE || bid === B.SEA_LANTERN || bid === B.REDSTONE_LAMP_ON || bid === B.LANTERN || bid === B.SOUL_LANTERN) removeTorchLight(bx, by, bz);
+    if (isDynamicLightBlock(bid)) removeTorchLight(bx, by, bz);
     if (bid === B.BEACON) removeBeaconBeam(bx, by, bz);
+    if (bid === B.RESPAWN_ANCHOR) respawnAnchorCharges.delete(`${bx},${by},${bz}`);
     if (bid === B.DOOR) {
       openDoors.delete(`${bx},${by},${bz}`);
       if (world.getBlock(bx, by + 1, bz) === B.DOOR) {
@@ -22073,13 +22134,21 @@ function onMousedown(btn) {
     const hit = raycast(origin, dir, 6);
     const blockDist = hit ? Math.hypot(hit.x + 0.5 - origin.x, hit.y + 0.5 - origin.y, hit.z + 0.5 - origin.z) : 999;
 
-    // 铁桶装水或装岩浆
+    // 铁桶装水或装岩浆（安全处理堆叠空桶，不覆盖整组；创造模式倾倒不清空）
+    const replaceBucketSlot = (newId) => {
+      if (sel.count > 1) {
+        sel.count--;
+        addItem(newId, 1);
+      } else {
+        hotbar[selected] = { id: newId, count: 1 };
+      }
+      refreshHotbar();
+    };
     if (sel && sel.id === B.BUCKET) {
       if (hit && world.getBlock(hit.x, hit.y, hit.z) === B.WATER) {
         world.setBlock(hit.x, hit.y, hit.z, B.AIR);
         enqueueAround(hit.x, hit.y, hit.z);
-        hotbar[selected] = { id: B.WATER_BUCKET, count: 1 };
-        refreshHotbar();
+        replaceBucketSlot(B.WATER_BUCKET);
         tone(450, 300, 0.15, 'sine', 0.25);
         toast('🪣 装了一桶清澈水源！获得【水桶】');
         return;
@@ -22087,8 +22156,7 @@ function onMousedown(btn) {
       if (hit && world.getBlock(hit.x, hit.y, hit.z) === B.MAGMA) {
         world.setBlock(hit.x, hit.y, hit.z, B.BASALT);
         enqueueAround(hit.x, hit.y, hit.z);
-        hotbar[selected] = { id: B.LAVA_BUCKET, count: 1 };
-        refreshHotbar();
+        replaceBucketSlot(B.LAVA_BUCKET);
         playSizzle();
         spawnParticles(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, 0xe67e22, 16);
         toast('🪣 舀取了一桶滚烫岩浆！获得【岩浆桶】！');
@@ -22102,8 +22170,7 @@ function onMousedown(btn) {
             world.setWater(ax, ay, az, 0);
             enqueueAround(ax, ay, az);
           }
-          hotbar[selected] = { id: B.LAVA_BUCKET, count: 1 };
-          refreshHotbar();
+          replaceBucketSlot(B.LAVA_BUCKET);
           playSizzle();
           spawnParticles(ax + 0.5, ay + 0.5, az + 0.5, 0xff6b1a, 16);
           toast('🪣 舀取了一桶下界熔岩！获得【岩浆桶】！');
@@ -22111,8 +22178,7 @@ function onMousedown(btn) {
         }
       }
       if (feetInWater()) {
-        hotbar[selected] = { id: inNether ? B.LAVA_BUCKET : B.WATER_BUCKET, count: 1 };
-        refreshHotbar();
+        replaceBucketSlot(inNether ? B.LAVA_BUCKET : B.WATER_BUCKET);
         if (inNether) {
           playSizzle();
           toast('🪣 舀取了一桶下界熔岩！获得【岩浆桶】！');
@@ -22128,8 +22194,7 @@ function onMousedown(btn) {
       const [nx, ny, nz] = hit.normal;
       const px = hit.x + nx, py = hit.y + ny, pz = hit.z + nz;
       if (py >= 0 && py < HEIGHT && world.getBlock(px, py, pz) === B.AIR) {
-        hotbar[selected] = { id: B.BUCKET, count: 1 };
-        refreshHotbar();
+        if (!player.fly) replaceBucketSlot(B.BUCKET);
         if (inNether) {
           playSizzle();
           spawnParticles(px + 0.5, py + 0.5, pz + 0.5, 0xdddddd, 22);
@@ -22178,8 +22243,7 @@ function onMousedown(btn) {
           }
           enqueueAround(px, py, pz);
         }
-        hotbar[selected] = { id: B.BUCKET, count: 1 };
-        refreshHotbar();
+        if (!player.fly) replaceBucketSlot(B.BUCKET);
         return;
       }
     }
@@ -22559,7 +22623,8 @@ function onMousedown(btn) {
               toast('⚓ 重生锚已谐振绑定！成功设置下界重生锚点！');
               return;
             } else {
-              // 主世界引发异次元力量失衡大爆炸
+              // 非下界维度引发异次元力量失衡大爆炸
+              respawnAnchorCharges.delete(posKey);
               world.setBlock(hit.x, hit.y, hit.z, B.AIR);
               enqueueAround(hit.x, hit.y, hit.z);
               playExplosionSound();
@@ -22570,6 +22635,9 @@ function onMousedown(btn) {
                   for (let dz = -2; dz <= 2; dz++) {
                     const tx = hit.x + dx, ty = hit.y + dy, tz = hit.z + dz;
                     if (ty >= 0 && ty < HEIGHT && world.getBlock(tx, ty, tz) !== B.BEDROCK) {
+                      const tBid = world.getBlock(tx, ty, tz);
+                      if (isDynamicLightBlock(tBid)) removeTorchLight(tx, ty, tz);
+                      if (tBid === B.BEACON) removeBeaconBeam(tx, ty, tz);
                       world.setBlock(tx, ty, tz, B.AIR);
                       enqueueAround(tx, ty, tz);
                     }
@@ -22578,7 +22646,7 @@ function onMousedown(btn) {
               }
               spawnParticles(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, 0xff3838, 40);
               spawnParticles(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, 0x9b59b6, 30);
-              toast('💥 维度法则冲突！重生锚在主世界发生了灾难级湮灭大爆炸！');
+              toast(`💥 维度法则冲突！重生锚在${inEnd ? '末地' : '主世界'}发生了灾难级湮灭大爆炸！`);
               return;
             }
           } else {
@@ -23658,7 +23726,7 @@ function onMousedown(btn) {
     if (isSapling(sid) && below !== B.GRASS && below !== B.DIRT && below !== B.SAND) { toast('⚠️ 树苗只能种植在泥土、草地或沙子上'); return; }
     if (sid === B.WATER) world.setWater(px, py, pz, 8);
     else world.setBlock(px, py, pz, sid);
-    if (sid === B.TORCH || sid === B.SOUL_TORCH || sid === B.JACK_O_LANTERN || sid === B.GLOWSTONE || sid === B.CAMPFIRE || sid === B.SOUL_CAMPFIRE || sid === B.SEA_LANTERN || sid === B.REDSTONE_LAMP_ON || sid === B.LANTERN || sid === B.SOUL_LANTERN) addTorchLight(px, py, pz);
+    if (isDynamicLightBlock(sid)) addTorchLight(px, py, pz);
     if (sid === B.BEACON) addBeaconBeam(px, py, pz);
     if (isSapling(sid)) {
       plantedSaplings.set(`${px},${py},${pz}`, { x: px, y: py, z: pz, id: sid, growAt: performance.now() + 15000 + Math.random() * 15000 });
@@ -24465,7 +24533,7 @@ function clearAllOverworldMobs() {
   }
   if (wanderingTrader && wanderingTrader.g) { scene.remove(wanderingTrader.g); wanderingTrader = null; }
   for (let i = items.length - 1; i >= 0; i--) {
-    if (items[i] && items[i].mesh) scene.remove(items[i].mesh);
+    if (items[i] && items[i].spr) scene.remove(items[i].spr);
   }
   items.length = 0;
 }
@@ -24495,6 +24563,9 @@ function reloadActiveWorld(seed, opts = {}) {
     clearEndVisuals();
     for (const l of torchLights.values()) scene.remove(l);
     torchLights.clear();
+    for (const b of activeBeacons.values()) if (b && b.group) scene.remove(b.group);
+    activeBeacons.clear();
+    respawnAnchorCharges.clear();
     waterQ.length = 0; waterHead = 0; waterSet.clear();
     groundCache.clear();
     villageCenters.clear();
@@ -24504,11 +24575,21 @@ function reloadActiveWorld(seed, opts = {}) {
     chestStorages.clear();
     clearAllOverworldMobs();
 
-    // 2. 重置维度与存档槽位
+    // 2. 重置维度、玩家装备/经验与存档槽位
     inNether = false;
     inEnd = false;
     dragonDefeated = false;
     playerBedSpawn = null;
+    if (player.armor) {
+      player.armor.helmet = null;
+      player.armor.chestplate = null;
+      player.armor.leggings = null;
+      player.armor.boots = null;
+      if (typeof updateArmorBar === 'function') updateArmorBar();
+    }
+    player.xp = 0;
+    player.level = 0;
+    if (typeof updateXpBar === 'function') updateXpBar();
     world.dim = 'overworld';
     world.chunks = world.overworldChunks;
     editedChunks = overworldEdited;
