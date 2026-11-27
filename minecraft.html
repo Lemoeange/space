@@ -561,6 +561,10 @@
 <div id="sleepFade" style="position:fixed;inset:0;background:#060814;opacity:0;pointer-events:none;transition:opacity 0.65s cubic-bezier(0.4, 0, 0.2, 1);z-index:9999;"></div>
 <div id="totemFlash" style="position:fixed;inset:0;background:radial-gradient(circle, rgba(255,215,0,0.85) 0%, rgba(23,221,98,0.55) 60%, transparent 100%);opacity:0;pointer-events:none;transition:opacity 0.7s cubic-bezier(0.1, 0.9, 0.2, 1);z-index:9998;"></div>
 <div id="crosshair"></div>
+<!-- 拉弓蓄力进度指示条（准星正下方） -->
+<div id="bowChargeHUD" style="display:none; position:fixed; top:calc(50% + 20px); left:50%; transform:translateX(-50%); width:64px; height:6px; background:rgba(10,14,20,0.72); border:1px solid rgba(255,255,255,0.35); border-radius:999px; overflow:hidden; pointer-events:none; z-index:920; box-shadow:0 2px 8px rgba(0,0,0,0.5);">
+  <div id="bowChargeFill" style="width:0%; height:100%; background:linear-gradient(90deg, #5fd184, #f7c948); transition:background 0.1s ease;"></div>
+</div>
 <!-- 望远镜单筒黄铜瞄准刻度遮罩 -->
 <div id="spyglassOverlay" style="display:none; position:fixed; inset:0; pointer-events:none; z-index:9000; box-shadow:inset 0 0 0 100vmax rgba(12,8,4,0.94); border-radius:50%; margin:auto; width:min(70vh, 70vw); height:min(70vh, 70vw); border:8px solid #b8860b;">
   <div style="position:absolute; inset:0; border:2px dashed rgba(245,200,90,0.35); border-radius:50%;"></div>
@@ -14097,7 +14101,7 @@ function explodeTnt(ex, ey, ez, customRadius = 6.4) {
     player.vel.y += force * 12;
     player.vel.z += (pdz / (pdist || 1)) * force * 16;
     const dmg = Math.floor(force * 12);
-    if (dmg > 0 && !flyMode) damagePlayer(dmg);
+    if (dmg > 0 && !player.fly) damagePlayer(dmg);
   }
 
   for (let i = zombies.length - 1; i >= 0; i--) {
@@ -16231,9 +16235,34 @@ function updateBeacons(dt) {
 let bowCharging = false;
 let bowChargeTime = 0;
 const arrows = [];
-const arrowGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.65, 5);
+const arrowGeo = new THREE.CylinderGeometry(0.028, 0.028, 0.78, 6);
 arrowGeo.rotateX(Math.PI / 2);
-const arrowMat = new THREE.MeshLambertMaterial({ color: 0x9c7a4e });
+const arrowMat = new THREE.MeshLambertMaterial({ color: 0xb68b54 });
+const arrowSpectralMat = new THREE.MeshBasicMaterial({ color: 0xffe44d });
+const arrowTipGeo = new THREE.ConeGeometry(0.065, 0.18, 4);
+arrowTipGeo.rotateX(-Math.PI / 2);
+const arrowTipMat = new THREE.MeshLambertMaterial({ color: 0xd0d8e0 });
+const arrowFletchGeo = new THREE.BoxGeometry(0.18, 0.018, 0.22);
+const arrowFletchMat = new THREE.MeshBasicMaterial({ color: 0xf4f6f8 });
+const arrowFletchSpectralMat = new THREE.MeshBasicMaterial({ color: 0xfff394 });
+
+function createArrowMesh(isSpectral) {
+  const g = new THREE.Group();
+  const shaft = new THREE.Mesh(arrowGeo, isSpectral ? arrowSpectralMat : arrowMat);
+  g.add(shaft);
+  const tip = new THREE.Mesh(arrowTipGeo, isSpectral ? arrowSpectralMat : arrowTipMat);
+  tip.position.z = -0.44;
+  g.add(tip);
+  const fMat = isSpectral ? arrowFletchSpectralMat : arrowFletchMat;
+  const f1 = new THREE.Mesh(arrowFletchGeo, fMat);
+  f1.position.z = 0.30;
+  g.add(f1);
+  const f2 = new THREE.Mesh(arrowFletchGeo, fMat);
+  f2.position.z = 0.30;
+  f2.rotation.z = Math.PI / 2;
+  g.add(f2);
+  return g;
+}
 
 function playBowDraw() {
   // 拉弓木质弓臂绷紧吱呀声 + 弓弦张力上升
@@ -16244,8 +16273,8 @@ function playBowDraw() {
 function playBowShoot() {
   // 弓弦清脆弹振 + 箭矢破空呼啸
   const jit = 0.94 + Math.random() * 0.12;
-  tone(480 * jit, 175 * jit, 0.11, 'triangle', 0.20);
-  tone(920 * jit, 380 * jit, 0.06, 'sine', 0.08, 0.01);
+  tone(480 * jit, 175 * jit, 0.11, 'triangle', 0.22);
+  tone(920 * jit, 380 * jit, 0.06, 'sine', 0.10, 0.01);
   burst(0.08, 0.14, 2400, 'bandpass');
   burst(0.05, 0.08, 4200, 'highpass', 0.02);
 }
@@ -16256,25 +16285,31 @@ function playArrowHitBlock() {
   tone(260 * jit, 105 * jit, 0.055, 'triangle', 0.14);
   tone(520 * jit, 420 * jit, 0.045, 'sine', 0.05, 0.018);
 }
+function playArrowHitMob() {
+  // 原版经典箭矢命中生物清脆叮咚反馈音
+  tone(880, 1320, 0.14, 'sine', 0.18);
+}
 
 function shootArrow(power) {
   const sel = hotbar[selected];
   if (!sel || sel.id !== B.BOW) return;
 
+  const p = Math.max(0.12, Math.min(1.0, power || 0));
   const hasSpectral = countItem(B.SPECTRAL_ARROW) > 0;
   const hasNormal = countItem(B.ARROW) > 0;
-  if (!hasSpectral && !hasNormal && !flyMode) {
-    playPop(B.WOOD);
+  if (!hasSpectral && !hasNormal && !player.fly) {
+    playPop(B.PLANKS);
+    toast('⚠️ 背包中没有可用的箭矢！请先合成或携带【箭】');
     return;
   }
   const isSpectral = hasSpectral;
-  if (!flyMode) {
+  if (!player.fly) {
     if (isSpectral) removeItem(B.SPECTRAL_ARROW, 1);
     else removeItem(B.ARROW, 1);
     refreshHotbar();
   }
 
-  if (sel.dur !== undefined) {
+  if (!player.fly && sel.dur !== undefined) {
     sel.dur--;
     if (sel.dur <= 0) { hotbar[selected] = null; playBreak(); }
     refreshHotbar();
@@ -16284,22 +16319,24 @@ function shootArrow(power) {
 
   const dir = new THREE.Vector3();
   aimDir(dir);
-  const origin = aimOrigin().clone().addScaledVector(dir, 0.35);
+  const origin = aimOrigin().clone().addScaledVector(dir, 0.45);
 
-  const arrowMatToUse = isSpectral ? new THREE.MeshLambertMaterial({ color: 0xffea00 }) : arrowMat;
-  const mesh = new THREE.Mesh(arrowGeo, arrowMatToUse);
+  const mesh = createArrowMesh(isSpectral);
   mesh.position.copy(origin);
   mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), dir);
   scene.add(mesh);
 
-  const speed = 10.0 + power * 24.0; // 10 ~ 34 m/s
-  const dmg = Math.round(4 + power * 6); // 4 ~ 10 点伤害
+  const crit = p >= 0.92;
+  const speed = 13.0 + p * 27.0; // 13 ~ 40 m/s
+  const enchantBonus = (sel.enchanted || sel.reinforced) ? 4 : 0;
+  const dmg = Math.round(4 + p * 6 + (crit ? 2 : 0) + enchantBonus); // 5 ~ 12（附魔最高 16）
 
   arrows.push({
     mesh,
     pos: origin,
-    vel: dir.clone().multiplyScalar(speed).add(new THREE.Vector3(0, 0.8 * power, 0)),
+    vel: dir.clone().multiplyScalar(speed).add(new THREE.Vector3(0, 0.65 * p, 0)),
     dmg,
+    crit,
     isSpectral,
     stuck: false,
     life: 8.0,
@@ -16309,7 +16346,7 @@ function shootArrow(power) {
 function shootCrossbow() {
   const hasArrow = countItem(B.ARROW) > 0 || countItem(B.SPECTRAL_ARROW) > 0;
   if (!hasArrow && !player.fly) {
-    playPop(B.WOOD);
+    playPop(B.PLANKS);
     toast('⚠️ 背包中没有可用的箭矢！');
     return;
   }
@@ -16324,27 +16361,29 @@ function shootCrossbow() {
 
   const dir = new THREE.Vector3();
   aimDir(dir);
-  const origin = aimOrigin().clone().addScaledVector(dir, 0.4);
+  const origin = aimOrigin().clone().addScaledVector(dir, 0.45);
 
-  const arrowMatToUse = isSpectral ? new THREE.MeshLambertMaterial({ color: 0xffea00 }) : arrowMat;
-  const mesh = new THREE.Mesh(arrowGeo, arrowMatToUse);
+  const mesh = createArrowMesh(isSpectral);
   mesh.position.copy(origin);
   mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), dir);
   scene.add(mesh);
 
+  const sel = hotbar[selected];
+  const enchantBonus = (sel && (sel.enchanted || sel.reinforced)) ? 4 : 0;
   arrows.push({
     mesh,
     pos: origin,
-    vel: dir.clone().multiplyScalar(40.0), // 40 m/s 高速机发
-    dmg: 11, // 11 点高额穿透破甲伤害
+    vel: dir.clone().multiplyScalar(42.0), // 42 m/s 高速机发
+    dmg: 11 + enchantBonus, // 11~15 点高额穿透破甲伤害
+    crit: true,
     isSpectral,
     stuck: false,
     life: 8.0,
   });
-  toast('🏹 机械弩高速击发！');
 }
 
 function updateArrows(dt) {
+  const SUB = 4; // 4 次子步进，彻底防止 40 m/s 高速箭矢穿透怪物、末地水晶或薄墙
   for (let i = arrows.length - 1; i >= 0; i--) {
     const a = arrows[i];
     a.life -= dt;
@@ -16359,226 +16398,168 @@ function updateArrows(dt) {
 
     if (a.isSpectral) {
       spawnParticles(a.pos.x, a.pos.y, a.pos.z, 0xffea00, 1);
+    } else if (a.crit && !a.fromMob && Math.random() < 0.7) {
+      spawnParticles(a.pos.x, a.pos.y, a.pos.z, 0xf8fafc, 1);
     }
 
-    a.vel.y -= 11.0 * dt;
-    a.pos.addScaledVector(a.vel, dt);
-    a.mesh.position.copy(a.pos);
+    const stepDt = dt / SUB;
+    let removed = false;
+    for (let sIdx = 0; sIdx < SUB; sIdx++) {
+      a.vel.y -= 11.0 * stepDt;
+      a.pos.addScaledVector(a.vel, stepDt);
+      const vDir = a.vel.clone().normalize();
+      a.mesh.position.copy(a.pos);
+      a.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), vDir);
 
-    const vDir = a.vel.clone().normalize();
-    a.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), vDir);
-
-    const bx = Math.floor(a.pos.x), by = Math.floor(a.pos.y), bz = Math.floor(a.pos.z);
-    const hitBlock = (by >= 0 && by < HEIGHT) ? world.getBlock(bx, by, bz) : B.AIR;
-    if (by >= 0 && by < HEIGHT && hitBlock !== B.AIR && isSolid(hitBlock)) {
-      a.stuck = true;
-      a.life = 4.0;
-      playArrowHitBlock();
-      spawnParticles(a.pos.x, a.pos.y, a.pos.z, blockColor(hitBlock), 4);
-      if (hitBlock === B.TARGET && !a.fromMob) {
-        const ox = Math.abs(a.pos.x - (bx + 0.5));
-        const oy = Math.abs(a.pos.y - (by + 0.5));
-        const oz = Math.abs(a.pos.z - (bz + 0.5));
-        const planeDist = Math.hypot(Math.min(ox, oy), Math.min(oy, oz));
-        const score = Math.max(1, Math.min(15, Math.round(15 * (1 - planeDist * 1.6))));
-        tone(440 + score * 40, 660 + score * 50, 0.18, 'triangle', 0.35);
-        if (score >= 12) {
-          tone(880, 1320, 0.25, 'sine', 0.4);
-          spawnParticles(bx + 0.5, by + 0.5, bz + 0.5, 0xffd700, 24);
-          spawnParticles(bx + 0.5, by + 0.5, bz + 0.5, 0xff4757, 16);
-        } else {
-          spawnParticles(bx + 0.5, by + 0.5, bz + 0.5, 0xff4757, 10);
-        }
-        player.xp = (player.xp || 0) + score;
-        updateXPBar();
-        toast(score >= 14 ? `🎯 绝妙正中红心！10环【${score} 分】满分！获得 ${score} 点经验！` : `🎯 命中标靶！得分【${score} 分】！+${score} 经验！`);
-      }
-      continue;
-    }
-
-    if (a.fromMob) {
-      const pDist = Math.hypot(player.pos.x - a.pos.x, (player.pos.y + 0.9) - a.pos.y, player.pos.z - a.pos.z);
-      if (pDist < 0.85) {
-        damagePlayer(a.dmg);
-        scene.remove(a.mesh);
-        arrows.splice(i, 1);
-        continue;
-      }
-    } else {
-      let hitMob = false;
-      if (checkHitEndBossOrCrystal(a.pos, a.dmg, 1.3)) {
-        hitMob = true;
-      }
-      if (!hitMob) for (let zi = zombies.length - 1; zi >= 0; zi--) {
-        const z = zombies[zi];
-        const dist = Math.hypot(z.x - a.pos.x, (z.g.position.y + 0.8) - a.pos.y, z.z - a.pos.z);
-        if (dist < 0.75) {
-          hitMob = true;
-          z.hp -= a.dmg;
-          z.hurtT = 0.25;
-          z.x += vDir.x * 0.8;
-          z.z += vDir.z * 0.8;
-          playZombieHit();
-          spawnParticles(a.pos.x, a.pos.y, a.pos.z, 0x609654, 8);
-          if (a.isSpectral) {
-            applyGlowing(z, 16.0);
-            tone(700, 1100, 0.2, 'sine', 0.25);
-            toast('🏹 光灵箭命中目标！施加了 16 秒穿墙透视高亮边框！');
-          }
-          if (z.hp <= 0) killZombie(zi);
+      // 1) 优先检测实体命中（避免目标靠墙时箭先扎墙）
+      if (a.fromMob) {
+        const pDist = Math.hypot(player.pos.x - a.pos.x, (player.pos.y + 0.9) - a.pos.y, player.pos.z - a.pos.z);
+        if (pDist < 0.85) {
+          damagePlayer(a.dmg);
+          scene.remove(a.mesh);
+          arrows.splice(i, 1);
+          removed = true;
           break;
         }
-      }
-
-      if (!hitMob) {
-        for (let ci = creepers.length - 1; ci >= 0; ci--) {
-          const c = creepers[ci];
-          const dist = Math.hypot(c.x - a.pos.x, (c.g.position.y + 0.6) - a.pos.y, c.z - a.pos.z);
-          if (dist < 0.75) {
+      } else {
+        let hitMob = false;
+        if (checkHitEndBossOrCrystal(a.pos, a.dmg, 1.35)) {
+          hitMob = true;
+          playArrowHitMob();
+        }
+        if (!hitMob) for (let zi = zombies.length - 1; zi >= 0; zi--) {
+          const z = zombies[zi];
+          if (Math.hypot(z.x - a.pos.x, (z.g.position.y + 0.9) - a.pos.y, z.z - a.pos.z) < 0.85) {
             hitMob = true;
-            c.hp -= a.dmg;
-            c.hurtT = 0.25;
-            c.x += vDir.x * 0.8;
-            c.z += vDir.z * 0.8;
-            playZombieHit();
+            z.hp -= a.dmg; z.hurtT = 0.25; z.x += vDir.x * 0.8; z.z += vDir.z * 0.8;
+            playZombieHit(); playArrowHitMob();
+            spawnParticles(a.pos.x, a.pos.y, a.pos.z, 0x609654, 8);
+            if (a.isSpectral) { applyGlowing(z, 16.0); toast('🏹 光灵箭命中目标！施加了 16 秒穿墙透视高亮边框！'); }
+            if (z.hp <= 0) killZombie(zi);
+            break;
+          }
+        }
+        if (!hitMob) for (let ci = creepers.length - 1; ci >= 0; ci--) {
+          const c = creepers[ci];
+          if (Math.hypot(c.x - a.pos.x, (c.g.position.y + 0.7) - a.pos.y, c.z - a.pos.z) < 0.85) {
+            hitMob = true;
+            c.hp -= a.dmg; c.hurtT = 0.25; c.x += vDir.x * 0.8; c.z += vDir.z * 0.8;
+            playZombieHit(); playArrowHitMob();
             spawnParticles(a.pos.x, a.pos.y, a.pos.z, 0x4e9a46, 8);
-            if (a.isSpectral) {
-              applyGlowing(c, 16.0);
-              tone(700, 1100, 0.2, 'sine', 0.25);
-              toast('🏹 光灵箭命中苦力怕！施加了 16 秒穿墙透视高亮边框！');
-            }
+            if (a.isSpectral) { applyGlowing(c, 16.0); toast('🏹 光灵箭命中苦力怕！施加了 16 秒穿墙透视高亮边框！'); }
             if (c.hp <= 0) killCreeper(ci);
             break;
           }
         }
-      }
-
-      if (!hitMob) {
-        for (let si = skeletons.length - 1; si >= 0; si--) {
+        if (!hitMob) for (let si = skeletons.length - 1; si >= 0; si--) {
           const s = skeletons[si];
-          const dist = Math.hypot(s.x - a.pos.x, (s.g.position.y + 0.8) - a.pos.y, s.z - a.pos.z);
-          if (dist < 0.75) {
+          if (Math.hypot(s.x - a.pos.x, (s.g.position.y + 0.9) - a.pos.y, s.z - a.pos.z) < 0.85) {
             hitMob = true;
-            s.hp -= a.dmg;
-            s.hurtT = 0.25;
-            s.x += vDir.x * 0.8;
-            s.z += vDir.z * 0.8;
-            tone(160, 240, 0.1, 'triangle', 0.1);
+            s.hp -= a.dmg; s.hurtT = 0.25; s.x += vDir.x * 0.8; s.z += vDir.z * 0.8;
+            tone(160, 240, 0.1, 'triangle', 0.1); playArrowHitMob();
             spawnParticles(a.pos.x, a.pos.y, a.pos.z, 0xd0d6dc, 8);
-            if (a.isSpectral) {
-              applyGlowing(s, 16.0);
-              tone(700, 1100, 0.2, 'sine', 0.25);
-              toast('🏹 光灵箭命中骷髅！施加了 16 秒穿墙透视高亮边框！');
-            }
+            if (a.isSpectral) { applyGlowing(s, 16.0); toast('🏹 光灵箭命中骷髅！施加了 16 秒穿墙透视高亮边框！'); }
             if (s.hp <= 0) killSkeleton(si);
             break;
           }
         }
-      }
-
-      if (!hitMob) {
-        for (let ei = endermen.length - 1; ei >= 0; ei--) {
+        if (!hitMob) for (let ei = endermen.length - 1; ei >= 0; ei--) {
           const e = endermen[ei];
-          const dist = Math.hypot(e.x - a.pos.x, (e.g.position.y + 1.2) - a.pos.y, e.z - a.pos.z);
-          if (dist < 1.8) {
+          if (Math.hypot(e.x - a.pos.x, (e.g.position.y + 1.2) - a.pos.y, e.z - a.pos.z) < 1.8) {
             teleportEnderman(e);
             e.angry = true;
             toast('🔮 末影人瞬移闪避了箭矢！');
             break;
           }
         }
-      }
-
-      if (!hitMob) {
-        for (let si = spiders.length - 1; si >= 0; si--) {
+        if (!hitMob) for (let si = spiders.length - 1; si >= 0; si--) {
           const sp = spiders[si];
-          const dist = Math.hypot(sp.x - a.pos.x, (sp.g.position.y + 0.3) - a.pos.y, sp.z - a.pos.z);
-          if (dist < 0.75) {
+          if (Math.hypot(sp.x - a.pos.x, (sp.g.position.y + 0.4) - a.pos.y, sp.z - a.pos.z) < 0.85) {
             hitMob = true;
-            sp.hp -= a.dmg;
-            sp.hurtT = 0.25;
-            sp.angry = true;
-            sp.x += vDir.x * 0.8;
-            sp.z += vDir.z * 0.8;
-            playSpiderHiss();
+            sp.hp -= a.dmg; sp.hurtT = 0.25; sp.angry = true; sp.x += vDir.x * 0.8; sp.z += vDir.z * 0.8;
+            playSpiderHiss(); playArrowHitMob();
             spawnParticles(a.pos.x, a.pos.y, a.pos.z, 0x1e1c22, 8);
-            if (a.isSpectral) {
-              applyGlowing(sp, 16.0);
-              tone(700, 1100, 0.2, 'sine', 0.25);
-              toast('🏹 光灵箭命中蜘蛛！施加了 16 秒穿墙透视高亮边框！');
-            }
+            if (a.isSpectral) { applyGlowing(sp, 16.0); toast('🏹 光灵箭命中蜘蛛！施加了 16 秒穿墙透视高亮边框！'); }
             if (sp.hp <= 0) killSpider(si);
             break;
           }
         }
-      }
-
-      if (!hitMob) {
-        for (let pi = pillagers.length - 1; pi >= 0; pi--) {
+        if (!hitMob) for (let pi = pillagers.length - 1; pi >= 0; pi--) {
           const p = pillagers[pi];
-          const dist = Math.hypot(p.x - a.pos.x, (p.g.position.y + 0.8) - a.pos.y, p.z - a.pos.z);
-          if (dist < 0.80) {
+          if (Math.hypot(p.x - a.pos.x, (p.g.position.y + 0.9) - a.pos.y, p.z - a.pos.z) < 0.85) {
             hitMob = true;
-            p.hp -= a.dmg;
-            p.hurtT = 0.25;
-            p.x += vDir.x * 0.8;
-            p.z += vDir.z * 0.8;
-            playZombieHit();
+            p.hp -= a.dmg; p.hurtT = 0.25; p.x += vDir.x * 0.8; p.z += vDir.z * 0.8;
+            playZombieHit(); playArrowHitMob();
             spawnParticles(a.pos.x, a.pos.y, a.pos.z, 0x959b9b, 10);
-            if (a.isSpectral) {
-              applyGlowing(p, 16.0);
-              tone(700, 1100, 0.2, 'sine', 0.25);
-              toast('🏹 光灵箭命中掠夺者！施加了 16 秒穿墙透视高亮边框！');
-            }
+            if (a.isSpectral) { applyGlowing(p, 16.0); toast('🏹 光灵箭命中掠夺者！施加了 16 秒穿墙透视高亮边框！'); }
             if (p.hp <= 0) killPillager(pi);
             break;
           }
         }
-      }
-
-      if (!hitMob) {
-        for (let ri = ravagers.length - 1; ri >= 0; ri--) {
+        if (!hitMob) for (let ri = ravagers.length - 1; ri >= 0; ri--) {
           const r = ravagers[ri];
-          const dist = Math.hypot(r.x - a.pos.x, (r.g.position.y + 1.0) - a.pos.y, r.z - a.pos.z);
-          if (dist < 1.3) {
+          if (Math.hypot(r.x - a.pos.x, (r.g.position.y + 1.0) - a.pos.y, r.z - a.pos.z) < 1.35) {
             hitMob = true;
-            r.hp -= a.dmg;
-            r.hurtT = 0.25;
-            playZombieHit();
+            r.hp -= a.dmg; r.hurtT = 0.25;
+            playZombieHit(); playArrowHitMob();
             spawnParticles(a.pos.x, a.pos.y, a.pos.z, 0x545559, 10);
-            if (a.isSpectral) {
-              applyGlowing(r, 16.0);
-              tone(700, 1100, 0.2, 'sine', 0.25);
-              toast('🏹 光灵箭命中狂暴劫掠兽！标记了 16 秒穿墙高亮边框！');
-            }
+            if (a.isSpectral) { applyGlowing(r, 16.0); toast('🏹 光灵箭命中狂暴劫掠兽！标记了 16 秒穿墙高亮边框！'); }
             if (r.hp <= 0) killRavager(ri);
             break;
           }
         }
-      }
-
-      if (!hitMob) {
-        for (let ai = animals.length - 1; ai >= 0; ai--) {
+        if (!hitMob) for (let ai = animals.length - 1; ai >= 0; ai--) {
           const m = animals[ai];
-          const dist = Math.hypot(m.x - a.pos.x, (m.g.position.y + 0.4) - a.pos.y, m.z - a.pos.z);
-          if (dist < 0.75) {
+          if (Math.hypot(m.x - a.pos.x, (m.g.position.y + 0.5) - a.pos.y, m.z - a.pos.z) < 0.85) {
             hitMob = true;
-            m.hp -= a.dmg;
-            m.hurtT = 0.25;
-            m.x += vDir.x * 0.8;
-            m.z += vDir.z * 0.8;
-            playPop();
+            m.hp -= a.dmg; m.hurtT = 0.25; m.x += vDir.x * 0.8; m.z += vDir.z * 0.8;
+            playPop(); playArrowHitMob();
             spawnParticles(a.pos.x, a.pos.y, a.pos.z, 0xc88a8a, 8);
             if (m.hp <= 0) killAnimal(ai);
             break;
           }
         }
+        if (hitMob) {
+          scene.remove(a.mesh);
+          arrows.splice(i, 1);
+          removed = true;
+          break;
+        }
       }
 
-      if (hitMob || a.life <= 0) {
-        scene.remove(a.mesh);
-        arrows.splice(i, 1);
+      // 2) 检测实心方块插针碰撞
+      const bx = Math.floor(a.pos.x), by = Math.floor(a.pos.y), bz = Math.floor(a.pos.z);
+      const hitBlock = (by >= 0 && by < HEIGHT) ? world.getBlock(bx, by, bz) : B.AIR;
+      if (by >= 0 && by < HEIGHT && hitBlock !== B.AIR && isSolid(hitBlock)) {
+        a.stuck = true;
+        a.life = 6.0;
+        playArrowHitBlock();
+        spawnParticles(a.pos.x, a.pos.y, a.pos.z, blockColor(hitBlock), 6);
+        if (hitBlock === B.TARGET && !a.fromMob) {
+          const ox = Math.abs(a.pos.x - (bx + 0.5));
+          const oy = Math.abs(a.pos.y - (by + 0.5));
+          const oz = Math.abs(a.pos.z - (bz + 0.5));
+          const planeDist = Math.hypot(Math.min(ox, oy), Math.min(oy, oz));
+          const score = Math.max(1, Math.min(15, Math.round(15 * (1 - planeDist * 1.6))));
+          tone(440 + score * 40, 660 + score * 50, 0.18, 'triangle', 0.35);
+          if (score >= 12) {
+            tone(880, 1320, 0.25, 'sine', 0.4);
+            spawnParticles(bx + 0.5, by + 0.5, bz + 0.5, 0xffd700, 24);
+            spawnParticles(bx + 0.5, by + 0.5, bz + 0.5, 0xff4757, 16);
+          } else {
+            spawnParticles(bx + 0.5, by + 0.5, bz + 0.5, 0xff4757, 10);
+          }
+          player.xp = (player.xp || 0) + score;
+          updateXPBar();
+          toast(score >= 14 ? `🎯 绝妙正中红心！10环【${score} 分】满分！获得 ${score} 点经验！` : `🎯 命中标靶！得分【${score} 分】！+${score} 经验！`);
+        }
+        break;
       }
+    }
+
+    if (!removed && !a.stuck && a.life <= 0) {
+      scene.remove(a.mesh);
+      arrows.splice(i, 1);
     }
   }
 }
@@ -21872,8 +21853,13 @@ function onMousedown(btn) {
   aimDir(dir);
   const sel = hotbar[selected];
   if (btn === 2) { // 放置 / 交互
-    // 手持木弓右键拉弦蓄力
+    // 手持木弓右键拉弦蓄力（生存无箭时立刻提示，有箭/创造模式进入蓄力拉弓）
     if (sel && sel.id === B.BOW) {
+      if (!player.fly && countItem(B.ARROW) <= 0 && countItem(B.SPECTRAL_ARROW) <= 0) {
+        playPop(B.PLANKS);
+        toast('⚠️ 背包中没有可用的箭矢！请先携带【箭】或【光灵箭】');
+        return;
+      }
       bowCharging = true;
       bowChargeTime = 0;
       playBowDraw();
@@ -23652,8 +23638,29 @@ function animate() {
   requestAnimationFrame(animate);   // 跟随屏幕刷新率，不再空转烧 CPU/电量；游戏速度仍由 dt 保证
   const dt = Math.min(clock.getDelta(), 0.05);
 
-  // 望远镜放大 (5倍聚焦，15° 视野)
-  const targetFov = isZooming ? 15 : 75;
+  // 若切走手持弓，自动取消蓄力并收起进度条
+  const heldForBow = hotbar[selected];
+  if (bowCharging && (!locked || !heldForBow || heldForBow.id !== B.BOW)) {
+    bowCharging = false;
+    bowChargeTime = 0;
+  }
+  const bowRatio = bowCharging ? Math.min(1.0, bowChargeTime / 0.85) : 0;
+  const bowHud = document.getElementById('bowChargeHUD');
+  const bowFill = document.getElementById('bowChargeFill');
+  if (bowHud && bowFill) {
+    if (bowCharging) {
+      bowHud.style.display = 'block';
+      bowFill.style.width = (bowRatio * 100).toFixed(1) + '%';
+      bowFill.style.background = bowRatio >= 0.92
+        ? 'linear-gradient(90deg, #f7c948, #fff099)'
+        : 'linear-gradient(90deg, #5fd184, #f7c948)';
+    } else {
+      bowHud.style.display = 'none';
+    }
+  }
+
+  // 望远镜放大 (5倍聚焦，15° 视野) / 拉弓平滑拉近焦距 (75° → 58°)
+  const targetFov = isZooming ? 15 : (bowCharging ? (75 - bowRatio * 17) : 75);
   if (Math.abs(camera.fov - targetFov) > 0.05) {
     camera.fov += (targetFov - camera.fov) * Math.min(1, 16 * dt);
     camera.updateProjectionMatrix();
