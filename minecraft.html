@@ -577,6 +577,15 @@
   <div id="raidSub" style="color:#ffd8d8; font-size:11.5px; text-shadow:0 1px 3px rgba(0,0,0,0.8); margin-top:4px;">剩余灾厄暴徒: 4</div>
 </div>
 
+<!-- 顶端末影龙 BOSS 血条 (Ender Dragon HUD) -->
+<div id="dragonHUD" style="display:none; position:fixed; top:18px; left:50%; transform:translateX(-50%); width:420px; max-width:92vw; z-index:905; text-align:center; pointer-events:none; background:rgba(16,8,28,0.82); backdrop-filter:blur(12px); border:1px solid rgba(212,110,255,0.48); border-radius:14px; padding:9px 16px; box-shadow:0 10px 30px rgba(80,10,130,0.5);">
+  <div id="dragonTitle" style="color:#eb9cff; font-weight:800; font-size:14.5px; text-shadow:0 2px 6px rgba(0,0,0,0.9); margin-bottom:6px; letter-spacing:1.2px;">🐉 末影龙 · Ender Dragon</div>
+  <div style="width:100%; height:11px; background:rgba(18,8,26,0.92); border:1.5px solid #6b21a8; border-radius:999px; overflow:hidden; box-shadow:inset 0 1px 4px rgba(0,0,0,0.8);">
+    <div id="dragonBar" style="width:100%; height:100%; background:linear-gradient(90deg, #9333ea, #d946ef, #f472b6); transition:width 0.2s ease;"></div>
+  </div>
+  <div id="dragonSub" style="color:#e9d5ff; font-size:11.5px; text-shadow:0 1px 3px rgba(0,0,0,0.85); margin-top:4px;">HP: 200 / 200 · 💎 剩余末地水晶: 10</div>
+</div>
+
 <!-- 右上角状态效果 (Status Effects: 不祥之兆 / 村庄英雄) -->
 <div id="statusEffects" style="position:fixed; top:16px; right:16px; z-index:900; display:flex; flex-direction:column; gap:8px; pointer-events:none;">
   <div id="badOmenBadge" style="display:none; background:rgba(26,14,36,0.86); backdrop-filter:blur(10px); border:1px solid rgba(186,85,211,0.55); border-radius:10px; padding:6px 14px; color:#f0d0ff; font-size:12.5px; font-weight:700; text-shadow:0 1px 3px rgba(0,0,0,0.8); box-shadow:0 6px 18px rgba(0,0,0,0.4);">
@@ -937,7 +946,10 @@ const B = {
   RED_NETHER_BRICKS:325, CHISELED_NETHER_BRICKS:326, BARREL:327, GILDED_BLACKSTONE:328,
   OXIDIZED_COPPER:329, PURPUR_BLOCK:330, END_STONE:331, END_STONE_BRICKS:332,
   BLAZE_POWDER:333, MAGMA_CREAM:334, GLASS_BOTTLE:335, JUMP_POTION:336,
-  INVISIBILITY_POTION:337, CARROT:338, POTATO:339, BAKED_POTATO:340
+  INVISIBILITY_POTION:337, CARROT:338, POTATO:339, BAKED_POTATO:340,
+  END_PORTAL_FRAME:341, END_PORTAL_FRAME_FILLED:342, END_PORTAL:343,
+  PURPUR_PILLAR:344, END_ROD:345, CHORUS_PLANT:346, CHORUS_FLOWER:347,
+  CHORUS_FRUIT:348, DRAGON_EGG:349, DRAGON_BREATH:350, END_CRYSTAL:351
 };
 
 function mulberry32(a) {
@@ -1293,10 +1305,103 @@ function netherOreFor(wx, y, wz) {
   return distSq <= maxR * maxR ? target : B.NETHERRACK;
 }
 
+/* ---------- 末地（The End）主岛、黑曜石柱、外岛群与末地城噪声 ---------- */
+const END_PILLARS = (() => {
+  const arr = [];
+  const heights = [76, 82, 88, 79, 94, 85, 98, 80, 91, 74];
+  const radii =   [2,  2,  3,  2,  3,  2,  3,  2,  3,  2];
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    arr.push({
+      id: i,
+      x: Math.round(Math.cos(a) * 32),
+      z: Math.round(Math.sin(a) * 32),
+      topY: heights[i],
+      radius: radii[i],
+      caged: (i === 2 || i === 6),
+    });
+  }
+  return arr;
+})();
+
+function endBiomeAt(x, z) {
+  const dist = Math.hypot(x, z);
+  if (dist < 78) return 1; // 末地主岛
+  if (dist < 126) return 3; // 末地虚空荒原带
+  const isl = P.terrain.fbm2((x + WX) * 0.0085 + 9100, (z + WZ) * 0.0085 + 9100, 3);
+  if (isl > 0.24) return 4; // 末地城高地
+  if (isl > 0.02) return 2; // 末地高地（紫颂林）
+  return 3;                 // 末地虚空荒原
+}
+
+function endColumnAt(x, z) {
+  const dist = Math.hypot(x, z);
+  // 1) 末地主岛：以 (0, 0) 为中心的雄伟浮空末地石大陆（半径 ~58~64 格，顶面 y=56..66，底面锥形悬空至 y=36..52）
+  if (dist < 72) {
+    const edgeN = P.terrain.fbm2(x * 0.032 + 1200, z * 0.032 + 1200, 3);
+    const maxR = 57 + edgeN * 11;
+    if (dist <= maxR) {
+      const t = dist / maxR;
+      const dome = Math.max(0, 1 - t * t);
+      const surfN = P.terrain.fbm2(x * 0.026 + 3100, z * 0.026 + 3100, 3);
+      // 中心返回传送门基座区 (dist < 10) 保持平稳高台 y = 62
+      const flatW = Math.max(0, Math.min(1, (10 - dist) / 5));
+      const rawTop = 55 + dome * 9 + surfN * 5.5;
+      const topY = Math.round(rawTop * (1 - flatW) + 62 * flatW);
+      const underN = P.terrain.fbm2(x * 0.045 + 4800, z * 0.045 + 4800, 2);
+      const botY = Math.max(24, Math.min(topY - 2, Math.round(topY - 4 - Math.pow(dome, 0.72) * 24 + underN * 5)));
+      return { hasLand: true, topY, botY, isMain: true, islandN: dome };
+    }
+    return { hasLand: false, topY: 0, botY: 0, isMain: false, islandN: 0 };
+  }
+  // 2) 中间虚空鸿沟（r ∈ [72, 128)）
+  if (dist < 128) return { hasLand: false, topY: 0, botY: 0, isMain: false, islandN: 0 };
+  // 3) 末地外岛群（无限浮空末地石群岛，含紫颂果树林与宏伟末地城高地）
+  const wx = x + WX, wz = z + WZ;
+  const isl = P.terrain.fbm2(wx * 0.0085 + 9100, wz * 0.0085 + 9100, 3);
+  const sub = P.terrain.fbm2(wx * 0.024 + 9700, wz * 0.024 + 9700, 2);
+  const density = isl + sub * 0.24;
+  if (density <= 0.04) return { hasLand: false, topY: 0, botY: 0, isMain: false, islandN: 0 };
+  const s = Math.min(1, (density - 0.04) / 0.36);
+  const topY = Math.min(92, Math.round(56 + s * 16 + sub * 7));
+  const thickness = Math.max(3, Math.round(3 + Math.pow(s, 0.8) * 18 + sub * 4));
+  const botY = Math.max(26, topY - thickness);
+  return { hasLand: true, topY, botY, isMain: false, islandN: s };
+}
+
+function nearestStrongholdCenter(px, pz) {
+  const hash2 = (x, z) => {
+    let n = Math.imul(x, 374761393) + Math.imul(z, 668265263);
+    n = (n ^ (n >>> 13)) * 1274126177;
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  };
+  const baseSx = Math.floor(Math.floor(px / 16) / 5);
+  const baseSz = Math.floor(Math.floor(pz / 16) / 5);
+  let best = null, bestD2 = Infinity;
+  for (let dz = -5; dz <= 5; dz++) {
+    for (let dx = -5; dx <= 5; dx++) {
+      const sx = baseSx + dx, sz = baseSz + dz;
+      if (hash2(sx * 149 + 31, sz * 173 + 59) >= 0.44) continue;
+      // 仅追踪带末地传送门祭坛的要塞大厅（非纯图书馆变体）
+      if (hash2(sx * 19 + 3, sz * 73 + 9) < 0.45) continue;
+      const hubRx = 1 + ((hash2(sx * 37 + 17, sz * 43 + 11) * 3) | 0);
+      const hubRz = 1 + ((hash2(sx * 61 + 23, sz * 29 + 7) * 3) | 0);
+      const stY = 10 + ((hash2(sx * 89 + 5, sz * 101 + 13) * 11) | 0);
+      const wx = (sx * 5 + hubRx) * 16 + 7;
+      const wz = (sz * 5 + hubRz) * 16 + 7;
+      if (surfaceHeight(wx, wz) < stY + 17) continue;
+      const d2 = (wx - px) * (wx - px) + (wz - pz) * (wz - pz);
+      if (d2 < bestD2) { bestD2 = d2; best = { x: wx, y: stY + 1, z: wz, dist: Math.sqrt(d2) }; }
+    }
+  }
+  return best || { x: 0, y: 18, z: 0, dist: Math.hypot(px, pz) };
+}
+
 const NOISE = {
   HEIGHT, SEA, NETHER_SEA, B, mulberry32, Perlin, surfaceHeight, surfaceHeightAt, isCave, oreFor, oreNoise,
   biomeOf, biomeOfClimate, climateAt, setWorldOffset, getWorldOffset,
   netherBiomeAt, netherColumnAt, netherCavernNoise, netherOreFor,
+  END_PILLARS, endBiomeAt, endColumnAt, nearestStrongholdCenter,
 };
 if (typeof window !== 'undefined') window.NOISE = NOISE;
 if (typeof globalThis !== 'undefined') globalThis.NOISE = NOISE;
@@ -1345,7 +1450,7 @@ if (!THREE || !THREE.Vector3) {
 }
 setLoading('正在生成地形…');
 
-const { HEIGHT, SEA, NETHER_SEA, B, mulberry32, surfaceHeight, surfaceHeightAt, isCave, oreFor, oreNoise, biomeOf, biomeOfClimate, climateAt, setWorldOffset, getWorldOffset, netherBiomeAt, netherColumnAt, netherCavernNoise, netherOreFor } = globalThis.NOISE;
+const { HEIGHT, SEA, NETHER_SEA, B, mulberry32, surfaceHeight, surfaceHeightAt, isCave, oreFor, oreNoise, biomeOf, biomeOfClimate, climateAt, setWorldOffset, getWorldOffset, netherBiomeAt, netherColumnAt, netherCavernNoise, netherOreFor, END_PILLARS, endBiomeAt, endColumnAt, nearestStrongholdCenter } = globalThis.NOISE;
 
 /* ============================ 常量 ============================ */
 const CHUNK = 16;
@@ -1467,6 +1572,9 @@ function makeAtlas() {
   T.cutSandstone = i++; T.redNetherBricks = i++; T.chiseledNetherBricks = i++;
   T.barrelTop = i++; T.barrelSide = i++; T.gildedBlackstone = i++;
   T.oxidizedCopper = i++; T.purpurBlock = i++; T.endStone = i++; T.endStoneBricks = i++;
+  T.endFrameTop = i++; T.endFrameEyeTop = i++; T.endFrameSide = i++; T.endPortal = i++;
+  T.purpurPillarTop = i++; T.purpurPillarSide = i++; T.endRod = i++;
+  T.chorusPlant = i++; T.chorusFlower = i++; T.dragonEgg = i++;
 
   function put(tile, x, y, r, g, b, a) {
     const px = (y * ATLAS_W + tile * TILE + x) * 4;
@@ -4010,6 +4118,74 @@ function makeAtlas() {
   for (let y = 0; y < 8; y++) put(T.endStoneBricks, 8, y, 168, 164, 112);
   for (let y = 8; y < 16; y++) put(T.endStoneBricks, 0, y, 168, 164, 112);
 
+  // 64. 末地传送门框架（青玉雕纹顶面 / 镶嵌末影之眼发光顶面 / 末地石青玉檐侧面）
+  fill(T.endFrameTop, [62, 118, 102], 7, 450);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    if (x === 0 || x === 15 || y === 0 || y === 15) put(T.endFrameTop, x, y, 214, 212, 152);
+    else if (x === 1 || x === 14 || y === 1 || y === 14) put(T.endFrameTop, x, y, 40, 86, 74);
+    else if (x >= 5 && x <= 10 && y >= 5 && y <= 10) put(T.endFrameTop, x, y, 22, 48, 42);
+  }
+  fill(T.endFrameEyeTop, [62, 118, 102], 7, 451);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    if (x === 0 || x === 15 || y === 0 || y === 15) put(T.endFrameEyeTop, x, y, 214, 212, 152);
+    else if (x === 1 || x === 14 || y === 1 || y === 14) put(T.endFrameEyeTop, x, y, 40, 86, 74);
+    else if (x >= 4 && x <= 11 && y >= 4 && y <= 11) {
+      const dd = Math.hypot(x - 7.5, y - 7.5);
+      if (dd <= 1.6) put(T.endFrameEyeTop, x, y, 16, 46, 44);
+      else if (dd <= 3.0) put(T.endFrameEyeTop, x, y, 64, 245, 198);
+      else put(T.endFrameEyeTop, x, y, 26, 148, 120);
+    }
+  }
+  fill(T.endFrameSide, [222, 220, 162], 8, 452);
+  speck(T.endFrameSide, [190, 186, 128], 18, 453);
+  for (let y = 0; y < 6; y++) for (let x = 0; x < TILE; x++) {
+    put(T.endFrameSide, x, y, (y === 0 || y === 5) ? 42 : 64, (y === 0 || y === 5) ? 88 : 124, (y === 0 || y === 5) ? 76 : 106);
+  }
+  for (let y = 6; y < 12; y++) for (let x = 5; x <= 10; x++) {
+    if (y === 6 || y === 11 || x === 5 || x === 10) put(T.endFrameSide, x, y, 54, 106, 92);
+  }
+
+  // 65. 末地传送门（深邃星渊星点贴图）
+  fill(T.endPortal, [8, 10, 22], 5, 455);
+  speck(T.endPortal, [52, 212, 206], 14, 456);
+  speck(T.endPortal, [186, 122, 255], 12, 457);
+  speck(T.endPortal, [235, 245, 255], 8, 458);
+
+  // 66. 紫珀柱（竖向浮雕条纹 + 顶部同心圆环）
+  fill(T.purpurPillarSide, [172, 124, 174], 5, 460);
+  for (let x = 0; x < TILE; x++) {
+    const col = (x % 4 === 0) ? [126, 82, 130] : ((x % 4 === 2) ? [208, 166, 208] : null);
+    if (col) for (let y = 0; y < TILE; y++) put(T.purpurPillarSide, x, y, col[0], col[1], col[2]);
+  }
+  fill(T.purpurPillarTop, [174, 126, 176], 5, 461);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5));
+    if (d > 6.5 || (d > 3.2 && d < 4.4)) put(T.purpurPillarTop, x, y, 122, 78, 126);
+    else if (d <= 2.2) put(T.purpurPillarTop, x, y, 214, 176, 214);
+  }
+
+  // 67. 末地烛（紫珀底座 + 洁白发光灯柱）
+  fill(T.endRod, [246, 240, 226], 4, 463);
+  for (let y = 12; y < 16; y++) for (let x = 0; x < TILE; x++) put(T.endRod, x, y, 138, 92, 142);
+  for (let y = 0; y < 12; y++) { put(T.endRod, 0, y, 222, 214, 198); put(T.endRod, 15, y, 222, 214, 198); }
+
+  // 68. 紫颂植物 & 紫颂花
+  fill(T.chorusPlant, [86, 48, 94], 10, 465);
+  speck(T.chorusPlant, [52, 24, 62], 24, 466);
+  speck(T.chorusPlant, [132, 82, 144], 16, 467);
+  fill(T.chorusFlower, [146, 114, 156], 8, 468);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    if ((x < 3 || x > 12) && (y < 3 || y > 12)) put(T.chorusFlower, x, y, 92, 54, 102);
+    else if (x >= 4 && x <= 11 && y >= 4 && y <= 11) put(T.chorusFlower, x, y, 236, 222, 242);
+  }
+  speck(T.chorusFlower, [196, 124, 238], 10, 469);
+
+  // 69. 龙蛋（黑曜漆黑蛋壳 + 神秘紫红星斑）
+  fill(T.dragonEgg, [18, 14, 24], 6, 471);
+  speck(T.dragonEgg, [72, 26, 98], 24, 472);
+  speck(T.dragonEgg, [168, 52, 214], 12, 473);
+  speck(T.dragonEgg, [34, 24, 44], 20, 474);
+
   ctx.putImageData(img, 0, 0);
   // 3D 渲染改用 2D 纹理数组（每 tile 独立一层，配合 RepeatWrapping 可让单个 tile 跨大四边形循环）
   const layers = ATLAS_TILES;
@@ -4238,6 +4414,14 @@ function _tileOfRaw(id) {
     case B.PURPUR_BLOCK: return { top: atlas.T.purpurBlock, side: atlas.T.purpurBlock, bottom: atlas.T.purpurBlock };
     case B.END_STONE: return { top: atlas.T.endStone, side: atlas.T.endStone, bottom: atlas.T.endStone };
     case B.END_STONE_BRICKS: return { top: atlas.T.endStoneBricks, side: atlas.T.endStoneBricks, bottom: atlas.T.endStoneBricks };
+    case B.END_PORTAL_FRAME: return { top: atlas.T.endFrameTop, side: atlas.T.endFrameSide, bottom: atlas.T.endStone };
+    case B.END_PORTAL_FRAME_FILLED: return { top: atlas.T.endFrameEyeTop, side: atlas.T.endFrameSide, bottom: atlas.T.endStone };
+    case B.END_PORTAL: return { top: atlas.T.endPortal, side: atlas.T.endPortal, bottom: atlas.T.endPortal };
+    case B.PURPUR_PILLAR: return { top: atlas.T.purpurPillarTop, side: atlas.T.purpurPillarSide, bottom: atlas.T.purpurPillarTop };
+    case B.END_ROD: return { top: atlas.T.endRod, side: atlas.T.endRod, bottom: atlas.T.endRod };
+    case B.CHORUS_PLANT: return { top: atlas.T.chorusPlant, side: atlas.T.chorusPlant, bottom: atlas.T.chorusPlant };
+    case B.CHORUS_FLOWER: return { top: atlas.T.chorusFlower, side: atlas.T.chorusFlower, bottom: atlas.T.chorusFlower };
+    case B.DRAGON_EGG: return { top: atlas.T.dragonEgg, side: atlas.T.dragonEgg, bottom: atlas.T.dragonEgg };
     case B.CAMPFIRE: return { top: atlas.T.campfireTop, side: atlas.T.campfireSide, bottom: atlas.T.campfireSide };
     case B.DOOR: return { top: atlas.T.doorTop, side: atlas.T.doorBottom, bottom: atlas.T.doorBottom };
     case B.COBWEB: return { top: atlas.T.cobweb, side: atlas.T.cobweb, bottom: atlas.T.cobweb };
@@ -5021,6 +5205,23 @@ function updateEnvironment(t) {
     skyMat.uniforms.uNight.value = 0.0;
     skyMat.uniforms.uHaze.value = 0.0;
     FOG_COLOR.setRGB(0.30, 0.055, 0.04);
+  } else if (inEnd) {
+    // 末地异次元氛围：深邃紫靛无尽星幕、清冷淡紫虚空星光与幽玄星云雾
+    sun.castShadow = false;
+    moon.castShadow = false;
+    moon.intensity = 0;
+    ambient.intensity = (player.nightVisionTimer && player.nightVisionTimer > 0) ? 1.15 : 0.88;
+    ambient.color.setRGB(0.84, 0.78, 0.96);
+    hemi.intensity = (player.nightVisionTimer && player.nightVisionTimer > 0) ? 1.0 : 0.78;
+    hemi.color.setRGB(0.76, 0.66, 0.98);
+    hemi.groundColor.setRGB(0.32, 0.22, 0.48);
+    sun.intensity = 0.44;
+    sun.color.setRGB(0.86, 0.78, 1.0);
+    skyMat.uniforms.uZenith.value.setRGB(0.035, 0.018, 0.085);
+    skyMat.uniforms.uHorizon.value.setRGB(0.10, 0.055, 0.18);
+    skyMat.uniforms.uNight.value = 1.0;
+    skyMat.uniforms.uHaze.value = 0.0;
+    FOG_COLOR.setRGB(0.09, 0.05, 0.16);
   }
 
   // 水面材质环境更新
@@ -5040,8 +5241,8 @@ function updateEnvironment(t) {
   cloudMatHigh.uniforms.uColor.value.copy(cloudMat.color);
   cloudMatHigh.uniforms.uSunColor.value.copy(sun.color);
   cloudMatHigh.uniforms.uWarm.value = warm;
-  cloudMesh.visible = !inNether;
-  cloudMeshHigh.visible = !inNether;
+  cloudMesh.visible = !inNether && !inEnd;
+  cloudMeshHigh.visible = !inNether && !inEnd;
 }
 
 /* ============================ 世界 ============================ */
@@ -5069,6 +5270,9 @@ const NETHER_BIOME_NAMES = {
   1: '🔥 下界荒地', 2: '🦴 灵魂沙峡谷', 3: '🌋 玄武岩三角洲', 4: '🍄 绯红菌林',
   5: '💠 诡异菌林', 6: '🏰 黑石堡垒荒原', 7: '💎 石英晶窟', 8: '🟣 哭泣黑曜裂谷',
   9: '🧱 绯红要塞遗迹', 10: '✨ 鎏金熔炉谷'
+};
+const END_BIOME_NAMES = {
+  1: '🌌 末地主岛', 2: '🏝️ 末地高地', 3: '🌑 末地虚空荒原', 4: '🏛️ 末地城遗迹'
 };
 function populateBiomeChest(x, y, z, theme = 'prismarine') {
   const ck = `${x},${y},${z}`;
@@ -5161,6 +5365,34 @@ function populateUndergroundChest(x, y, z, theme = 'dungeon') {
       { id: B.LAPIS_LAZULI, count: 5 + Math.floor(rnd() * 8), prob: 0.65 },
       { id: B.NIGHT_VISION_POTION, count: 1, prob: 0.45 },
     ];
+  } else if (theme === 'end_ship') {
+    possibleLoot = [
+      { id: B.ELYTRA, count: 1, prob: 1.00 },
+      { id: B.DIAMOND, count: 3 + Math.floor(rnd() * 5), prob: 0.95 },
+      { id: B.NETHERITE_INGOT, count: 1, prob: 0.45 },
+      { id: B.ENCHANTED_GOLDEN_APPLE, count: 1, prob: 0.40 },
+      { id: B.SHULKER_BOX, count: 1 + Math.floor(rnd() * 2), prob: 0.85 },
+      { id: B.DRAGON_BREATH, count: 2 + Math.floor(rnd() * 3), prob: 0.80 },
+      { id: B.DIAMOND_SWORD, count: 1, prob: 0.55 },
+      { id: B.DIAMOND_CHESTPLATE, count: 1, prob: 0.50 },
+      { id: B.FIREWORK_ROCKET, count: 8 + Math.floor(rnd() * 12), prob: 0.90 },
+      { id: B.END_ROD, count: 4 + Math.floor(rnd() * 6), prob: 0.80 },
+    ];
+  } else if (theme === 'end_city') {
+    possibleLoot = [
+      { id: B.DIAMOND, count: 2 + Math.floor(rnd() * 4), prob: 0.85 },
+      { id: B.EMERALD, count: 4 + Math.floor(rnd() * 6), prob: 0.82 },
+      { id: B.GOLD_INGOT, count: 4 + Math.floor(rnd() * 6), prob: 0.80 },
+      { id: B.SHULKER_BOX, count: 1, prob: 0.55 },
+      { id: B.CHORUS_FRUIT, count: 6 + Math.floor(rnd() * 8), prob: 0.85 },
+      { id: B.ENDER_PEARL, count: 3 + Math.floor(rnd() * 5), prob: 0.78 },
+      { id: B.DIAMOND_PICKAXE, count: 1, prob: 0.42 },
+      { id: B.DIAMOND_HELMET, count: 1, prob: 0.40 },
+      { id: B.DIAMOND_BOOTS, count: 1, prob: 0.40 },
+      { id: B.GOLDEN_APPLE, count: 1 + Math.floor(rnd() * 2), prob: 0.60 },
+      { id: B.FIREWORK_ROCKET, count: 6 + Math.floor(rnd() * 8), prob: 0.65 },
+      { id: B.END_ROD, count: 3 + Math.floor(rnd() * 5), prob: 0.75 },
+    ];
   } else {
     possibleLoot = [
       { id: B.DIAMOND, count: 1 + Math.floor(rnd() * 2), prob: 0.38 },
@@ -5241,6 +5473,7 @@ class World {
   constructor() {
     this.overworldChunks = new Map();
     this.netherChunks = new Map();
+    this.endChunks = new Map();
     this.dim = 'overworld';
     this.chunks = this.overworldChunks;
   }
@@ -5249,20 +5482,262 @@ class World {
     const k = key(cx, cz);
     if (this.chunks.has(k)) return;
     const isNetherDim = (this.dim === 'nether');
+    const isEndDim = (this.dim === 'end');
+    const nonOverworld = isNetherDim || isEndDim;
     const c = {
       cx, cz, dim: this.dim,
       blocks: new Uint16Array(CHUNK * CHUNK * HEIGHT),
       water: new Uint8Array(CHUNK * CHUNK * HEIGHT),
-      treesPlanted: isNetherDim,
-      villageChunk: isNetherDim ? false : undefined,
-      villageBuilt: isNetherDim,
+      treesPlanted: nonOverworld,
+      villageChunk: nonOverworld ? false : undefined,
+      villageBuilt: nonOverworld,
       dirty: true, group: null, edited: false, topY: 0
     };
     this.chunks.set(k, c);
     if (isNetherDim) this._fillNether(c);
+    else if (isEndDim) this._fillEnd(c);
     else this._fill(c);
     applyEditedChunk(c);   // 有存档/卸载快照就把改动盖回去（离出生点很远的地方也能恢复）
     if (mpActive && typeof applyMpDiffsToChunk === 'function') applyMpDiffsToChunk(c);
+  }
+  _fillEnd(c) {
+    const baseX = c.cx * CHUNK, baseZ = c.cz * CHUNK;
+    const setE = (lx, y, lz, id) => {
+      if (lx < 0 || lx >= 16 || lz < 0 || lz >= 16 || y < 0 || y >= HEIGHT) return;
+      c.blocks[y * 256 + lz * 16 + lx] = id;
+    };
+    let topYMax = 0;
+    const colTop = new Int16Array(256);
+
+    // 第一遍：末地主岛 & 外岛群浮空末地石地貌
+    for (let lz = 0; lz < CHUNK; lz++) {
+      const wz = baseZ + lz;
+      for (let lx = 0; lx < CHUNK; lx++) {
+        const wx = baseX + lx;
+        const col = endColumnAt(wx, wz);
+        if (col.hasLand) {
+          for (let y = col.botY; y <= col.topY; y++) {
+            setE(lx, y, lz, B.END_STONE);
+          }
+          colTop[lz * 16 + lx] = col.topY;
+          if (col.topY > topYMax) topYMax = col.topY;
+        }
+      }
+    }
+
+    // 第二遍：主岛 10 根巍峨黑曜石柱（含 2 座带铁栏式保护笼的黑曜石柱）
+    for (let pi = 0; pi < END_PILLARS.length; pi++) {
+      const pil = END_PILLARS[pi];
+      const rPad = pil.radius + 2;
+      if (pil.x + rPad < baseX || pil.x - rPad >= baseX + 16 || pil.z + rPad < baseZ || pil.z - rPad >= baseZ + 16) continue;
+      const rSq = (pil.radius + 0.35) * (pil.radius + 0.35);
+      for (let lz = 0; lz < 16; lz++) {
+        const wz = baseZ + lz;
+        for (let lx = 0; lx < 16; lx++) {
+          const wx = baseX + lx;
+          const dx = wx - pil.x, dz = wz - pil.z;
+          if (dx * dx + dz * dz <= rSq) {
+            for (let y = 30; y <= pil.topY; y++) setE(lx, y, lz, B.OBSIDIAN);
+            if (pil.topY > topYMax) topYMax = pil.topY;
+          }
+          if (dx === 0 && dz === 0) {
+            setE(lx, pil.topY + 1, lz, B.BEDROCK);
+            if (pil.topY + 1 > topYMax) topYMax = pil.topY + 1;
+          }
+          // 保护笼（2 座特色柱子顶部环绕深板岩砖与锁链笼栏）
+          if (pil.caged && Math.max(Math.abs(dx), Math.abs(dz)) === 2) {
+            const isCorner = (Math.abs(dx) === 2 && Math.abs(dz) === 2);
+            for (let dy = 1; dy <= 3; dy++) {
+              setE(lx, pil.topY + dy, lz, isCorner ? B.DEEPSLATE_BRICKS : B.CHAIN);
+            }
+            setE(lx, pil.topY + 4, lz, B.DEEPSLATE_BRICKS);
+            if (pil.topY + 4 > topYMax) topYMax = pil.topY + 4;
+          }
+          if (pil.caged && Math.max(Math.abs(dx), Math.abs(dz)) <= 1) {
+            setE(lx, pil.topY + 4, lz, B.CHAIN);
+          }
+        }
+      }
+    }
+
+    // 第三遍：主岛中心基岩返回传送门泉台 (0, 62, 0) & 黑曜石着陆平台 (46, 56, 0)
+    if (baseX <= 5 && baseX + 15 >= -5 && baseZ <= 5 && baseZ + 15 >= -5) {
+      for (let lz = 0; lz < 16; lz++) {
+        const wz = baseZ + lz;
+        for (let lx = 0; lx < 16; lx++) {
+          const wx = baseX + lx;
+          const d = Math.hypot(wx, wz);
+          if (d <= 3.4) {
+            setE(lx, 61, lz, B.BEDROCK);
+            if (d >= 2.25) {
+              setE(lx, 62, lz, B.BEDROCK);
+            } else if (wx === 0 && wz === 0) {
+              for (let y = 62; y <= 65; y++) setE(lx, y, lz, B.BEDROCK);
+              if (dragonDefeated) setE(lx, 66, lz, B.DRAGON_EGG);
+            } else {
+              setE(lx, 62, lz, dragonDefeated ? B.END_PORTAL : B.AIR);
+              for (let y = 63; y <= 68; y++) setE(lx, y, lz, B.AIR);
+            }
+            if ((Math.abs(wx) === 1 && wz === 0) || (wx === 0 && Math.abs(wz) === 1)) {
+              setE(lx, 64, lz, B.TORCH);
+            }
+            if (67 > topYMax) topYMax = 67;
+          }
+        }
+      }
+    }
+    // 玩家初次抵达末地的黑曜石着陆台 (44..48, y=56, -2..2)
+    if (baseX <= 49 && baseX + 15 >= 43 && baseZ <= 3 && baseZ + 15 >= -3) {
+      for (let lz = 0; lz < 16; lz++) {
+        const wz = baseZ + lz;
+        if (wz < -2 || wz > 2) continue;
+        for (let lx = 0; lx < 16; lx++) {
+          const wx = baseX + lx;
+          if (wx < 44 || wx > 48) continue;
+          setE(lx, 56, lz, B.OBSIDIAN);
+          for (let dy = 1; dy <= 5; dy++) setE(lx, 56 + dy, lz, B.AIR);
+          if (62 > topYMax) topYMax = 62;
+        }
+      }
+    }
+    // 末地折跃门台基（击败末影龙后在主岛东缘 (56, 66, 0) 点亮直达外岛的末地折跃门）
+    if (baseX <= 58 && baseX + 15 >= 54 && baseZ <= 2 && baseZ + 15 >= -2) {
+      const gx = 56 - baseX, gz = 0 - baseZ;
+      if (gx >= 1 && gx <= 14 && gz >= 1 && gz <= 14) {
+        setE(gx, 66, gz, B.BEDROCK);
+        setE(gx, 67, gz, B.BEDROCK);
+        setE(gx, 69, gz, B.BEDROCK);
+        setE(gx, 70, gz, B.BEDROCK);
+        setE(gx, 68, gz, dragonDefeated ? B.END_PORTAL : B.AIR);
+        if (71 > topYMax) topYMax = 71;
+      }
+    }
+
+    // 第四遍：外岛紫颂果树林（CHORUS_PLANT 枝干 + CHORUS_FLOWER 顶端花朵）
+    const centerDist = Math.hypot(baseX + 8, baseZ + 8);
+    if (centerDist >= 126) {
+      const eRnd = mulberry32((c.cx * 524287 + c.cz * 131071) ^ 0x6e4b2a91);
+      for (let lz = 2; lz < 14; lz++) {
+        for (let lx = 2; lx < 14; lx++) {
+          const ty = colTop[lz * 16 + lx];
+          if (ty < 40 || ty > HEIGHT - 16) continue;
+          if (eRnd() >= 0.011) continue;
+          // 主干向上拔节 3~6 格再分岔开花
+          const stemH = 3 + ((eRnd() * 4) | 0);
+          for (let k = 1; k <= stemH; k++) setE(lx, ty + k, lz, B.CHORUS_PLANT);
+          const brCount = 1 + ((eRnd() * 3) | 0);
+          const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+          for (let b = 0; b < brCount; b++) {
+            const d = dirs[(b + ((eRnd() * 4) | 0)) & 3];
+            const bx = lx + d[0], bz = lz + d[1];
+            if (bx < 1 || bx > 14 || bz < 1 || bz > 14) continue;
+            setE(bx, ty + stemH, bz, B.CHORUS_PLANT);
+            const armH = 2 + ((eRnd() * 4) | 0);
+            for (let k = 1; k < armH; k++) setE(bx, ty + stemH + k, bz, B.CHORUS_PLANT);
+            setE(bx, ty + stemH + armH, bz, B.CHORUS_FLOWER);
+            if (ty + stemH + armH > topYMax) topYMax = ty + stemH + armH;
+          }
+          setE(lx, ty + stemH + 1, lz, B.CHORUS_FLOWER);
+          if (ty + stemH + 1 > topYMax) topYMax = ty + stemH + 1;
+        }
+      }
+
+      // 第五遍：外岛宏伟末地城塔楼 & 浮空末地船（4×4 区块网格，含潜影盒、末地烛与鞘翅宝箱！）
+      const ex = Math.floor(c.cx / 4), ez = Math.floor(c.cz / 4);
+      const rx = ((c.cx % 4) + 4) % 4, rz = ((c.cz % 4) + 4) % 4;
+      const cityHubRx = 1 + ((plantHash(ex * 31 + 7, ez * 43 + 11) * 2) | 0);
+      const cityHubRz = 1 + ((plantHash(ex * 53 + 3, ez * 29 + 19) * 2) | 0);
+      const centerTop = colTop[8 * 16 + 8];
+      if (rx === cityHubRx && rz === cityHubRz && centerTop >= 56 && centerTop <= 88 && plantHash(ex * 89 + 13, ez * 97 + 23) < 0.48) {
+        const y0 = centerTop;
+        // 1) 三层末地城主塔（底座 10×10 末地石砖 + 紫珀塔身 + 末地烛照明 + 潜影盒与珍宝库）
+        const towerH = 18;
+        for (let dy = 0; dy <= towerH; dy++) {
+          const half = (dy <= 5) ? 4 : (dy <= 11 ? 3 : 4);
+          const xMin = 8 - half, xMax = 8 + half, zMin = 8 - half, zMax = 8 + half;
+          const isFloor = (dy === 0 || dy === 6 || dy === 12 || dy === towerH);
+          for (let lz = zMin; lz <= zMax; lz++) {
+            for (let lx = xMin; lx <= xMax; lx++) {
+              const isEdge = (lx === xMin || lx === xMax || lz === zMin || lz === zMax);
+              const isCorner = ((lx === xMin || lx === xMax) && (lz === zMin || lz === zMax));
+              if (isFloor) {
+                setE(lx, y0 + dy, lz, isEdge ? B.PURPUR_PILLAR : B.PURPUR_BLOCK);
+              } else if (isEdge) {
+                const isDoor = (dy >= 1 && dy <= 3 && lz === zMax && (lx === 7 || lx === 8));
+                const isWin = ((dy === 3 || dy === 9 || dy === 15) && (lx === 8 || lz === 8));
+                if (isDoor) setE(lx, y0 + dy, lz, B.AIR);
+                else if (isCorner) setE(lx, y0 + dy, lz, B.PURPUR_PILLAR);
+                else if (isWin) setE(lx, y0 + dy, lz, B.GLASS);
+                else setE(lx, y0 + dy, lz, (dy % 2 === 0) ? B.END_STONE_BRICKS : B.PURPUR_BLOCK);
+              } else {
+                setE(lx, y0 + dy, lz, B.AIR);
+              }
+            }
+          }
+          // 塔角外悬末地烛灯柱
+          if (dy === 5 || dy === 11 || dy === towerH) {
+            setE(xMin, y0 + dy + 1, zMin, B.END_ROD);
+            setE(xMax, y0 + dy + 1, zMin, B.END_ROD);
+            setE(xMin, y0 + dy + 1, zMax, B.END_ROD);
+            setE(xMax, y0 + dy + 1, zMax, B.END_ROD);
+          }
+        }
+        // 内部贯通爬梯直达三层与屋顶平台
+        for (let dy = 1; dy <= towerH; dy++) {
+          setE(7, y0 + dy, 6, B.PURPUR_PILLAR);
+          setE(7, y0 + dy, 7, B.LADDER);
+          if (dy === 6 || dy === 12 || dy === towerH) setE(7, y0 + dy, 7, B.LADDER);
+        }
+        // 塔内战利品（潜影盒 + 末影箱 + 2 座末地城珍宝箱）
+        setE(10, y0 + 1, 6, B.SHULKER_BOX);
+        setE(6, y0 + 7, 10, B.ENDER_CHEST);
+        setE(10, y0 + 13, 10, B.CHEST); populateUndergroundChest(baseX + 10, y0 + 13, baseZ + 10, 'end_city');
+        setE(6, y0 + 13, 6, B.CHEST); populateUndergroundChest(baseX + 6, y0 + 13, baseZ + 6, 'end_city');
+        setE(8, y0 + towerH + 1, 8, B.END_ROD);
+
+        // 2) 悬停于末地城顶端的浮空末地船（55% 末地城自带浮空战舰，内藏必出【鞘翅】的船长宝箱！）
+        if (plantHash(ex * 67 + 5, ez * 71 + 9) < 0.55 && y0 + towerH + 14 < HEIGHT - 4) {
+          const sy = y0 + towerH + 6;
+          // 船底与舷墙（12×6，lx ∈ [2..13], lz ∈ [5..10]）
+          for (let lx = 2; lx <= 13; lx++) {
+            const prow = (lx === 2 || lx === 13);
+            const z0 = prow ? 6 : 5, z1 = prow ? 9 : 10;
+            for (let lz = z0; lz <= z1; lz++) {
+              const rim = (lx === 2 || lx === 13 || lz === z0 || lz === z1);
+              setE(lx, sy, lz, (lx >= 4 && lx <= 11 && lz >= 6 && lz <= 9) ? B.OBSIDIAN : B.PURPUR_BLOCK);
+              setE(lx, sy + 1, lz, rim ? B.PURPUR_BLOCK : B.END_STONE_BRICKS);
+              if (rim) setE(lx, sy + 2, lz, (lx % 2 === 0) ? B.PURPUR_PILLAR : B.PURPUR_BLOCK);
+            }
+          }
+          // 船尾舱室与船桅
+          for (let lx = 9; lx <= 12; lx++) {
+            for (let lz = 6; lz <= 9; lz++) {
+              setE(lx, sy + 4, lz, B.PURPUR_BLOCK);
+              if (lx === 9 || lx === 12 || lz === 6 || lz === 9) {
+                if (!(lx === 9 && (lz === 7 || lz === 8))) setE(lx, sy + 3, lz, B.END_STONE_BRICKS);
+              }
+            }
+          }
+          for (let dy = 2; dy <= 7; dy++) setE(6, sy + dy, 7, B.PURPUR_PILLAR);
+          setE(6, sy + 8, 7, B.END_ROD);
+          setE(2, sy + 3, 7, B.END_ROD); setE(2, sy + 3, 8, B.END_ROD);
+          // 船长珍宝舱：必出鞘翅宝箱 + 附魔台 + 潜影盒
+          setE(11, sy + 2, 7, B.CHEST); populateUndergroundChest(baseX + 11, sy + 2, baseZ + 7, 'end_ship');
+          setE(11, sy + 2, 8, B.SHULKER_BOX);
+          setE(10, sy + 2, 8, B.ENCHANTING_TABLE);
+          // 从塔顶延伸至末地船的悬浮登船爬梯柱
+          for (let yy = y0 + towerH + 1; yy <= sy + 2; yy++) {
+            setE(8, yy, 5, B.PURPUR_PILLAR);
+            setE(8, yy, 4, B.LADDER);
+          }
+          if (sy + 9 > topYMax) topYMax = sy + 9;
+        } else if (y0 + towerH + 2 > topYMax) {
+          topYMax = y0 + towerH + 2;
+        }
+      }
+    }
+
+    c.topY = topYMax;
   }
   _fillNether(c) {
     const baseX = c.cx * CHUNK, baseZ = c.cz * CHUNK;
@@ -6449,19 +6924,29 @@ class World {
               setU(13, stY + 4, 12, B.CHEST); populateUndergroundChest(baseX + 13, stY + 4, baseZ + 12, 'stronghold');
               setU(2, stY + 6, 2, B.COBWEB); setU(13, stY + 6, 13, B.COBWEB);
             } else {
-              // 变体 A：远古星陨要塞圣坛（末地石砖+紫珀阶梯祭坛、附魔台、书架壁龛、双要塞珍宝箱）
+              // 变体 A：远古要塞末地传送门圣坛（标准 3×3 十二格末地传送门框架环，随机预镶 1~3 颗末影之眼，补满 12 颗即可激活前往末地！）
               for (let dz = -2; dz <= 2; dz++) {
                 for (let dx = -2; dx <= 2; dx++) {
-                  const rim = (Math.abs(dx) === 2 || Math.abs(dz) === 2);
-                  setU(7 + dx, stY, 7 + dz, rim ? B.END_STONE_BRICKS : B.PURPUR_BLOCK);
+                  const isCorner = (Math.abs(dx) === 2 && Math.abs(dz) === 2);
+                  const isRing = (!isCorner && (Math.abs(dx) === 2 || Math.abs(dz) === 2));
+                  if (isRing) {
+                    const preEye = plantHash((baseX + 7 + dx) * 19 + 5, (baseZ + 7 + dz) * 23 + 11) < 0.22;
+                    setU(7 + dx, stY, 7 + dz, B.END_STONE_BRICKS);
+                    setU(7 + dx, stY + 1, 7 + dz, preEye ? B.END_PORTAL_FRAME_FILLED : B.END_PORTAL_FRAME);
+                  } else if (isCorner) {
+                    setU(7 + dx, stY, 7 + dz, B.END_STONE_BRICKS);
+                    setU(7 + dx, stY + 1, 7 + dz, B.QUARTZ_PILLAR);
+                    setU(7 + dx, stY + 2, 7 + dz, B.QUARTZ_PILLAR);
+                    setU(7 + dx, stY + 3, 7 + dz, B.SEA_LANTERN);
+                  } else {
+                    // 传送门中央 3×3 凹槽（底座炽热岩浆块，激活后上方即生星渊末地传送门）
+                    setU(7 + dx, stY - 1, 7 + dz, B.MAGMA);
+                    setU(7 + dx, stY, 7 + dz, B.AIR);
+                    setU(7 + dx, stY + 1, 7 + dz, B.AIR);
+                  }
                 }
               }
-              setU(7, stY + 1, 7, B.ENCHANTING_TABLE);
-              for (const [qx, qz] of [[5, 5], [9, 5], [5, 9], [9, 9]]) {
-                setU(qx, stY + 1, qz, B.QUARTZ_PILLAR);
-                setU(qx, stY + 2, qz, B.QUARTZ_PILLAR);
-                setU(qx, stY + 3, qz, B.SEA_LANTERN);
-              }
+              setU(3, stY, 7, B.ENCHANTING_TABLE);
               // 四角书架与工作遗物
               for (let dy = 0; dy <= 2; dy++) {
                 setU(2, stY + dy, 2, B.BOOKSHELF); setU(3, stY + dy, 2, B.BOOKSHELF);
@@ -6708,22 +7193,23 @@ function markDirtyBlock(x, y, z) {
 }
 
 /* ============================ 存档（localStorage） ============================ */
-/* 已编辑、但当前可能已被卸载的区块（主世界与下界分维度独立保管，互不串写）。 */
+/* 已编辑、但当前可能已被卸载的区块（主世界 / 下界 / 末地分维度独立保管，互不串写）。 */
 const overworldEdited = new Map(); // 数值 key(cx,cz) -> { cx, cz, blocks, water }
 const netherEdited = new Map();
+const endEdited = new Map();
 let editedChunks = overworldEdited;
 
 function stashEditedChunk(c) {
   if (!c.edited) return;
-  const map = (c.dim === 'nether') ? netherEdited : overworldEdited;
+  const map = (c.dim === 'nether') ? netherEdited : (c.dim === 'end' ? endEdited : overworldEdited);
   map.set(key(c.cx, c.cz), { cx: c.cx, cz: c.cz, blocks: c.blocks, water: c.water });
 }
 
-/* 恢复区块里的火把光源：否则读档后火把还在，却不再发光 */
+/* 恢复区块里的火把/末地烛光源：否则读档后火把还在，却不再发光 */
 function restoreTorchLights(c) {
   const baseX = c.cx * 16, baseZ = c.cz * 16;
   for (let i = 0; i < c.blocks.length; i++) {
-    if (c.blocks[i] !== B.TORCH && c.blocks[i] !== B.SOUL_TORCH) continue;
+    if (c.blocks[i] !== B.TORCH && c.blocks[i] !== B.SOUL_TORCH && c.blocks[i] !== B.END_ROD) continue;
     const y = Math.floor(i / 256);
     const tz = baseZ + Math.floor((i % 256) / 16);
     const tx = baseX + (i % 16);
@@ -6734,7 +7220,7 @@ function restoreTorchLights(c) {
 /* 区块（重新）加载时，把存档/快照里的改动盖回去 */
 function applyEditedChunk(c) {
   const k = key(c.cx, c.cz);
-  const map = (c.dim === 'nether') ? netherEdited : overworldEdited;
+  const map = (c.dim === 'nether') ? netherEdited : (c.dim === 'end' ? endEdited : overworldEdited);
   const s = map.get(k);
   if (!s) return false;
   if (s.blocks && s.blocks.length === c.blocks.length) c.blocks.set(s.blocks);
@@ -6830,13 +7316,13 @@ const MP_DIFF_MAX = 12000;
 
 function storageKeysFor(profile) {
   if (profile === 'mp') {
-    return { world: 'mc_mp_world_v1', nether: 'mc_mp_nether_v2', inv: 'mc_mp_inv_v1', seed: 'mc_mp_seed_v1', meta: 'mc_mp_meta_v1' };
+    return { world: 'mc_mp_world_v1', nether: 'mc_mp_nether_v2', end: 'mc_mp_end_v1', inv: 'mc_mp_inv_v1', seed: 'mc_mp_seed_v1', meta: 'mc_mp_meta_v1' };
   }
   if (profile === 'mp_guest') {
     const code = mpRoomCode || 'GUEST';
-    return { world: null, nether: null, inv: 'mc_mp_guest_inv_' + code, seed: null, meta: null };
+    return { world: null, nether: null, end: null, inv: 'mc_mp_guest_inv_' + code, seed: null, meta: null };
   }
-  return { world: 'mc_world_v1', nether: 'mc_nether_v2', inv: 'mc_inv_v1', seed: 'mc_seed_v1', meta: null };
+  return { world: 'mc_world_v1', nether: 'mc_nether_v2', end: 'mc_end_v1', inv: 'mc_inv_v1', seed: 'mc_seed_v1', meta: null };
 }
 
 function saveWorld() {
@@ -6846,6 +7332,7 @@ function saveWorld() {
     // 客机加入别人房间时不覆盖本地单机或自己的联机世界，仅保存本房间的个人背包
     if (keys.world) saveDimChunks(keys.world, world.overworldChunks, overworldEdited);
     if (keys.nether) saveDimChunks(keys.nether, world.netherChunks, netherEdited);
+    if (keys.end) saveDimChunks(keys.end, world.endChunks, endEdited);
     // 背包、农作物、熔炉、箱子与当前精确游戏时间存档
     const invData = {
       hotbar: hotbar.map((s) => (s ? [s.id, s.count, s.dur || 0] : null)),
@@ -6855,6 +7342,7 @@ function saveWorld() {
       timeOfDay,
       weather,
       weatherTimer,
+      dragonDefeated: !!dragonDefeated,
       crops: keys.world ? Array.from(crops.entries()) : [],
       furnace: {
         input: furnace.input ? [furnace.input.id, furnace.input.count, furnace.input.dur || 0] : null,
@@ -6916,6 +7404,7 @@ function loadWorld(profileOverride) {
     try {
       loadDimMap(keys.world, overworldEdited);
       loadDimMap(keys.nether, netherEdited);
+      loadDimMap(keys.end, endEdited);
       // 已经加载过的区块（开局的 7×7）立刻盖回去；其余的等 ensureChunk 时再盖
       for (const c of [...world.overworldChunks.values()]) applyEditedChunk(c);
     } finally {
@@ -6932,7 +7421,7 @@ function loadWorld(profileOverride) {
         if (Array.isArray(m.diffs)) {
           for (const d of m.diffs) {
             if (!Array.isArray(d) || d.length < 6) continue;
-            const dimName = d[0] === 1 ? 'nether' : 'overworld';
+            const dimName = d[0] === 1 ? 'nether' : (d[0] === 2 ? 'end' : 'overworld');
             mpBlockDiffs.set(`${dimName}:${d[1]},${d[2]},${d[3]}`, d);
           }
         }
@@ -6946,6 +7435,7 @@ function loadWorld(profileOverride) {
       if (Array.isArray(d.inv)) d.inv.forEach((s, i) => { inv[i] = restore(s); });
       if (typeof d.selected === 'number' && d.selected >= 0 && d.selected < HOTBAR_SIZE) selected = d.selected;
       if (typeof d.hunger === 'number') player.hunger = Math.max(0, Math.min(20, d.hunger));
+      if (keys.world && typeof d.dragonDefeated === 'boolean') dragonDefeated = d.dragonDefeated;
       if (keys.world && typeof d.timeOfDay === 'number' && isFinite(d.timeOfDay)) timeOfDay = ((d.timeOfDay % 1) + 1) % 1;
       if (keys.world && typeof d.weather === 'string') weather = d.weather;
       if (keys.world && typeof d.weatherTimer === 'number') weatherTimer = d.weatherTimer;
@@ -7295,8 +7785,12 @@ function aoAt(bx, by, bz, f, wx, wy, wz, solid) {
   return AO_LEVELS[occ];
 }
 
-function undergroundFactor(colTop, lx, lz, y, isNether) {
-  if (isNether) {
+function undergroundFactor(colTop, lx, lz, y, dimOrNether) {
+  if (dimOrNether === 'end') {
+    // 末地浮空群岛无地表覆土遮蔽，采用均匀清冷星光照度，让末地石与末地城轮廓分明
+    return 0.94;
+  }
+  if (dimOrNether === 'nether' || dimOrNether === true) {
     // 下界天然被地狱岩穹顶封顶，依靠岩浆海辉光与熔岩热雾提供柔和照明，避免整片下界被主世界地下衰减压黑
     const lavaBoost = y <= NETHER_SEA + 8 ? Math.max(0, 1 - Math.abs(y - NETHER_SEA) / 9) * 0.12 : 0;
     return Math.min(1.0, 0.90 + lavaBoost);
@@ -7385,9 +7879,9 @@ function buildOpaqueGreedy(c, A, baseX, baseZ, yMax, colTop, getB, solid) {
         if (!isSeeThrough(nb)) continue;
         let tile = tileFace(id, fi);
         if (id === B.CHEST && f.face === 'side' && fdz === 1) tile = atlas.T.chestFront;
-        const under = (id === B.GLOWSTONE || id === B.SHROOMLIGHT || id === B.MAGMA || id === B.SEA_LANTERN || id === B.REDSTONE_LAMP_ON)
+        const under = (id === B.GLOWSTONE || id === B.SHROOMLIGHT || id === B.MAGMA || id === B.SEA_LANTERN || id === B.REDSTONE_LAMP_ON || id === B.CHORUS_FLOWER)
           ? 1.0
-          : undergroundFactor(colTop, lx, lz, ly, isNetherChunk);
+          : undergroundFactor(colTop, lx, lz, ly, c.dim);
         if (aoAllOne(bx, ly, bz, f, solid)) {
           mask[t2 * 16 + t1] = 1;
           keys[t2 * 16 + t1] = tile * 2000 + Math.min(999, Math.max(0, Math.round(under * 1000)));
@@ -7817,34 +8311,51 @@ function buildChunkGeometry(c) {
           pushPortalSlab(P, wx, y, wz, getB);
           continue;
         }
+        if (id === B.END_PORTAL) {
+          const ep = tileOf(id);
+          pushSubBox(T, wx, y, wz, 0.0, 0.22, 0.0, 1.0, 0.78, 1.0, ep.top, ep.side, ep.bottom, 1.0);
+          continue;
+        }
+        if (id === B.END_ROD) {
+          const er = tileOf(id);
+          pushSubBox(T, wx, y, wz, 0.42, 0.0, 0.42, 0.58, 1.0, 0.58, er.top, er.side, er.bottom, 1.0);
+          continue;
+        }
+        if (id === B.DRAGON_EGG) {
+          const de = tileOf(id);
+          const uEgg = undergroundFactor(colTop, lx, lz, y, c.dim);
+          pushSubBox(C, wx, y, wz, 0.14, 0.0, 0.14, 0.86, 0.44, 0.86, de.top, de.side, de.bottom, uEgg);
+          pushSubBox(C, wx, y, wz, 0.22, 0.44, 0.22, 0.78, 0.76, 0.78, de.top, de.side, de.bottom, uEgg);
+          pushSubBox(C, wx, y, wz, 0.34, 0.76, 0.34, 0.66, 0.96, 0.66, de.top, de.side, de.bottom, uEgg);
+          continue;
+        }
         if (id === B.LANTERN || id === B.SOUL_LANTERN) {
           const lt = tileOf(id);
           pushSubBox(T, wx, y, wz, 0.28, 0.02, 0.28, 0.72, 0.68, 0.72, lt.top, lt.side, lt.bottom, 1.0);
           continue;
         }
-        const isNetherChunk = (c.dim === 'nether');
         if (id === B.BELL) {
           const bt = tileOf(id);
-          pushSubBox(C, wx, y, wz, 0.16, 0.16, 0.16, 0.84, 0.96, 0.84, bt.top, bt.side, bt.bottom, undergroundFactor(colTop, lx, lz, y, isNetherChunk));
+          pushSubBox(C, wx, y, wz, 0.16, 0.16, 0.16, 0.84, 0.96, 0.84, bt.top, bt.side, bt.bottom, undergroundFactor(colTop, lx, lz, y, c.dim));
           continue;
         }
         if (id === B.GRINDSTONE) {
           const gt = tileOf(id);
-          pushSubBox(C, wx, y, wz, 0.14, 0.0, 0.14, 0.86, 0.82, 0.86, gt.top, gt.side, gt.bottom, undergroundFactor(colTop, lx, lz, y, isNetherChunk));
+          pushSubBox(C, wx, y, wz, 0.14, 0.0, 0.14, 0.86, 0.82, 0.86, gt.top, gt.side, gt.bottom, undergroundFactor(colTop, lx, lz, y, c.dim));
           continue;
         }
         if (id === B.CHAIN || id === B.LIGHTNING_ROD) {
           const ct = tileOf(id);
-          pushSubBox(C, wx, y, wz, 0.40, 0.0, 0.40, 0.60, 1.0, 0.60, ct.top, ct.side, ct.bottom, undergroundFactor(colTop, lx, lz, y, isNetherChunk));
+          pushSubBox(C, wx, y, wz, 0.40, 0.0, 0.40, 0.60, 1.0, 0.60, ct.top, ct.side, ct.bottom, undergroundFactor(colTop, lx, lz, y, c.dim));
           continue;
         }
         if (id === B.LEVER || id === B.BUTTON) {
           const st = tileOf(id);
-          pushSubBox(C, wx, y, wz, 0.30, 0.0, 0.30, 0.70, id === B.LEVER ? 0.55 : 0.22, 0.70, st.top, st.side, st.bottom, undergroundFactor(colTop, lx, lz, y, isNetherChunk));
+          pushSubBox(C, wx, y, wz, 0.30, 0.0, 0.30, 0.70, id === B.LEVER ? 0.55 : 0.22, 0.70, st.top, st.side, st.bottom, undergroundFactor(colTop, lx, lz, y, c.dim));
           continue;
         }
         if (id === B.GLASS) {                     // 玻璃：cutout，逐面（不参与贪心）
-          const under = undergroundFactor(colTop, lx, lz, y, isNetherChunk);
+          const under = undergroundFactor(colTop, lx, lz, y, c.dim);
           for (let fi = 0; fi < 6; fi++) {
             const f = FACES[fi];
             const nb = getB(wx + f.dir[0], y + f.dir[1], wz + f.dir[2]);
@@ -8138,6 +8649,9 @@ const BLOCK_COLORS = {
   [B.GOLD_HELMET]: 0xf4c830, [B.GOLD_CHESTPLATE]: 0xf4c830, [B.GOLD_LEGGINGS]: 0xf4c830, [B.GOLD_BOOTS]: 0xf4c830,
   [B.LEATHER_HELMET]: 0x9c5a32, [B.LEATHER_CHESTPLATE]: 0x9c5a32, [B.LEATHER_LEGGINGS]: 0x9c5a32, [B.LEATHER_BOOTS]: 0x9c5a32,
   [B.MUSHROOM_STEW]: 0xc66842, [B.HONEY_BOTTLE]: 0xf2a628, [B.SWEET_BERRIES]: 0xc42038, [B.GOLDEN_MELON]: 0xf4c244, [B.REGEN_POTION]: 0xe858a8,
+  [B.END_PORTAL_FRAME]: 0x3e7666, [B.END_PORTAL_FRAME_FILLED]: 0x40f5c6, [B.END_PORTAL]: 0x161230,
+  [B.PURPUR_PILLAR]: 0xac7cac, [B.END_ROD]: 0xf6f0e2, [B.CHORUS_PLANT]: 0x56305e, [B.CHORUS_FLOWER]: 0xd8a8ee,
+  [B.CHORUS_FRUIT]: 0xa45cb8, [B.DRAGON_EGG]: 0x241236, [B.DRAGON_BREATH]: 0xe256ff, [B.END_CRYSTAL]: 0xf058f8,
   [B.WOOD_HOE]: 0xce9548, [B.STONE_HOE]: 0x8e949d, [B.GOLD_HOE]: 0xf4c830, [B.IRON_HOE]: 0xe2eaf4, [B.DIAMOND_HOE]: 0x36ece2, [B.NETHERITE_HOE]: 0x685d66,
   [B.WHITE_CONCRETE]: 0xdce0e4, [B.RED_CONCRETE]: 0xa42422, [B.BLUE_CONCRETE]: 0x2c3a9a, [B.YELLOW_CONCRETE]: 0xeeb822, [B.BLACK_CONCRETE]: 0x16181e, [B.CYAN_CONCRETE]: 0x1c8698,
   [B.JUNGLE_PLANKS]: 0xa87a56, [B.ACACIA_PLANKS]: 0xb46234, [B.MAPLE_PLANKS]: 0xae482e, [B.CRAFTING_TABLE]: 0x94663a,
@@ -13318,6 +13832,29 @@ function meleeAttack() {
   scan(animals, 'animal');
 
   let hitAny = false;
+  // 0) 末地维度近战优先判定：挥剑击碎末地水晶或斩击低飞/盘踞祭坛的末影龙
+  if (inEnd && !best) {
+    const orig = aimOrigin();
+    for (let i = endCrystals.length - 1; i >= 0; i--) {
+      const c = endCrystals[i];
+      if (!c.alive) continue;
+      const toC = new THREE.Vector3(c.x - orig.x, c.y - orig.y, c.z - orig.z);
+      const dist = toC.length();
+      if (dist <= 5.2 && toC.normalize().dot(dir) > 0.72) {
+        destroyEndCrystal(i, true);
+        hitAny = true;
+        break;
+      }
+    }
+    if (!hitAny && enderDragon && enderDragon.hp > 0) {
+      const toD = new THREE.Vector3(enderDragon.x - orig.x, enderDragon.y - orig.y, enderDragon.z - orig.z);
+      const dist = toD.length();
+      if (dist <= 8.5 && toD.normalize().dot(dir) > 0.62) {
+        damageEnderDragon(dmg, new THREE.Vector3(enderDragon.x, enderDragon.y, enderDragon.z));
+        hitAny = true;
+      }
+    }
+  }
   if (best) {
     const m = best.ent;
     hitAny = true;
@@ -13949,6 +14486,10 @@ const enderEyeGeo = new THREE.SphereGeometry(0.18, 12, 12);
 const enderEyeMat = new THREE.MeshBasicMaterial({ color: 0x16a085 });
 
 function launchEnderEye() {
+  if (inNether || inEnd) {
+    toast('👁️ 末影之眼只能在主世界感应地下要塞的末地传送门方位');
+    return;
+  }
   const dir = new THREE.Vector3();
   aimDir(dir);
   const spawnPos = aimOrigin().clone().addScaledVector(dir, 0.5);
@@ -13957,9 +14498,15 @@ function launchEnderEye() {
   scene.add(mesh);
   tone(520, 880, 0.25, 'sine', 0.2);
 
-  const targetX = 0, targetZ = 0;
-  const toCenter = new THREE.Vector3(targetX - spawnPos.x, 0, targetZ - spawnPos.z).normalize();
-  const flyVel = toCenter.multiplyScalar(9.0).add(new THREE.Vector3(0, 4.5, 0));
+  const sh = nearestStrongholdCenter(spawnPos.x, spawnPos.z);
+  const dx = sh.x - spawnPos.x, dz = sh.z - spawnPos.z;
+  const horizDist = Math.hypot(dx, dz);
+  const toTarget = horizDist > 0.5
+    ? new THREE.Vector3(dx / horizDist, 0, dz / horizDist)
+    : new THREE.Vector3(0, -1, 0);
+  const flyVel = horizDist < 12
+    ? toTarget.multiplyScalar(2.2).add(new THREE.Vector3(0, -2.0, 0))
+    : toTarget.multiplyScalar(9.5).add(new THREE.Vector3(0, 4.6, 0));
 
   enderEyes.push({
     mesh,
@@ -13968,7 +14515,11 @@ function launchEnderEye() {
     age: 0,
     life: 2.5
   });
-  toast('👁️ 末影之眼凌空漂浮！正朝远方神秘村庄与遗迹指引方向…');
+  if (horizDist < 12) {
+    toast(`👁️ 末影之眼强烈震颤下沉！地下要塞末地传送门就在脚下深处（y ≈ ${sh.y}）！`);
+  } else {
+    toast(`👁️ 末影之眼凌空飞向最近的地下要塞末地传送门（约 ${Math.round(horizDist)} 格）…`);
+  }
 }
 
 function updateEnderEyes(dt) {
@@ -14452,7 +15003,11 @@ let portalCooldown = 0;
 let portalSoundAcc = 0;
 let portalAmbientAcc = 0;
 let inNether = false;
+let inEnd = false;
+let dragonDefeated = false;
 let overworldPortalPos = null;
+let endPortalReturnPos = null;
+let endPortalCooldown = 0;
 
 // —— 下界传送门专属三段音效（点燃裂隙 / 门内蓄力旋涡 / 维度穿梭）——
 function playPortalIgnite() {
@@ -14675,12 +15230,13 @@ function setOverworldEntitiesVisible(visible) {
   if (wanderingTrader && wanderingTrader.g) wanderingTrader.g.visible = visible;
   // 清理当前场景掉落物，避免另一维度的掉落物悬浮在新维度里
   for (let i = items.length - 1; i >= 0; i--) {
-    if (items[i] && items[i].mesh) scene.remove(items[i].mesh);
+    if (items[i] && items[i].spr) scene.remove(items[i].spr);
   }
   items.length = 0;
 }
 
-function switchDimension(toNether) {
+function switchDimension(targetDim) {
+  const dim = (typeof targetDim === 'boolean') ? (targetDim ? 'nether' : 'overworld') : (targetDim || 'overworld');
   if (player.ridingHorse) player.ridingHorse = null;
   stopBreaking();
 
@@ -14689,24 +15245,26 @@ function switchDimension(toNether) {
     if (c.group) { scene.remove(c.group); disposeGroup(c.group); c.group = null; }
     c.dirty = true;
   }
-  // 2. 清理当前维度动态火把光源、流体更新队列与立柱高度缓存
+  // 2. 清理当前维度动态火把光源、流体更新队列、末地实景对象与立柱高度缓存
   for (const l of torchLights.values()) scene.remove(l);
   torchLights.clear();
   waterQ.length = 0;
   waterHead = 0;
   waterSet.clear();
   groundCache.clear();
+  if (dim !== 'end') clearEndVisuals();
 
-  // 3. 切换维度状态与独立区块仓库
-  inNether = toNether;
-  world.dim = toNether ? 'nether' : 'overworld';
-  world.chunks = toNether ? world.netherChunks : world.overworldChunks;
-  editedChunks = toNether ? netherEdited : overworldEdited;
+  // 3. 切换维度状态与独立区块仓库（主世界 / 下界 / 末地三维度完全隔离）
+  inNether = (dim === 'nether');
+  inEnd = (dim === 'end');
+  world.dim = dim;
+  world.chunks = inNether ? world.netherChunks : (inEnd ? world.endChunks : world.overworldChunks);
+  editedChunks = inNether ? netherEdited : (inEnd ? endEdited : overworldEdited);
 
-  // 4. 隐藏/恢复主世界生物，避免动物与村民漂浮在下界岩浆海里
-  setOverworldEntitiesVisible(!toNether);
+  // 4. 隐藏/恢复主世界生物（避免主世界动物/村民悬浮在下界或末地虚空中）
+  setOverworldEntitiesVisible(dim === 'overworld');
 
-  // 5. 立即同步环境光照与迷雾
+  // 5. 立即同步环境光照、星幕天穹与迷雾
   updateEnvironment(timeOfDay);
 }
 
@@ -14841,6 +15399,652 @@ function updateNetherPortal(dt) {
   }
 }
 
+/* ============================ 🌌 末地传送门、末地水晶与末影龙 Boss 系统 (The End) ============================ */
+const endCrystals = [];      // { id, x, y, z, g, outer, inner, phase, alive, custom }
+const dragonFireballs = [];  // { mesh, pos, vel, life }
+const dragonClouds = [];     // { mesh, x, y, z, r, life, dmgCd }
+let enderDragon = null;      // { g, x, y, z, yaw, hp, maxHp, state, stateTimer, angle, wingL, wingR, tailSegs, head, beamLine, healCrystal, fireballCd, hurtT, attackCd }
+let endVoidDmgTimer = 0;
+
+function playEndPortalActivate() {
+  if (!ensureAudio()) return;
+  tone(88, 55, 0.9, 'sawtooth', 0.22);
+  const chord = [220, 277.18, 329.63, 440, 659.25];
+  chord.forEach((f, idx) => {
+    tone(f, f * 1.02, 0.75, 'sine', 0.11, idx * 0.08);
+    tone(f * 0.5, f * 0.505, 0.8, 'triangle', 0.09, idx * 0.08);
+  });
+}
+
+function playDragonRoar() {
+  if (!ensureAudio()) return;
+  tone(110, 48, 0.95, 'sawtooth', 0.22);
+  tone(78, 36, 1.15, 'triangle', 0.20, 0.08);
+  burst(0.55, 0.18, 420, 'bandpass', 0.05);
+}
+
+function playDragonVictory() {
+  if (!ensureAudio()) return;
+  const fanfare = [261.63, 329.63, 392.0, 523.25, 659.25, 783.99, 1046.5];
+  fanfare.forEach((f, i) => {
+    tone(f, f * 1.005, 0.65, 'sine', 0.12, i * 0.11);
+    tone(f * 0.5, f * 0.5, 0.7, 'triangle', 0.08, i * 0.11);
+  });
+}
+
+function updateDragonHUD() {
+  const hud = document.getElementById('dragonHUD');
+  const bar = document.getElementById('dragonBar');
+  const sub = document.getElementById('dragonSub');
+  if (!hud) return;
+  if (!inEnd || !enderDragon || enderDragon.hp <= 0) {
+    hud.style.display = 'none';
+    return;
+  }
+  hud.style.display = 'block';
+  const pct = Math.max(0, Math.min(100, (enderDragon.hp / enderDragon.maxHp) * 100));
+  if (bar) bar.style.width = pct.toFixed(1) + '%';
+  const aliveCrystals = endCrystals.filter(c => c.alive).length;
+  if (sub) {
+    const stateLabel = enderDragon.state === 'perch' ? ' · ⬇ 盘踞祭坛（近战良机！）' : (enderDragon.state === 'swoop' ? ' · ⚡ 俯冲突袭' : '');
+    sub.textContent = `HP: ${Math.ceil(enderDragon.hp)} / ${enderDragon.maxHp} · 💎 剩余末地水晶: ${aliveCrystals}${stateLabel}`;
+  }
+}
+
+function clearEndVisuals() {
+  for (const c of endCrystals) if (c.g) scene.remove(c.g);
+  endCrystals.length = 0;
+  for (const fb of dragonFireballs) if (fb.mesh) scene.remove(fb.mesh);
+  dragonFireballs.length = 0;
+  for (const cl of dragonClouds) if (cl.mesh) scene.remove(cl.mesh);
+  dragonClouds.length = 0;
+  if (enderDragon) {
+    if (enderDragon.g) scene.remove(enderDragon.g);
+    if (enderDragon.beamLine) scene.remove(enderDragon.beamLine);
+    enderDragon = null;
+  }
+  updateDragonHUD();
+}
+
+function createEndCrystalObject(x, y, z, id, custom = false) {
+  const g = new THREE.Group();
+  const baseMat = new THREE.MeshStandardMaterial({ color: 0x2a2434, roughness: 0.7 });
+  const outerMat = new THREE.MeshBasicMaterial({ color: 0xd8f0ff, transparent: true, opacity: 0.45, wireframe: true });
+  const innerMat = new THREE.MeshStandardMaterial({ color: 0xe84aff, emissive: 0xc026d3, emissiveIntensity: 1.4, roughness: 0.15 });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.24, 0.92), baseMat);
+  base.position.y = -0.78;
+  g.add(base);
+  const outer = new THREE.Mesh(new THREE.OctahedronGeometry(0.76, 0), outerMat);
+  const inner = new THREE.Mesh(new THREE.OctahedronGeometry(0.46, 0), innerMat);
+  g.add(outer);
+  g.add(inner);
+  g.position.set(x, y, z);
+  scene.add(g);
+  return { id, x, y, z, g, outer, inner, phase: Math.random() * Math.PI * 2, alive: true, custom };
+}
+
+function spawnEndCrystals() {
+  for (const c of endCrystals) if (c.g) scene.remove(c.g);
+  endCrystals.length = 0;
+  if (dragonDefeated) return;
+  for (const pil of END_PILLARS) {
+    endCrystals.push(createEndCrystalObject(pil.x + 0.5, pil.topY + 2.35, pil.z + 0.5, pil.id, false));
+  }
+}
+
+function destroyEndCrystal(idx, byPlayer = true) {
+  const c = endCrystals[idx];
+  if (!c || !c.alive) return;
+  c.alive = false;
+  if (c.g) scene.remove(c.g);
+  endCrystals.splice(idx, 1);
+  if (typeof playExplosion === 'function') playExplosion();
+  else tone(95, 34, 0.45, 'sawtooth', 0.35);
+  screenShake = Math.max(screenShake, 0.55);
+  spawnParticles(c.x, c.y, c.z, 0xf058ff, 34);
+  spawnParticles(c.x, c.y, c.z, 0xffc844, 24);
+  spawnXpOrb(c.x, c.y, c.z, 18);
+  const pDist = Math.hypot(player.pos.x - c.x, player.pos.y + 1 - c.y, player.pos.z - c.z);
+  if (pDist < 5.5 && !player.fly) {
+    damagePlayer(Math.max(1, Math.round((5.5 - pDist) * 1.4)));
+  }
+  if (enderDragon && enderDragon.healCrystal === c) {
+    enderDragon.healCrystal = null;
+    damageEnderDragon(12, new THREE.Vector3(c.x, c.y, c.z));
+    toast('💥 击碎了正在治疗末影龙的末地水晶！对末影龙造成 12 点反噬伤害！');
+  } else if (byPlayer) {
+    const left = endCrystals.filter(k => k.alive).length;
+    toast(`💥 末地水晶已摧毁！（剩余 ${left} 颗）`);
+  }
+  updateDragonHUD();
+}
+
+function createEnderDragonMesh() {
+  const g = new THREE.Group();
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x16141e, roughness: 0.55, metalness: 0.25 });
+  const spineMat = new THREE.MeshStandardMaterial({ color: 0x453b54, roughness: 0.45 });
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xf054ff });
+  const wingMat = new THREE.MeshStandardMaterial({ color: 0x20182b, roughness: 0.65, side: THREE.DoubleSide });
+
+  // 躯干与脊刺
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.9, 5.2), darkMat);
+  g.add(torso);
+  for (let i = -2; i <= 2; i++) {
+    const sp = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.55, 0.6), spineMat);
+    sp.position.set(0, 1.18, i * 1.0);
+    g.add(sp);
+  }
+  // 颈部与龙头（含发光紫瞳、双角与下颚）
+  const head = new THREE.Group();
+  head.position.set(0, 0.3, 3.0);
+  const neck = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.1, 2.2), darkMat);
+  neck.position.set(0, 0.1, 0.6);
+  head.add(neck);
+  const skull = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.25, 1.9), darkMat);
+  skull.position.set(0, 0.2, 2.2);
+  head.add(skull);
+  const snout = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.65, 1.3), darkMat);
+  snout.position.set(0, 0.05, 3.55);
+  head.add(snout);
+  const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.35, 1.25), spineMat);
+  jaw.position.set(0, -0.42, 3.45);
+  head.add(jaw);
+  for (const sx of [-0.52, 0.52]) {
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.22, 0.28), eyeMat);
+    eye.position.set(sx, 0.35, 3.05);
+    head.add(eye);
+    const horn = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.32, 1.1), spineMat);
+    horn.position.set(sx * 0.9, 0.95, 1.75);
+    head.add(horn);
+  }
+  g.add(head);
+
+  // 巨型双翼（可高频扇动枢轴组）
+  const makeWing = (sign) => {
+    const piv = new THREE.Group();
+    piv.position.set(sign * 1.1, 0.5, 0.5);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.36, 0.5), spineMat);
+    arm.position.set(sign * 2.3, 0, 0.2);
+    piv.add(arm);
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.28, 0.38), spineMat);
+    tip.position.set(sign * 6.4, -0.1, -0.4);
+    tip.rotation.y = sign * -0.18;
+    piv.add(tip);
+    const mem = new THREE.Mesh(new THREE.BoxGeometry(8.2, 0.08, 3.4), wingMat);
+    mem.position.set(sign * 4.3, -0.05, -1.4);
+    piv.add(mem);
+    g.add(piv);
+    return piv;
+  };
+  const wingL = makeWing(-1);
+  const wingR = makeWing(1);
+
+  // 节段式波浪龙尾
+  const tailSegs = [];
+  for (let i = 0; i < 6; i++) {
+    const s = 1.0 - i * 0.11;
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(1.1 * s, 1.0 * s, 1.25), darkMat);
+    seg.position.set(0, 0, -3.1 - i * 1.15);
+    g.add(seg);
+    tailSegs.push(seg);
+  }
+
+  // 四爪
+  for (const [lx, lz] of [[-1.0, 1.5], [1.0, 1.5], [-1.1, -1.5], [1.1, -1.5]]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.4, 0.65), darkMat);
+    leg.position.set(lx, -1.1, lz);
+    g.add(leg);
+  }
+
+  return { g, head, wingL, wingR, tailSegs };
+}
+
+function spawnEnderDragon() {
+  if (enderDragon) {
+    if (enderDragon.g) scene.remove(enderDragon.g);
+    if (enderDragon.beamLine) scene.remove(enderDragon.beamLine);
+    enderDragon = null;
+  }
+  if (dragonDefeated) { updateDragonHUD(); return; }
+  const parts = createEnderDragonMesh();
+  parts.g.position.set(0, 92, -32);
+  scene.add(parts.g);
+
+  const beamGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+  const beamMat = new THREE.LineBasicMaterial({ color: 0xf054ff, transparent: true, opacity: 0.92 });
+  const beamLine = new THREE.Line(beamGeo, beamMat);
+  beamLine.visible = false;
+  scene.add(beamLine);
+
+  enderDragon = {
+    ...parts,
+    x: 0, y: 92, z: -32, yaw: 0,
+    hp: 200, maxHp: 200,
+    state: 'orbit', stateTimer: 9.0,
+    angle: 0,
+    beamLine, healCrystal: null,
+    fireballCd: 4.5, hurtT: 0, attackCd: 0
+  };
+  playDragonRoar();
+  updateDragonHUD();
+}
+
+function damageEnderDragon(dmg, hitPos) {
+  if (!enderDragon || enderDragon.hp <= 0) return;
+  enderDragon.hp = Math.max(0, enderDragon.hp - dmg);
+  enderDragon.hurtT = 0.25;
+  const px = hitPos ? hitPos.x : enderDragon.x;
+  const py = hitPos ? hitPos.y : enderDragon.y;
+  const pz = hitPos ? hitPos.z : enderDragon.z;
+  spawnParticles(px, py, pz, 0xd946ef, 16);
+  tone(160, 90, 0.22, 'sawtooth', 0.22);
+  updateDragonHUD();
+  if (enderDragon.hp <= 0) {
+    onEnderDragonDefeated();
+  }
+}
+
+function onEnderDragonDefeated() {
+  if (!enderDragon) return;
+  const dx = enderDragon.x, dy = enderDragon.y, dz = enderDragon.z;
+  dragonDefeated = true;
+  if (enderDragon.g) scene.remove(enderDragon.g);
+  if (enderDragon.beamLine) scene.remove(enderDragon.beamLine);
+  enderDragon = null;
+  // 清理剩余水晶与龙息
+  for (const c of endCrystals) if (c.g) scene.remove(c.g);
+  endCrystals.length = 0;
+
+  playDragonVictory();
+  screenShake = 0.9;
+  for (let k = 0; k < 6; k++) {
+    spawnParticles(dx + (Math.random() - 0.5) * 6, dy + (Math.random() - 0.5) * 4, dz + (Math.random() - 0.5) * 6, (k & 1) ? 0xf058ff : 0xffdf60, 32);
+  }
+  // 丰厚屠龙奖励：+500 经验 + 4 瓶龙息掉落
+  player.xp = (player.xp || 0) + 500;
+  updateXPBar();
+  for (let i = 0; i < 4; i++) dropItem(B.DRAGON_BREATH, Math.round(dx), Math.max(63, Math.round(dy - 2)), Math.round(dz));
+
+  // 点亮主岛中心返回传送门基座 + 放置【龙蛋】战利品 + 开启通往外岛的【末地折跃门】！
+  for (let wz = -3; wz <= 3; wz++) {
+    for (let wx = -3; wx <= 3; wx++) {
+      const d = Math.hypot(wx, wz);
+      if (d <= 2.25 && !(wx === 0 && wz === 0)) {
+        world.setBlock(wx, 62, wz, B.END_PORTAL);
+      }
+    }
+  }
+  world.setBlock(0, 66, 0, B.DRAGON_EGG);
+  // 主岛东缘 (56, 68, 0) 点亮通往外岛群的末地折跃门
+  world.setBlock(56, 66, 0, B.BEDROCK);
+  world.setBlock(56, 67, 0, B.BEDROCK);
+  world.setBlock(56, 68, 0, B.END_PORTAL);
+  world.setBlock(56, 69, 0, B.BEDROCK);
+  world.setBlock(56, 70, 0, B.BEDROCK);
+  enqueueAround(0, 62, 0);
+  enqueueAround(56, 68, 0);
+
+  updateDragonHUD();
+  saveWorld();
+  toast('🏆 恭喜击败【末影龙】！获得 +500 XP 与【龙蛋】！返回传送门与外岛折跃门已全部开启！');
+}
+
+function tryActivateEndPortal(fx, fy, fz) {
+  // 扫描围绕该框架的所有可能 3×3 内部中心，若四周 12 格全为已镶眼框架则点亮 3×3 星渊末地传送门
+  for (let dz = -2; dz <= 2; dz++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      const cx = fx + dx, cz = fz + dz;
+      let allFilled = true;
+      for (let i = -1; i <= 1 && allFilled; i++) {
+        if (world.getBlock(cx - 2, fy, cz + i) !== B.END_PORTAL_FRAME_FILLED) allFilled = false;
+        if (world.getBlock(cx + 2, fy, cz + i) !== B.END_PORTAL_FRAME_FILLED) allFilled = false;
+        if (world.getBlock(cx + i, fy, cz - 2) !== B.END_PORTAL_FRAME_FILLED) allFilled = false;
+        if (world.getBlock(cx + i, fy, cz + 2) !== B.END_PORTAL_FRAME_FILLED) allFilled = false;
+      }
+      if (allFilled) {
+        for (let iz = -1; iz <= 1; iz++) {
+          for (let ix = -1; ix <= 1; ix++) {
+            world.setBlock(cx + ix, fy, cz + iz, B.END_PORTAL);
+          }
+        }
+        enqueueAround(cx, fy, cz);
+        playEndPortalActivate();
+        screenShake = 0.65;
+        spawnParticles(cx + 0.5, fy + 1.2, cz + 0.5, 0x38f8d0, 36);
+        spawnParticles(cx + 0.5, fy + 1.2, cz + 0.5, 0xa855f7, 36);
+        toast('🌌 末地传送门已激活！踏入星渊裂隙即可前往终末之境【末地】！');
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function tryRespawnDragonAtFountain() {
+  if (!inEnd || !dragonDefeated) return false;
+  const nearFountain = endCrystals.filter(c => c.alive && Math.hypot(c.x - 0.5, c.z - 0.5) <= 4.8);
+  if (nearFountain.length < 4) return false;
+  dragonDefeated = false;
+  // 熄灭返回传送门并重燃 10 座黑曜石柱水晶 + 复活末影龙
+  for (let wz = -3; wz <= 3; wz++) {
+    for (let wx = -3; wx <= 3; wx++) {
+      if (world.getBlock(wx, 62, wz) === B.END_PORTAL) world.setBlock(wx, 62, wz, B.AIR);
+    }
+  }
+  spawnEndCrystals();
+  spawnEnderDragon();
+  screenShake = 0.7;
+  toast('🐉 四颗末地水晶共鸣！终末霸主【末影龙】再度降临！');
+  return true;
+}
+
+function teleportToEnd() {
+  playPortalTravel();
+  screenShake = 0.6;
+  endPortalCooldown = 3.2;
+  const flashEl = document.getElementById('portalFlash');
+  if (flashEl) {
+    flashEl.style.opacity = '1';
+    setTimeout(() => { flashEl.style.opacity = '0'; }, 220);
+  }
+
+  if (!inEnd) {
+    // 主世界/下界 → 末地主岛黑曜石着陆台
+    if (!inNether) endPortalReturnPos = { x: player.pos.x, y: player.pos.y + 1.5, z: player.pos.z };
+    switchDimension('end');
+    // 预生成主岛中心与黑曜石着陆台周围区块，保证落地即见完整主岛与黑曜石柱
+    for (let cz = -3; cz <= 3; cz++) {
+      for (let cx = -3; cx <= 4; cx++) {
+        world.ensureChunk(cx, cz);
+      }
+    }
+    for (let cz = -2; cz <= 2; cz++) {
+      for (let cx = 1; cx <= 4; cx++) {
+        const cc = world.chunks.get(key(cx, cz));
+        if (cc) buildChunkMeshes(cc);
+      }
+    }
+    // 确保着陆平台稳固畅通
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+      world.setBlock(46 + dx, 56, dz, B.OBSIDIAN);
+      for (let dy = 1; dy <= 4; dy++) world.setBlock(46 + dx, 56 + dy, dz, B.AIR);
+    }
+    player.pos.set(46.5, 57.1, 0.5);
+    player.vel.set(0, 0, 0);
+    player.yaw = Math.PI * 0.5;
+    spawnEndCrystals();
+    spawnEnderDragon();
+    spawnParticles(46.5, 58.2, 0.5, 0xa855f7, 45);
+    toast(dragonDefeated
+      ? '🌌 再次降临【末地】！可经东缘折跃门探索广袤外岛与末地城！'
+      : '🌌 降临终末之境【末地】！摧毁黑曜石柱上的末地水晶并迎战【末影龙】！');
+  } else {
+    // 末地内部折跃门 OR 返回主世界
+    const bx = Math.floor(player.pos.x), bz = Math.floor(player.pos.z);
+    if (Math.hypot(bx - 56, bz) <= 4) {
+      // 主岛折跃门 → 外岛高地 (176, y, 0)
+      const ocx = Math.floor(176 / CHUNK), ocz = 0;
+      for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) world.ensureChunk(ocx + dx, ocz + dz);
+      const col = endColumnAt(176, 0);
+      const landY = col.hasLand ? col.topY : 66;
+      for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+        world.setBlock(176 + dx, landY, dz, B.END_STONE);
+        for (let dy = 1; dy <= 4; dy++) world.setBlock(176 + dx, landY + dy, dz, B.AIR);
+      }
+      // 在外岛抵达点旁边竖立返程末地折跃门 (172, landY + 2, 0)
+      world.setBlock(172, landY + 1, 0, B.BEDROCK);
+      world.setBlock(172, landY + 2, 0, B.END_PORTAL);
+      world.setBlock(172, landY + 3, 0, B.BEDROCK);
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+        const cc = world.chunks.get(key(ocx + dx, ocz + dz));
+        if (cc) buildChunkMeshes(cc);
+      }
+      player.pos.set(176.5, landY + 1.2, 0.5);
+      player.vel.set(0, 0, 0);
+      spawnParticles(176.5, landY + 2, 0.5, 0x38f8d0, 42);
+      toast('🏝️ 穿越末地折跃门，抵达【末地外岛群】！探索紫颂林、末地城与浮空末地船！');
+      return;
+    }
+    if (Math.hypot(bx - 172, bz) <= 4) {
+      // 外岛返程折跃门 → 主岛东缘 (52, 65, 0)
+      const mcx = Math.floor(52 / CHUNK);
+      for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) world.ensureChunk(mcx + dx, dz);
+      player.pos.set(52.5, 65.2, 0.5);
+      player.vel.set(0, 0, 0);
+      spawnParticles(52.5, 66.2, 0.5, 0xc084fc, 38);
+      toast('🌌 返回【末地主岛】！');
+      return;
+    }
+    // 主岛中心基岩返回传送门 → 回归主世界
+    const target = endPortalReturnPos || { x: 0, y: Math.floor(surfaceHeight(0, 0)) + 2, z: 0 };
+    switchDimension('overworld');
+    const ocx = Math.floor(target.x / CHUNK), ocz = Math.floor(target.z / CHUNK);
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) world.ensureChunk(ocx + dx, ocz + dz);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const cc = world.chunks.get(key(ocx + dx, ocz + dz));
+      if (cc) { restoreTorchLights(cc); buildChunkMeshes(cc); }
+    }
+    player.pos.set(target.x, target.y + 0.2, target.z);
+    player.vel.set(0, 0, 0);
+    spawnParticles(target.x, target.y + 1, target.z, 0x5fd184, 48);
+    toast('✨ 穿越末地星渊返回传送门，荣耀归来主世界！');
+  }
+}
+
+function updateEndDimension(dt) {
+  if (endPortalCooldown > 0) endPortalCooldown = Math.max(0, endPortalCooldown - dt);
+
+  // 1) 末地传送门踩踏检测（主世界进末地 / 末地折跃门 / 末地回主世界）
+  if (locked && endPortalCooldown <= 0) {
+    const bx = Math.floor(player.pos.x), by = Math.floor(player.pos.y), bz = Math.floor(player.pos.z);
+    if (world.getBlock(bx, by, bz) === B.END_PORTAL || world.getBlock(bx, by - 1, bz) === B.END_PORTAL || world.getBlock(bx, by + 1, bz) === B.END_PORTAL) {
+      teleportToEnd();
+      return;
+    }
+  }
+  if (!inEnd) return;
+
+  // 2) 末地虚空跌落保护/伤害
+  if (player.pos.y < 8) {
+    if (player.fly) {
+      player.pos.y = 56;
+    } else {
+      endVoidDmgTimer += dt;
+      if (endVoidDmgTimer >= 0.45) {
+        endVoidDmgTimer = 0;
+        damagePlayer(4);
+        toast('🌑 坠入末地无尽虚空！');
+      }
+    }
+  } else {
+    endVoidDmgTimer = 0;
+  }
+
+  // 3) 末地水晶悬浮旋转动画
+  const nowT = clock.elapsedTime;
+  for (const c of endCrystals) {
+    if (!c.alive || !c.g) continue;
+    c.g.position.y = c.y + Math.sin(nowT * 2.4 + c.phase) * 0.28;
+    c.outer.rotation.y = nowT * 1.4 + c.phase;
+    c.outer.rotation.x = nowT * 0.9;
+    c.inner.rotation.y = -nowT * 2.2;
+    c.inner.rotation.z = nowT * 1.5;
+  }
+
+  // 4) 末影龙 AI（盘旋充电 → 俯冲吐息 → 祭坛盘踞）
+  if (enderDragon && enderDragon.hp > 0) {
+    const d = enderDragon;
+    d.stateTimer -= dt;
+    d.fireballCd -= dt;
+    d.attackCd = Math.max(0, d.attackCd - dt);
+    if (d.hurtT > 0) d.hurtT = Math.max(0, d.hurtT - dt);
+
+    // 寻找最近存活水晶提供治疗光束
+    let nearestC = null, bestC = 42;
+    for (const c of endCrystals) {
+      if (!c.alive) continue;
+      const cd = Math.hypot(c.x - d.x, c.y - d.y, c.z - d.z);
+      if (cd < bestC) { bestC = cd; nearestC = c; }
+    }
+    d.healCrystal = nearestC;
+    if (nearestC) {
+      d.hp = Math.min(d.maxHp, d.hp + dt * 2.6);
+      const posArr = d.beamLine.geometry.attributes.position;
+      posArr.setXYZ(0, nearestC.x, nearestC.y, nearestC.z);
+      posArr.setXYZ(1, d.x, d.y, d.z);
+      posArr.needsUpdate = true;
+      d.beamLine.visible = true;
+      if (Math.random() < 0.25) spawnParticles((nearestC.x + d.x) * 0.5, (nearestC.y + d.y) * 0.5, (nearestC.z + d.z) * 0.5, 0xf058ff, 1);
+    } else {
+      d.beamLine.visible = false;
+    }
+
+    // 状态机目标点
+    let tx = 0, ty = 92, tz = 0, spd = 16;
+    if (d.state === 'orbit') {
+      d.angle += dt * 0.42;
+      tx = Math.cos(d.angle) * 34;
+      tz = Math.sin(d.angle) * 34;
+      ty = 88 + Math.sin(d.angle * 2.0) * 10;
+      spd = 17;
+      if (d.stateTimer <= 0) {
+        const playerOnIsland = Math.hypot(player.pos.x, player.pos.z) < 72;
+        d.state = (playerOnIsland && Math.random() < 0.62) ? 'swoop' : 'perch';
+        d.stateTimer = d.state === 'swoop' ? 5.5 : 7.0;
+        if (d.state === 'swoop') playDragonRoar();
+      }
+    } else if (d.state === 'swoop') {
+      tx = player.pos.x;
+      ty = Math.max(66, player.pos.y + 4.5);
+      tz = player.pos.z;
+      spd = 23;
+      const distP = Math.hypot(player.pos.x - d.x, player.pos.y + 1 - d.y, player.pos.z - d.z);
+      if (distP < 5.5 && d.attackCd <= 0) {
+        d.attackCd = 1.6;
+        if (!player.fly) {
+          damagePlayer(4);
+          player.vel.y = 9.5;
+          const kb = Math.max(0.01, Math.hypot(player.pos.x - d.x, player.pos.z - d.z));
+          player.vel.x += ((player.pos.x - d.x) / kb) * 10;
+          player.vel.z += ((player.pos.z - d.z) / kb) * 10;
+          toast('🐉 末影龙振翼重击！');
+        }
+        d.state = 'orbit';
+        d.stateTimer = 7.5;
+      }
+      if (d.stateTimer <= 0) { d.state = 'orbit'; d.stateTimer = 7.0; }
+    } else if (d.state === 'perch') {
+      tx = 0.5; ty = 68.5; tz = 0.5; spd = 14;
+      if (d.stateTimer <= 0) { d.state = 'orbit'; d.stateTimer = 8.5; }
+    }
+
+    // 平滑飞向目标并转向
+    const vx = tx - d.x, vy = ty - d.y, vz = tz - d.z;
+    const vLen = Math.hypot(vx, vy, vz);
+    if (vLen > 0.5) {
+      const step = Math.min(vLen, spd * dt);
+      d.x += (vx / vLen) * step;
+      d.y += (vy / vLen) * step;
+      d.z += (vz / vLen) * step;
+      const targetYaw = Math.atan2(vx, vz);
+      let dyaw = targetYaw - d.yaw;
+      while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+      while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+      d.yaw += dyaw * Math.min(1, dt * 3.8);
+    }
+    d.g.position.set(d.x, d.y, d.z);
+    d.g.rotation.y = d.yaw;
+    // 振翼 + 龙尾波浪摆动
+    const flap = Math.sin(nowT * (d.state === 'perch' ? 4.2 : 6.2)) * 0.58;
+    d.wingL.rotation.z = flap;
+    d.wingR.rotation.z = -flap;
+    for (let i = 0; i < d.tailSegs.length; i++) {
+      d.tailSegs[i].position.y = Math.sin(nowT * 5.0 - i * 0.65) * 0.35;
+      d.tailSegs[i].position.x = Math.cos(nowT * 3.2 - i * 0.55) * 0.22;
+    }
+
+    // 喷吐紫焰龙息火球
+    if (d.fireballCd <= 0 && Math.hypot(player.pos.x - d.x, player.pos.z - d.z) < 62) {
+      d.fireballCd = 5.5 + Math.random() * 3.0;
+      const fbMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.42, 10, 10),
+        new THREE.MeshBasicMaterial({ color: 0xe84aff })
+      );
+      const start = new THREE.Vector3(d.x + Math.sin(d.yaw) * 4.5, d.y, d.z + Math.cos(d.yaw) * 4.5);
+      fbMesh.position.copy(start);
+      scene.add(fbMesh);
+      const toP = new THREE.Vector3(player.pos.x - start.x, (player.pos.y + 0.8) - start.y, player.pos.z - start.z).normalize();
+      dragonFireballs.push({ mesh: fbMesh, pos: start, vel: toP.multiplyScalar(22), life: 4.5 });
+      tone(210, 110, 0.28, 'sawtooth', 0.16);
+    }
+    updateDragonHUD();
+  }
+
+  // 5) 龙息火球飞行与爆炸生成龙息滞留紫云
+  for (let i = dragonFireballs.length - 1; i >= 0; i--) {
+    const fb = dragonFireballs[i];
+    fb.life -= dt;
+    fb.pos.addScaledVector(fb.vel, dt);
+    fb.mesh.position.copy(fb.pos);
+    if (Math.random() < 0.7) spawnParticles(fb.pos.x, fb.pos.y, fb.pos.z, 0xd946ef, 2);
+    const bx = Math.floor(fb.pos.x), by = Math.floor(fb.pos.y), bz = Math.floor(fb.pos.z);
+    const hitBlk = (by >= 0 && by < HEIGHT && isSolid(world.getBlock(bx, by, bz)));
+    const hitPlr = Math.hypot(player.pos.x - fb.pos.x, (player.pos.y + 0.9) - fb.pos.y, player.pos.z - fb.pos.z) < 1.3;
+    if (hitBlk || hitPlr || fb.life <= 0) {
+      scene.remove(fb.mesh);
+      dragonFireballs.splice(i, 1);
+      spawnParticles(fb.pos.x, fb.pos.y + 0.4, fb.pos.z, 0xf058ff, 26);
+      tone(120, 60, 0.3, 'triangle', 0.2);
+      const clMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(3.2, 3.2, 0.55, 18),
+        new THREE.MeshBasicMaterial({ color: 0xc026d3, transparent: true, opacity: 0.42 })
+      );
+      clMesh.position.set(fb.pos.x, fb.pos.y + 0.35, fb.pos.z);
+      scene.add(clMesh);
+      dragonClouds.push({ mesh: clMesh, x: fb.pos.x, y: fb.pos.y + 0.35, z: fb.pos.z, r: 3.3, life: 9.0, dmgCd: 0 });
+    }
+  }
+
+  // 6) 龙息紫云持续伤害（可用玻璃瓶右键收集龙息！）
+  for (let i = dragonClouds.length - 1; i >= 0; i--) {
+    const cl = dragonClouds[i];
+    cl.life -= dt;
+    cl.dmgCd = Math.max(0, cl.dmgCd - dt);
+    cl.mesh.rotation.y += dt * 1.4;
+    if (Math.random() < 0.35) {
+      spawnParticles(cl.x + (Math.random() - 0.5) * 4.5, cl.y + Math.random() * 1.2, cl.z + (Math.random() - 0.5) * 4.5, 0xe879f9, 1);
+    }
+    if (!player.fly && cl.dmgCd <= 0 && Math.hypot(player.pos.x - cl.x, player.pos.z - cl.z) < cl.r && Math.abs(player.pos.y - cl.y) < 2.2) {
+      cl.dmgCd = 0.85;
+      damagePlayer(2);
+    }
+    if (cl.life <= 0) {
+      scene.remove(cl.mesh);
+      dragonClouds.splice(i, 1);
+    }
+  }
+}
+
+// 供近战/弓箭/三叉戟统一检测命中末地水晶或末影龙
+function checkHitEndBossOrCrystal(point, dmg, radius = 1.2) {
+  if (!inEnd) return false;
+  for (let i = endCrystals.length - 1; i >= 0; i--) {
+    const c = endCrystals[i];
+    if (!c.alive) continue;
+    if (Math.hypot(c.x - point.x, c.y - point.y, c.z - point.z) < radius + 0.95) {
+      destroyEndCrystal(i, true);
+      return true;
+    }
+  }
+  if (enderDragon && enderDragon.hp > 0) {
+    if (Math.hypot(enderDragon.x - point.x, enderDragon.y - point.y, enderDragon.z - point.z) < radius + 3.8) {
+      damageEnderDragon(dmg, point);
+      return true;
+    }
+  }
+  return false;
+}
+
 function updateTridents(dt) {
   for (let i = tridents.length - 1; i >= 0; i--) {
     const tri = tridents[i];
@@ -14868,6 +16072,9 @@ function updateTridents(dt) {
           updateXPBar();
           toast('🎯 传奇三叉戟贯穿命中靶心！【15 分】满分！获得 15 点经验！');
         }
+      }
+      if (!hit && checkHitEndBossOrCrystal(tri.pos, 18, 1.4)) {
+        hit = true;
       }
       if (!hit) {
         for (let zi = zombies.length - 1; zi >= 0; zi--) {
@@ -15186,7 +16393,10 @@ function updateArrows(dt) {
       }
     } else {
       let hitMob = false;
-      for (let zi = zombies.length - 1; zi >= 0; zi--) {
+      if (checkHitEndBossOrCrystal(a.pos, a.dmg, 1.3)) {
+        hitMob = true;
+      }
+      if (!hitMob) for (let zi = zombies.length - 1; zi >= 0; zi--) {
         const z = zombies[zi];
         const dist = Math.hypot(z.x - a.pos.x, (z.g.position.y + 0.8) - a.pos.y, z.z - a.pos.z);
         if (dist < 0.75) {
@@ -15952,6 +17162,32 @@ function eat(s) {
     toast('🤢 吞食蜘蛛眼 · 受到剧毒反噬扣血！');
     return;
   }
+  if (s.id === B.CHORUS_FRUIT) {
+    player.hunger = Math.min(20, player.hunger + 4);
+    s.count--;
+    if (s.count <= 0) hotbar[selected] = null;
+    refreshHotbar();
+    updateHungerBar();
+    eatCooldown = 0.5;
+    playEat();
+    // 紫颂果瞬移特性：随机闪现到附近 ±7 格内的安全实心落脚点
+    for (let tries = 0; tries < 14; tries++) {
+      const tx = Math.floor(player.pos.x + (Math.random() - 0.5) * 14);
+      const tz = Math.floor(player.pos.z + (Math.random() - 0.5) * 14);
+      const gy = findGround(tx, tz);
+      if (gy > 4 && gy < HEIGHT - 3 && isSolid(world.getBlock(tx, gy - 1, tz)) && !isSolid(world.getBlock(tx, gy, tz)) && !isSolid(world.getBlock(tx, gy + 1, tz))) {
+        spawnParticles(player.pos.x, player.pos.y + 0.9, player.pos.z, 0xc084fc, 18);
+        player.pos.set(tx + 0.5, gy + 0.05, tz + 0.5);
+        player.vel.set(0, 0, 0);
+        playTeleport();
+        spawnParticles(player.pos.x, player.pos.y + 0.9, player.pos.z, 0xe879f9, 20);
+        toast('🍇 食用紫颂果！发生短距空间折跃！');
+        return;
+      }
+    }
+    toast('🍇 食用了甘甜的紫颂果！');
+    return;
+  }
   if (player.hunger >= 20) return;           // 已饱
   player.hunger = Math.min(20, player.hunger + FOOD[s.id]);
   s.count--;
@@ -15999,7 +17235,8 @@ const TOOL_DURABILITY = {
 };
 // 工具能否作为方块放置（工具/木棍/锭/木炭/弓箭/骨头/盾牌/材料物品不可放置）
 function isPlaceable(id) {
-  if ((id >= 256 && id <= 271) || (id >= 288 && id <= 310) || id >= 333) return false;
+  if ((id >= 256 && id <= 271) || (id >= 288 && id <= 310) || (id >= 333 && id <= 340)) return false;
+  if (id === B.CHORUS_FRUIT || id === B.DRAGON_BREATH || id === B.END_CRYSTAL || id === B.END_PORTAL || id === B.END_PORTAL_FRAME_FILLED) return false;
   if (id === B.STICK || isTool(id) || id === B.SNOWBALL || id === B.BOW || id === B.ARROW || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.COMPASS || id === B.CLOCK || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT || id === B.ELYTRA || id === B.NETHERITE_INGOT || id === B.NETHER_PORTAL || id === B.HONEYCOMB || id === B.BONE_MEAL || id === B.GOAT_HORN) return false;
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.MELON_SLICE) return false;
   if (isFood(id)) return false;   // 食物不可放置
@@ -16020,8 +17257,8 @@ function _fillTbl(fn) {
 
 // —— 原始判定逻辑（供建表用，保持单一事实来源；均为函数声明，不产生每次调用的闭包） ——
 function _crossRaw(i) { return i === B.FLOWER_RED || i === B.FLOWER_YELLOW || i === B.GRASS_TALL || i === B.MUSHROOM_RED || i === B.MUSHROOM_BROWN || i === B.FERN || i === B.WHEAT_CROP || i === B.WHEAT_CROP_MATURE || i === B.BAMBOO || i === B.SUGARCANE || i === B.COBWEB || i === B.POINTED_DRIPSTONE || i === B.SAPLING || i === B.MAPLE_SAPLING || i === B.CHERRY_SAPLING || i === B.WEEPING_VINES || i === B.TWISTING_VINES; }
-function _seeRaw(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || id === B.DOOR || _crossRaw(id) || id === B.TORCH || id === B.SOUL_TORCH || id === B.LILY_PAD || id === B.CHERRY_PETALS || id === B.LADDER || id === B.VINE || id === B.BED || id === B.NETHER_PORTAL || id === B.LIGHTNING_ROD || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.LEVER || id === B.BUTTON || id === B.CHAIN || id === B.BELL || id === B.GRINDSTONE; }
-function _solidRaw(id) { return id !== B.AIR && id !== B.WATER && !_crossRaw(id) && id !== B.TORCH && id !== B.SOUL_TORCH && id !== B.LILY_PAD && id !== B.CHERRY_PETALS && id !== B.LADDER && id !== B.VINE && id !== B.NETHER_PORTAL && id !== B.LEVER && id !== B.BUTTON; }
+function _seeRaw(id) { return id === B.AIR || id === B.WATER || id === B.GLASS || id === B.DOOR || _crossRaw(id) || id === B.TORCH || id === B.SOUL_TORCH || id === B.LILY_PAD || id === B.CHERRY_PETALS || id === B.LADDER || id === B.VINE || id === B.BED || id === B.NETHER_PORTAL || id === B.END_PORTAL || id === B.END_ROD || id === B.DRAGON_EGG || id === B.LIGHTNING_ROD || id === B.LANTERN || id === B.SOUL_LANTERN || id === B.LEVER || id === B.BUTTON || id === B.CHAIN || id === B.BELL || id === B.GRINDSTONE; }
+function _solidRaw(id) { return id !== B.AIR && id !== B.WATER && !_crossRaw(id) && id !== B.TORCH && id !== B.SOUL_TORCH && id !== B.LILY_PAD && id !== B.CHERRY_PETALS && id !== B.LADDER && id !== B.VINE && id !== B.NETHER_PORTAL && id !== B.END_PORTAL && id !== B.LEVER && id !== B.BUTTON; }
 function isClimbable(id) { return id === B.LADDER || id === B.VINE || id === B.WEEPING_VINES || id === B.TWISTING_VINES; }
 
 // 透明/可透视（用于面剔除与 AO）—— 查表版
@@ -17371,6 +18608,10 @@ const NAMES = {
   [B.OXIDIZED_COPPER]: '氧化铜块', [B.PURPUR_BLOCK]: '紫珀块', [B.END_STONE]: '末地石', [B.END_STONE_BRICKS]: '末地石砖',
   [B.BLAZE_POWDER]: '烈焰粉', [B.MAGMA_CREAM]: '岩浆膏', [B.GLASS_BOTTLE]: '玻璃瓶', [B.JUMP_POTION]: '跳跃药水',
   [B.INVISIBILITY_POTION]: '隐身药水', [B.CARROT]: '胡萝卜', [B.POTATO]: '马铃薯', [B.BAKED_POTATO]: '烤马铃薯',
+  [B.END_PORTAL_FRAME]: '末地传送门框架', [B.END_PORTAL_FRAME_FILLED]: '末地传送门框架(已镶眼)',
+  [B.END_PORTAL]: '末地传送门', [B.PURPUR_PILLAR]: '紫珀柱', [B.END_ROD]: '末地烛',
+  [B.CHORUS_PLANT]: '紫颂植物', [B.CHORUS_FLOWER]: '紫颂花', [B.CHORUS_FRUIT]: '紫颂果',
+  [B.DRAGON_EGG]: '龙蛋', [B.DRAGON_BREATH]: '龙息', [B.END_CRYSTAL]: '末地水晶',
 };
 function itemName(id) { return NAMES[id] || ('物品#' + id); }
 function isHelmet(id) { return id === B.LEATHER_HELMET || id === B.GOLD_HELMET || id === B.IRON_HELMET || id === B.DIAMOND_HELMET || id === B.NETHERITE_HELMET || id === B.TURTLE_HELMET; }
@@ -17484,7 +18725,7 @@ const FOOD = {
   [B.MELON_SLICE]: 2, [B.EGG]: 2, [B.COOKED_MEAT]: 8, [B.RAW_FISH]: 2, [B.COOKED_FISH]: 6,
   [B.GOLDEN_APPLE]: 20, [B.SPIDER_EYE]: 2, [B.GOLDEN_CARROT]: 6, [B.ENCHANTED_GOLDEN_APPLE]: 20, [B.COOKIE]: 2, [B.CAKE]: 14,
   [B.MUSHROOM_STEW]: 6, [B.HONEY_BOTTLE]: 6, [B.SWEET_BERRIES]: 3, [B.GOLDEN_MELON]: 8,
-  [B.CARROT]: 3, [B.POTATO]: 2, [B.BAKED_POTATO]: 5,
+  [B.CARROT]: 3, [B.POTATO]: 2, [B.BAKED_POTATO]: 5, [B.CHORUS_FRUIT]: 4,
 };
 function isFood(id) { return FOOD[id] !== undefined; }
 
@@ -17756,6 +18997,12 @@ const RECIPES = [
   { out: B.GOLDEN_CARROT, n: 1, need: [[B.CARROT, 1], [B.GOLD_INGOT, 8]] },
   { out: B.JUMP_POTION, n: 1, need: [[B.SLIME_BALL, 1], [B.SUGAR, 1], [B.WATER_BUCKET, 1]] },
   { out: B.INVISIBILITY_POTION, n: 1, need: [[B.GOLDEN_CARROT, 1], [B.ENDER_PEARL, 1], [B.WATER_BUCKET, 1]] },
+  { out: B.PURPUR_BLOCK, n: 4, need: [[B.CHORUS_FRUIT, 4]] },
+  { out: B.PURPUR_PILLAR, n: 2, need: [[B.PURPUR_BLOCK, 2]] },
+  { out: B.END_ROD, n: 4, need: [[B.BLAZE_POWDER, 1], [B.CHORUS_FRUIT, 1]] },
+  { out: B.END_CRYSTAL, n: 1, need: [[B.GLASS, 7], [B.ENDER_EYE, 1], [B.BLAZE_POWDER, 1]] },
+  { out: B.END_PORTAL_FRAME, n: 3, need: [[B.END_STONE_BRICKS, 4], [B.OBSIDIAN, 2], [B.ENDER_PEARL, 2]] },
+  { out: B.EXPERIENCE_BOTTLE, n: 3, need: [[B.DRAGON_BREATH, 1], [B.GLASS_BOTTLE, 3]] },
 ];
 function canCraft(r) { return r.need.every(([id, n]) => countItem(id) >= n); }
 function craft(r) {
@@ -18964,6 +20211,29 @@ function makeItemIcon(id) {
     ctx.fillStyle = baked ? '#e6a84c' : '#ebd088'; ctx.fillRect(10, 12, 10, 7);
     ctx.fillStyle = baked ? '#fff0a8' : '#967038'; ctx.fillRect(12, 13, 4, 3);
     if (baked) { ctx.fillStyle = '#ffffff'; ctx.fillRect(13, 6, 2, 3); ctx.fillRect(18, 5, 2, 3); }
+  } else if (id === B.CHORUS_FRUIT) {
+    // 紫颂果：多瓣星紫异界奇果
+    ctx.fillStyle = '#421a52'; ctx.fillRect(8, 8, 16, 16); ctx.fillRect(11, 5, 10, 4); ctx.fillRect(11, 23, 10, 3);
+    ctx.fillStyle = '#8e44ad'; ctx.fillRect(9, 9, 14, 14); ctx.fillRect(12, 6, 8, 3);
+    ctx.fillStyle = '#c47ae6'; ctx.fillRect(10, 10, 6, 6); ctx.fillRect(16, 15, 6, 6);
+    ctx.fillStyle = '#f2d4ff'; ctx.fillRect(11, 11, 3, 3); ctx.fillRect(17, 16, 2, 2);
+  } else if (id === B.DRAGON_BREATH) {
+    // 龙息：紫粉炽燃龙息玻璃瓶
+    ctx.fillStyle = '#f5cd79'; ctx.fillRect(14, 5, 4, 3);
+    ctx.fillStyle = '#d0d8e0'; ctx.fillRect(13, 8, 6, 3); ctx.fillRect(10, 11, 12, 15);
+    ctx.fillStyle = '#8b1c8c'; ctx.fillRect(11, 12, 10, 13);
+    ctx.fillStyle = '#ec4899'; ctx.fillRect(12, 14, 8, 9);
+    ctx.fillStyle = '#f9a8d4'; ctx.fillRect(14, 15, 4, 4);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(17, 13, 2, 2);
+  } else if (id === B.END_CRYSTAL) {
+    // 末地水晶：悬浮紫晶菱核 + 晶莹玻璃框
+    ctx.fillStyle = '#4a1966'; ctx.fillRect(7, 7, 18, 18);
+    ctx.fillStyle = '#c8e6ff'; ctx.fillRect(8, 8, 16, 16);
+    ctx.fillStyle = '#2d123e'; ctx.fillRect(10, 10, 12, 12);
+    ctx.fillStyle = '#e040fb'; ctx.fillRect(11, 11, 10, 10);
+    ctx.fillStyle = '#ff98ff'; ctx.fillRect(13, 13, 6, 6);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(14, 14, 2, 2);
+    ctx.fillStyle = '#2c2c38'; ctx.fillRect(9, 25, 14, 3);
   }
   return cv;
 }
@@ -18983,7 +20253,7 @@ function makeIcon(id) {
 }
 function _makeIconRaw(id) {
   if (id === B.STICK || (isTool(id) && id !== B.SHIELD && id !== B.FISHING_ROD && id !== B.CROSSBOW && id !== B.SHEARS && id !== B.FLINT_AND_STEEL)) return makeToolIcon(id);
-  if ((id >= 256 && id <= 271) || (id >= 288 && id <= 310) || id >= 333) return makeItemIcon(id);
+  if ((id >= 256 && id <= 271) || (id >= 288 && id <= 310) || (id >= 333 && id <= 340) || id === B.CHORUS_FRUIT || id === B.DRAGON_BREATH || id === B.END_CRYSTAL) return makeItemIcon(id);
   if (id === B.IRON_INGOT || id === B.GOLD_INGOT || id === B.CHARCOAL || id === B.SNOWBALL || id === B.ARROW || id === B.COOKED_MEAT || id === B.RAW_FISH || id === B.COOKED_FISH || id === B.LADDER || id === B.GOLDEN_APPLE || id === B.BONE || id === B.SHIELD || id === B.GUNPOWDER || id === B.DOOR || id === B.ENDER_PEARL || id === B.STRING || id === B.FISHING_ROD || id === B.SPIDER_EYE || id === B.EMERALD || id === B.TOTEM_OF_UNDYING || id === B.SPECTRAL_ARROW || id === B.SADDLE || id === B.BUCKET || id === B.WATER_BUCKET || id === B.LAVA_BUCKET || id === B.CROSSBOW || id === B.SHEARS || id === B.FLINT_AND_STEEL || id === B.MILK_BUCKET || isArmor(id) || isPotion(id) || id === B.FIRE_CHARGE || id === B.GOLDEN_CARROT || id === B.COMPASS || id === B.CLOCK || id === B.ENCHANTED_GOLDEN_APPLE || id === B.COOKIE || id === B.FIREWORK_ROCKET || id === B.EXPERIENCE_BOTTLE || id === B.ENDER_EYE || id === B.SPYGLASS || id === B.MUSIC_DISC || id === B.TRIDENT || id === B.ELYTRA || id === B.NETHERITE_INGOT || id === B.HONEYCOMB || id === B.BONE_MEAL || id === B.GOAT_HORN) return makeItemIcon(id);
   if (isFood(id)) return makeItemIcon(id);
   return makeIconCanvas(id);
@@ -19240,7 +20510,7 @@ let creativeQuery = '';                // 创造物品库搜索关键词
 let _creativeCatalogCache = null;
 const CREATIVE_EXCLUDE = new Set([
   B.AIR, B.WATER, B.WHEAT_CROP, B.WHEAT_CROP_MATURE,
-  B.NETHER_PORTAL, B.REDSTONE_LAMP_ON, B.CAMPFIRE_OFF,
+  B.NETHER_PORTAL, B.END_PORTAL, B.END_PORTAL_FRAME_FILLED, B.REDSTONE_LAMP_ON, B.CAMPFIRE_OFF,
 ]);
 function creativeCategoryOf(id) {
   if (
@@ -20170,6 +21440,8 @@ const HARDNESS = {
   [B.POLISHED_GRANITE]: 1.8, [B.POLISHED_ANDESITE]: 1.8, [B.POLISHED_DIORITE]: 1.8, [B.CUT_SANDSTONE]: 1.6,
   [B.RED_NETHER_BRICKS]: 2.0, [B.CHISELED_NETHER_BRICKS]: 2.0, [B.GILDED_BLACKSTONE]: 2.0,
   [B.OXIDIZED_COPPER]: 2.6, [B.PURPUR_BLOCK]: 1.8, [B.END_STONE]: 2.8, [B.END_STONE_BRICKS]: 2.8,
+  [B.END_PORTAL_FRAME]: 6.0, [B.END_PORTAL_FRAME_FILLED]: 6.0, [B.END_PORTAL]: Infinity,
+  [B.PURPUR_PILLAR]: 1.8, [B.END_ROD]: 0.2, [B.CHORUS_PLANT]: 0.4, [B.CHORUS_FLOWER]: 0.4, [B.DRAGON_EGG]: 1.5,
 };
 function hardnessOf(id) { return HARDNESS[id] !== undefined ? HARDNESS[id] : 0.5; }
 // 破坏掉落物
@@ -20186,6 +21458,11 @@ function dropOf(id) {
   if (id === B.LAPIS_ORE) return null;       // 青金石矿破碎专门掉 4 枚青金石
   if (id === B.GLOWSTONE) return null;       // 萤石破碎专门掉 4 份萤石粉
   if (id === B.AMETHYST_BLOCK) return null;  // 紫水晶块破碎专门掉 4 枚紫水晶碎片
+  if (id === B.END_PORTAL) return null;
+  if (id === B.END_PORTAL_FRAME_FILLED) return B.END_PORTAL_FRAME;
+  if (id === B.CHORUS_PLANT) return B.CHORUS_FRUIT;
+  if (id === B.CHORUS_FLOWER) return B.CHORUS_FLOWER;
+  if (id === B.DRAGON_EGG) return B.DRAGON_EGG;
   if (id === B.CAMPFIRE) return B.CAMPFIRE;
   if (id === B.DOOR) return B.DOOR;
   if (id === B.COBWEB) return B.STRING;
@@ -22017,12 +23294,83 @@ function onMousedown(btn) {
       return;
     }
 
-    // 手持末影之眼投掷：空中飞旋指引
+    // 右键龙蛋：原版神秘紫粒子短距瞬移（左键挖掘即可收集珍稀战利品！）
+    if (hit && hit.id === B.DRAGON_EGG) {
+      for (let tries = 0; tries < 16; tries++) {
+        const tx = hit.x + Math.floor((Math.random() - 0.5) * 12);
+        const ty = Math.max(4, Math.min(HEIGHT - 4, hit.y + Math.floor((Math.random() - 0.5) * 6)));
+        const tz = hit.z + Math.floor((Math.random() - 0.5) * 12);
+        if (world.getBlock(tx, ty, tz) === B.AIR && isSolid(world.getBlock(tx, ty - 1, tz))) {
+          world.setBlock(hit.x, hit.y, hit.z, B.AIR);
+          world.setBlock(tx, ty, tz, B.DRAGON_EGG);
+          enqueueAround(hit.x, hit.y, hit.z);
+          enqueueAround(tx, ty, tz);
+          playTeleport();
+          spawnParticles(hit.x + 0.5, hit.y + 0.6, hit.z + 0.5, 0xc026d3, 20);
+          spawnParticles(tx + 0.5, ty + 0.6, tz + 0.5, 0xe879f9, 20);
+          toast('🥚 龙蛋闪烁紫光瞬移到了附近！（长按左键挖掘可收入囊中）');
+          return;
+        }
+      }
+      return;
+    }
+
+    // 手持末影之眼：对准【末地传送门框架】镶嵌充能，集齐 12 颗激活末地传送门；否则凌空投掷寻路！
     if (sel && sel.id === B.ENDER_EYE) {
+      if (hit && hit.id === B.END_PORTAL_FRAME) {
+        world.setBlock(hit.x, hit.y, hit.z, B.END_PORTAL_FRAME_FILLED);
+        enqueueAround(hit.x, hit.y, hit.z);
+        if (!player.fly) removeItem(B.ENDER_EYE, 1);
+        refreshHotbar();
+        tone(560, 920, 0.22, 'sine', 0.25);
+        spawnParticles(hit.x + 0.5, hit.y + 1.1, hit.z + 0.5, 0x40f5c6, 18);
+        if (!tryActivateEndPortal(hit.x, hit.y, hit.z)) {
+          toast('👁️ 已镶嵌一颗【末影之眼】！填满周围全部 12 格框架即可激活末地传送门！');
+        }
+        return;
+      }
       if (!player.fly) removeItem(B.ENDER_EYE, 1);
       refreshHotbar();
       launchEnderEye();
       return;
+    }
+
+    // 手持末地水晶：右键放置于黑曜石或基岩顶面（在末地返回泉台四周放 4 颗可复活末影龙！）
+    if (sel && sel.id === B.END_CRYSTAL) {
+      if (!hit || (hit.id !== B.OBSIDIAN && hit.id !== B.BEDROCK)) {
+        toast('⚠️ 末地水晶只能放置在黑曜石或基岩上方');
+        return;
+      }
+      const cx = hit.x + 0.5, cy = hit.y + 1.35, cz = hit.z + 0.5;
+      endCrystals.push(createEndCrystalObject(cx, cy, cz, 100 + endCrystals.length, true));
+      if (!player.fly) removeItem(B.END_CRYSTAL, 1);
+      refreshHotbar();
+      tone(640, 1080, 0.24, 'triangle', 0.24);
+      spawnParticles(cx, cy, cz, 0xf058ff, 22);
+      if (!tryRespawnDragonAtFountain()) {
+        toast('💎 已放置【末地水晶】！（击败末影龙后在末地基岩泉台四周放 4 颗可重新召唤末影龙）');
+      }
+      return;
+    }
+
+    // 手持空玻璃瓶：在末地龙息云或末影龙附近右键收集【龙息】
+    if (sel && sel.id === B.GLASS_BOTTLE && inEnd) {
+      let nearBreath = false;
+      for (const cl of dragonClouds) {
+        if (Math.hypot(player.pos.x - cl.x, player.pos.z - cl.z) < cl.r + 3.0) { nearBreath = true; break; }
+      }
+      if (!nearBreath && enderDragon && Math.hypot(player.pos.x - enderDragon.x, player.pos.y - enderDragon.y, player.pos.z - enderDragon.z) < 12) {
+        nearBreath = true;
+      }
+      if (nearBreath) {
+        if (!player.fly) removeItem(B.GLASS_BOTTLE, 1);
+        addItem(B.DRAGON_BREATH, 1);
+        refreshHotbar();
+        tone(520, 880, 0.22, 'sine', 0.22);
+        spawnParticles(player.pos.x, player.pos.y + 1.2, player.pos.z, 0xe879f9, 18);
+        toast('🧪 成功收集了一瓶稀世【龙息】！');
+        return;
+      }
     }
 
     // 手持望远镜右键聚焦远望
@@ -22317,9 +23665,9 @@ function animate() {
     }
     updateParticles(dt);
     updateItems(dt);
-    updateWeather(dt);
+    if (!inNether && !inEnd) updateWeather(dt);
     updateSensorsAndEnvironment(dt);
-    if (!inNether) {
+    if (!inNether && !inEnd) {
       mobResetPathBudget();
       updateAnimals(dt);
       updateAnimalSpawning(dt);
@@ -22350,6 +23698,7 @@ function animate() {
     updateTridents(dt);
     updateLightning(dt);
     updateNetherPortal(dt);
+    updateEndDimension(dt);
     updateCampfires(dt);
     updateAir(dt);
     updateBeacons(dt);
@@ -22405,10 +23754,10 @@ function animate() {
 
   // 水体/熔岩流体沉浸氛围 + 地下氛围
   const submerged = inWater();
-  underwaterEl.style.opacity = (!inNether && submerged) ? '1' : '0';
+  underwaterEl.style.opacity = (!inNether && !inEnd && submerged) ? '1' : '0';
   if (lavaOverlayEl) lavaOverlayEl.style.opacity = (inNether && submerged) ? '1' : '0';
-  const surfHere = inNether ? HEIGHT : surfaceHeight(Math.floor(player.pos.x), Math.floor(player.pos.z));
-  const underground = !inNether && !submerged && player.pos.y < surfHere - 2;
+  const surfHere = (inNether || inEnd) ? HEIGHT : surfaceHeight(Math.floor(player.pos.x), Math.floor(player.pos.z));
+  const underground = !inNether && !inEnd && !submerged && player.pos.y < surfHere - 2;
 
   // 幽邃洞穴神秘回响氛围音
   if (locked && underground && player.pos.y < SEA - 6) {
@@ -22424,8 +23773,8 @@ function animate() {
     ? (inNether ? FOG_LAVA : FOG_UNDERWATER)
     : (underground ? _caveFogTarget.copy(FOG_COLOR).lerp(FOG_CAVE, 0.78) : FOG_COLOR);
   scene.fog.color.lerp(targetFogColor, Math.min(1, 4 * dt));
-  const targetFogNear = submerged ? (inNether ? 1.2 : 8) : (inNether ? 18 : (underground ? 4 : FOG_NEAR));
-  const targetFogFar = submerged ? (inNether ? 14 : 80) : (inNether ? 96 : (underground ? 62 : FOG_FAR));
+  const targetFogNear = submerged ? (inNether ? 1.2 : 8) : (inNether ? 18 : (inEnd ? 34 : (underground ? 4 : FOG_NEAR)));
+  const targetFogFar = submerged ? (inNether ? 14 : 80) : (inNether ? 96 : (inEnd ? 158 : (underground ? 62 : FOG_FAR)));
   scene.fog.near += (targetFogNear - scene.fog.near) * Math.min(1, 4 * dt);
   scene.fog.far += (targetFogFar - scene.fog.far) * Math.min(1, 4 * dt);
   waterMat.uniforms.uTime.value = clock.elapsedTime;
@@ -22496,7 +23845,9 @@ function animate() {
     const clockStr = String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
     const biomeName = inNether
       ? (NETHER_BIOME_NAMES[netherBiomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z))] || '🔥 下界荒地')
-      : (BIOME_NAMES[biomeOf(Math.floor(player.pos.x), Math.floor(player.pos.z))] || '');
+      : (inEnd
+        ? (END_BIOME_NAMES[endBiomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z))] || '🌌 末地主岛')
+        : (BIOME_NAMES[biomeOf(Math.floor(player.pos.x), Math.floor(player.pos.z))] || ''));
     const facingNames = ['南', '西南', '西', '西北', '北', '东北', '东', '东南'];
     const facingIdx = Math.floor((((player.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4) + 0.5) % 8;
     const facingStr = facingNames[facingIdx];
@@ -22505,12 +23856,13 @@ function animate() {
       ? `<span class="hud-chip mp">🌐 房间 ${mpRoomCode} · ${mpOnlineCount()}人</span>`
       : '';
     const modeLabel = mpActive ? '🚶 生存(联机)' : (player.fly ? '✨ 创造' : '🚶 生存');
+    const dimChip = inNether ? '🔥 下界维度' : (inEnd ? '🌌 末地维度' : '🕒 ' + clockStr);
     hudMeta.innerHTML =
       `<span class="hud-chip">⚡ ${fps} FPS</span>` +
       mpChip +
       `<span class="hud-chip">📍 ${Math.round(player.pos.x)}, ${Math.round(player.pos.y)}, ${Math.round(player.pos.z)} · ${facingStr}</span>` +
       `<span class="hud-chip biome">${biomeName}</span>` +
-      `<span class="hud-chip">${inNether ? '🔥 下界维度' : '🕒 ' + clockStr}</span>` +
+      `<span class="hud-chip">${dimChip}</span>` +
       `<span class="hud-chip mode">${modeLabel}${subTag}</span>`;
     adaptiveResolution(fps);
     fpsAcc = 0; fpsFrames = 0;
@@ -22643,9 +23995,11 @@ function loadPeerJS() {
   return _peerJsPromise;
 }
 
-// —— 联机方块差异索引（支持跨主世界 / 下界及未加载远方区块）——
+// —— 联机方块差异索引（支持跨主世界 / 下界 / 末地及未加载远方区块）——
+function dimNameFromCode(code) { return code === 1 ? 'nether' : (code === 2 ? 'end' : 'overworld'); }
+function dimCodeFromName(name) { return name === 'nether' ? 1 : (name === 'end' ? 2 : 0); }
 function indexMpDiff(tuple) {
-  const dimName = tuple[0] === 1 ? 'nether' : 'overworld';
+  const dimName = dimNameFromCode(tuple[0]);
   const x = tuple[1], y = tuple[2], z = tuple[3];
   const coordKey = `${dimName}:${x},${y},${z}`;
   if (mpBlockDiffs.size >= MP_DIFF_MAX && !mpBlockDiffs.has(coordKey)) {
@@ -22661,7 +24015,7 @@ function indexMpDiff(tuple) {
 function rebuildMpDiffIndex() {
   mpChunkDiffIndex.clear();
   for (const [k, tuple] of mpBlockDiffs) {
-    const dimName = tuple[0] === 1 ? 'nether' : 'overworld';
+    const dimName = dimNameFromCode(tuple[0]);
     const ck = `${dimName}:${tuple[1] >> 4},${tuple[3] >> 4}`;
     let bucket = mpChunkDiffIndex.get(ck);
     if (!bucket) { bucket = new Map(); mpChunkDiffIndex.set(ck, bucket); }
@@ -22686,9 +24040,9 @@ function applyMpDiffsToChunk(c) {
 }
 function mpApplyRemoteBlock(dimName, x, y, z, b, w) {
   if (y < 0 || y >= HEIGHT) return;
-  const dimCode = dimName === 'nether' ? 1 : 0;
+  const dimCode = dimCodeFromName(dimName);
   indexMpDiff([dimCode, x, y, z, b, w]);
-  const targetMap = (dimName === 'nether') ? world.netherChunks : world.overworldChunks;
+  const targetMap = (dimName === 'nether') ? world.netherChunks : (dimName === 'end' ? world.endChunks : world.overworldChunks);
   const cx = x >> 4, cz = z >> 4;
   const c = targetMap.get(key(cx, cz));
   if (!c) return;
@@ -22703,7 +24057,7 @@ function mpApplyRemoteBlock(dimName, x, y, z, b, w) {
   else c.dirty = true;
 }
 function mpRecordAndSendBlock(dimName, x, y, z, b, w) {
-  const dimCode = dimName === 'nether' ? 1 : 0;
+  const dimCode = dimCodeFromName(dimName);
   const tuple = [dimCode, x, y, z, b, w];
   indexMpDiff(tuple);
   const pkt = { t: 'block', d: tuple };
@@ -22912,17 +24266,23 @@ function reloadActiveWorld(seed, opts = {}) {
 
   mpSuppressBroadcast++;
   try {
-    // 1. 卸载当前主世界与下界全部已挂载网格
+    // 1. 卸载当前主世界、下界与末地全部已挂载网格
     for (const c of world.overworldChunks.values()) {
       if (c.group) { scene.remove(c.group); disposeGroup(c.group); c.group = null; }
     }
     for (const c of world.netherChunks.values()) {
       if (c.group) { scene.remove(c.group); disposeGroup(c.group); c.group = null; }
     }
+    for (const c of world.endChunks.values()) {
+      if (c.group) { scene.remove(c.group); disposeGroup(c.group); c.group = null; }
+    }
     world.overworldChunks.clear();
     world.netherChunks.clear();
+    world.endChunks.clear();
     overworldEdited.clear();
     netherEdited.clear();
+    endEdited.clear();
+    clearEndVisuals();
     for (const l of torchLights.values()) scene.remove(l);
     torchLights.clear();
     waterQ.length = 0; waterHead = 0; waterSet.clear();
@@ -22936,6 +24296,8 @@ function reloadActiveWorld(seed, opts = {}) {
 
     // 2. 重置维度与存档槽位
     inNether = false;
+    inEnd = false;
+    dragonDefeated = false;
     world.dim = 'overworld';
     world.chunks = world.overworldChunks;
     editedChunks = overworldEdited;
@@ -23015,7 +24377,7 @@ function handleMpPacket(senderId, msg, conn) {
       mpPeers.set(senderId, info);
       createRemotePlayer(senderId, guestName);
       // 发送欢迎握手（种子 + 当前游戏时间 + 天气 + 在线玩家列表）
-      const playersList = [{ id: mpMyId, name: mpPlayerName, x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch, dim: inNether ? 'nether' : 'overworld' }];
+      const playersList = [{ id: mpMyId, name: mpPlayerName, x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch, dim: inNether ? 'nether' : (inEnd ? 'end' : 'overworld') }];
       for (const [pid, p] of mpPeers) {
         if (pid !== senderId) playersList.push({ id: pid, name: p.name, x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch, dim: p.dim });
       }
@@ -23051,7 +24413,7 @@ function handleMpPacket(senderId, msg, conn) {
       mpBroadcast({ t: 'state', id: senderId, name: info.name, x: msg.x, y: msg.y, z: msg.z, yaw: msg.yaw, pitch: msg.pitch, dim: info.dim, moving: !!msg.moving, swing: !!msg.swing }, senderId);
     } else if (msg.t === 'block' && Array.isArray(msg.d) && msg.d.length >= 6) {
       const [dimCode, x, y, z, b, w] = msg.d;
-      const dimName = dimCode === 1 ? 'nether' : 'overworld';
+      const dimName = dimNameFromCode(dimCode);
       mpSuppressBroadcast++;
       try { mpApplyRemoteBlock(dimName, x, y, z, b, w); } finally { mpSuppressBroadcast = Math.max(0, mpSuppressBroadcast - 1); }
       mpBroadcast(msg, senderId);
@@ -23088,7 +24450,7 @@ function handleMpPacket(senderId, msg, conn) {
       try {
         for (const d of msg.list) {
           if (Array.isArray(d) && d.length >= 6) {
-            mpApplyRemoteBlock(d[0] === 1 ? 'nether' : 'overworld', d[1], d[2], d[3], d[4], d[5]);
+            mpApplyRemoteBlock(dimNameFromCode(d[0]), d[1], d[2], d[3], d[4], d[5]);
           }
         }
       } finally {
@@ -23097,7 +24459,7 @@ function handleMpPacket(senderId, msg, conn) {
     } else if (msg.t === 'block' && Array.isArray(msg.d) && msg.d.length >= 6) {
       const [dimCode, x, y, z, b, w] = msg.d;
       mpSuppressBroadcast++;
-      try { mpApplyRemoteBlock(dimCode === 1 ? 'nether' : 'overworld', x, y, z, b, w); } finally { mpSuppressBroadcast = Math.max(0, mpSuppressBroadcast - 1); }
+      try { mpApplyRemoteBlock(dimNameFromCode(dimCode), x, y, z, b, w); } finally { mpSuppressBroadcast = Math.max(0, mpSuppressBroadcast - 1); }
     } else if (msg.t === 'door') {
       const kB = `${msg.x},${msg.y},${msg.z}`, kT = `${msg.x},${msg.y + 1},${msg.z}`;
       if (msg.open) { openDoors.add(kB); openDoors.add(kT); }
@@ -23120,7 +24482,7 @@ function updateMultiplayer(dt) {
   if (!mpActive) return;
 
   // 1. 平滑插值渲染所有远端玩家（同维度可见、跨维度自动隐藏）
-  const myDim = inNether ? 'nether' : 'overworld';
+  const myDim = inNether ? 'nether' : (inEnd ? 'end' : 'overworld');
   for (const rp of mpRemotePlayers.values()) {
     rp.group.visible = (rp.dim === myDim);
     const k = Math.min(1, dt * 12);
@@ -23550,12 +24912,15 @@ if (location.search.includes('debug')) {
     dropItem, spawnParticles, enqueueWater, rain, snow, addTorchLight,
     sun, moon, hemi, ambient, skyMat, cloudMat, cloudMesh, cloudMeshHigh, scene, renderer, FOG_COLOR, waterMat, lavaMat,
     snapShadowToTexel, snapTexel,
-    biomeOf, BIOME_NAMES, netherBiomeAt, NETHER_BIOME_NAMES, surfaceHeight, getWorldOffset, currentSeed, applySeedOffset, B,
+    biomeOf, BIOME_NAMES, netherBiomeAt, NETHER_BIOME_NAMES, endBiomeAt, END_BIOME_NAMES, surfaceHeight, getWorldOffset, currentSeed, applySeedOffset, B,
     tileOf, atlas, isPetals, RECIPES, FOOD,
     isCave, handLight, spawnAnimal, FOG_CAVE, select, rainChance, stopBreaking, findGround,
-    updateEnvironment, teleportDimension, switchDimension,
+    updateEnvironment, teleportDimension, teleportToEnd, switchDimension, tryActivateEndPortal, endCrystals,
     playPop, playPlace, playStep, playJump, playLand,
     get inNether() { return inNether; },
+    get inEnd() { return inEnd; },
+    get dragonDefeated() { return dragonDefeated; },
+    get enderDragon() { return enderDragon; },
     get locked() { return locked; },
     get selected() { return selected; },
     get timeOfDay() { return timeOfDay; },
