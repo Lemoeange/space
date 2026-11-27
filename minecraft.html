@@ -6080,6 +6080,7 @@ class World {
           }
         }
         if (surf > SEA) {
+          // 第一遍：先完整挖通本列全部 3D 洞穴空气，再做天花板/地面装饰，彻底杜绝「上方尚未挖空导致钟乳石/藤蔓全列密布且浮空」的缺陷
           for (let y = 5; y < surf - 2; y++) {
             if (isCave(wx, y, wz)) {
               // 水边安全屏障：若该高度在海平面及附近且 2 格范围内邻接水体，保留坚固石壁阻隔，防止洞穴穿孔与悬空水墙
@@ -6093,58 +6094,79 @@ class World {
                 if (nearWater) continue;
               }
               c.blocks[y * 256 + lz * 16 + lx] = B.AIR;
-              // 彻底杜绝洞穴草方块：洞穴上下接触面绝不应为草方块
-              const below = c.blocks[(y - 1) * 256 + lz * 16 + lx];
-              if (below === B.GRASS) c.blocks[(y - 1) * 256 + lz * 16 + lx] = B.STONE;
-              const above = c.blocks[(y + 1) * 256 + lz * 16 + lx];
-              if (above === B.GRASS) c.blocks[(y + 1) * 256 + lz * 16 + lx] = B.STONE;
-              // 洞穴地板放蘑菇（密度减半）
-              if (below !== B.AIR && below !== B.WATER) {
-                const pr = plantHash(wx * 11 + y, wz * 17);
-                if (pr < 0.009) c.blocks[y * 256 + lz * 16 + lx] = (pr < 0.0045 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
+            }
+          }
+          // 第二遍：在已挖通的真实洞穴地面与真实洞穴顶板处进行自然分层装饰
+          const dripZone = P.terrain.fbm2((wx + WX) * 0.017 + 3400, (wz + WZ) * 0.017 + 3400, 2);
+          const lushZone = P.terrain.fbm2((wx + WX) * 0.016 + 5200, (wz + WZ) * 0.016 + 5200, 2);
+          const sculkZone = P.terrain.fbm2((wx + WX) * 0.018 + 8100, (wz + WZ) * 0.018 + 8100, 2);
+          for (let y = 5; y < surf - 2; y++) {
+            const idx = y * 256 + lz * 16 + lx;
+            if (c.blocks[idx] !== B.AIR) continue;
+            const belowIdx = (y - 1) * 256 + lz * 16 + lx;
+            const aboveIdx = (y + 1) * 256 + lz * 16 + lx;
+            let below = c.blocks[belowIdx];
+            let above = c.blocks[aboveIdx];
+            // 彻底杜绝洞穴草方块：洞穴上下接触面绝不应为草方块
+            if (below === B.GRASS) { c.blocks[belowIdx] = B.STONE; below = B.STONE; }
+            if (above === B.GRASS) { c.blocks[aboveIdx] = B.STONE; above = B.STONE; }
+
+            const isTrueFloor = (below === B.STONE || below === B.DEEPSLATE || below === B.DIRT || below === B.GRAVEL || below === B.DRIPSTONE_BLOCK || below === B.MOSSY_COBBLE || below === B.CLAY);
+            const isTrueCeil = (above === B.STONE || above === B.DEEPSLATE || above === B.DRIPSTONE_BLOCK);
+
+            // 洞穴真实地板放蘑菇
+            if (isTrueFloor) {
+              const pr = plantHash(wx * 11 + y, wz * 17);
+              if (pr < 0.008) {
+                c.blocks[idx] = (pr < 0.004 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN);
+                continue;
               }
-              // 地下喀斯特溶洞：天花板倒悬钟乳石 + 地面石笋
-              if ((above === B.STONE || above === B.DEEPSLATE) && y < surf - 6 && y > 10) {
+            }
+
+            // 地下喀斯特溶洞（仅在区域溶洞带内、且仅限真实岩顶/真实岩底并保证 ≥2 格净空，绝不浮空、密度疏朗自然）
+            if (dripZone > 0.10 && y < surf - 6 && y > 10) {
+              if (isTrueCeil && c.blocks[(y - 1) * 256 + lz * 16 + lx] === B.AIR) {
                 const dp = plantHash(wx * 19 + y * 3, wz * 23 + 7);
-                if (dp < 0.018 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
-                  c.blocks[(y + 1) * 256 + lz * 16 + lx] = B.DRIPSTONE_BLOCK;
-                  c.blocks[y * 256 + lz * 16 + lx] = B.POINTED_DRIPSTONE;
+                if (dp < 0.012) {
+                  c.blocks[aboveIdx] = B.DRIPSTONE_BLOCK;
+                  c.blocks[idx] = B.POINTED_DRIPSTONE;
+                  continue;
                 }
               }
-              if ((below === B.STONE || below === B.DEEPSLATE) && y < surf - 6 && y > 10) {
+              if (isTrueFloor && c.blocks[(y + 1) * 256 + lz * 16 + lx] === B.AIR) {
                 const sm = plantHash(wx * 23 + y * 5, wz * 17 + 11);
-                if (sm < 0.012 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
-                  c.blocks[(y - 1) * 256 + lz * 16 + lx] = B.DRIPSTONE_BLOCK;
-                  c.blocks[y * 256 + lz * 16 + lx] = B.POINTED_DRIPSTONE;
+                if (sm < 0.009) {
+                  c.blocks[belowIdx] = B.DRIPSTONE_BLOCK;
+                  c.blocks[idx] = B.POINTED_DRIPSTONE;
+                  continue;
                 }
               }
-              // 繁茂微光溶洞（y = 28..56 中层洞窟苔石、黏土与荧光穹顶藤蔓）
-              if (y >= 28 && y <= 56) {
-                const lushZone = P.terrain.fbm2((wx + WX) * 0.016 + 5200, (wz + WZ) * 0.016 + 5200, 2);
-                if (lushZone > 0.24) {
-                  const lp = plantHash(wx * 13 + y * 7, wz * 19 + 5);
-                  if ((below === B.STONE || below === B.DEEPSLATE) && lp < 0.34) {
-                    c.blocks[(y - 1) * 256 + lz * 16 + lx] = (lp < 0.14) ? B.CLAY : B.MOSSY_COBBLE;
-                  }
-                  if ((above === B.STONE || above === B.DEEPSLATE) && lp > 0.965 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
-                    c.blocks[(y + 1) * 256 + lz * 16 + lx] = B.GLOWSTONE;
-                  } else if ((above === B.STONE || above === B.MOSSY_COBBLE) && lp > 0.92 && lp <= 0.965 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
-                    c.blocks[y * 256 + lz * 16 + lx] = B.VINE;
-                  }
+            }
+
+            // 繁茂微光溶洞（y = 28..56 中层洞窟真实地板苔石/黏土与真实岩顶荧光/藤蔓）
+            if (y >= 28 && y <= 56 && lushZone > 0.24) {
+              const lp = plantHash(wx * 13 + y * 7, wz * 19 + 5);
+              if ((below === B.STONE || below === B.DEEPSLATE) && lp < 0.34) {
+                c.blocks[belowIdx] = (lp < 0.14) ? B.CLAY : B.MOSSY_COBBLE;
+              }
+              if (isTrueCeil && c.blocks[(y - 1) * 256 + lz * 16 + lx] === B.AIR) {
+                if (lp > 0.965) {
+                  c.blocks[aboveIdx] = B.GLOWSTONE;
+                } else if (lp > 0.915) {
+                  c.blocks[idx] = B.VINE;
+                  continue;
                 }
               }
-              // 深暗之域幽匿窟（y <= 28 深层洞穴地面蔓延幽匿方块、幽匿感测体、深板岩砖遗迹与灵魂提灯）
-              if (y <= 28 && (below === B.DEEPSLATE || below === B.STONE)) {
-                const sculkZone = P.terrain.fbm2((wx + WX) * 0.018 + 8100, (wz + WZ) * 0.018 + 8100, 2);
-                if (sculkZone > 0.22) {
-                  const sp = plantHash(wx * 29 + y, wz * 31 + 13);
-                  c.blocks[(y - 1) * 256 + lz * 16 + lx] = (sp < 0.16) ? B.DEEPSLATE_BRICKS : B.SCULK_BLOCK;
-                  if (sp > 0.972 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
-                    c.blocks[y * 256 + lz * 16 + lx] = B.SCULK_SENSOR;
-                  } else if (sp > 0.962 && sp <= 0.972 && c.blocks[y * 256 + lz * 16 + lx] === B.AIR) {
-                    c.blocks[y * 256 + lz * 16 + lx] = B.SOUL_LANTERN;
-                  }
-                }
+            }
+
+            // 深暗之域幽匿窟（y <= 28 深层洞穴真实地面蔓延幽匿方块、幽匿感测体、深板岩砖遗迹与灵魂提灯）
+            if (y <= 28 && sculkZone > 0.22 && (below === B.DEEPSLATE || below === B.STONE)) {
+              const sp = plantHash(wx * 29 + y, wz * 31 + 13);
+              c.blocks[belowIdx] = (sp < 0.16) ? B.DEEPSLATE_BRICKS : B.SCULK_BLOCK;
+              if (sp > 0.972 && c.blocks[idx] === B.AIR) {
+                c.blocks[idx] = B.SCULK_SENSOR;
+              } else if (sp > 0.962 && sp <= 0.972 && c.blocks[idx] === B.AIR) {
+                c.blocks[idx] = B.SOUL_LANTERN;
               }
             }
           }
@@ -6565,6 +6587,20 @@ class World {
             setU(8, floorY, 8, B.CHEST);
             populateUndergroundChest(cx8, floorY, cz8, isSculk ? 'sculk' : 'dungeon');
           }
+        }
+      }
+    }
+    // 防浮空兜底校验：大型结构雕挖后若导致任何滴水石锥上下均无实心附着面，或洞穴藤蔓上方悬空，立即清除
+    for (let i = 0; i < 256; i++) {
+      for (let y = 4; y < HEIGHT - 2; y++) {
+        const idx = y * 256 + i;
+        const b = c.blocks[idx];
+        if (b === B.POINTED_DRIPSTONE) {
+          const up = c.blocks[(y + 1) * 256 + i];
+          const dn = c.blocks[(y - 1) * 256 + i];
+          const upOk = (up !== B.AIR && up !== B.WATER && !isCrossPlant(up) && up !== B.VINE);
+          const dnOk = (dn !== B.AIR && dn !== B.WATER && !isCrossPlant(dn) && dn !== B.VINE);
+          if (!upOk && !dnOk) c.blocks[idx] = B.AIR;
         }
       }
     }
@@ -20304,6 +20340,25 @@ function updateBreaking(dt) {
         upY++;
       }
     }
+    // 滴水石锥防浮空连锁坍塌：若上下相邻存在滴水石锥链且两端均失去实心方块附着，立刻整段折断掉落
+    const collapseDripstoneChain = (startY, step) => {
+      if (startY <= 0 || startY >= HEIGHT || world.getBlock(bx, startY, bz) !== B.POINTED_DRIPSTONE) return;
+      let y0 = startY, y1 = startY;
+      while (y0 - 1 > 0 && world.getBlock(bx, y0 - 1, bz) === B.POINTED_DRIPSTONE) y0--;
+      while (y1 + 1 < HEIGHT && world.getBlock(bx, y1 + 1, bz) === B.POINTED_DRIPSTONE) y1++;
+      const bottomSupport = isSolid(world.getBlock(bx, y0 - 1, bz));
+      const topSupport = isSolid(world.getBlock(bx, y1 + 1, bz));
+      if (!bottomSupport && !topSupport) {
+        for (let yy = y0; yy <= y1; yy++) {
+          world.setBlock(bx, yy, bz, B.AIR);
+          dropItem(B.POINTED_DRIPSTONE, bx, yy, bz);
+          spawnParticles(bx, yy, bz, blockColor(B.POINTED_DRIPSTONE), 8);
+          enqueueAround(bx, yy, bz);
+        }
+      }
+    };
+    collapseDripstoneChain(by + 1, 1);
+    collapseDripstoneChain(by - 1, -1);
     const heldTool = hotbar[selected];
     let drop = dropOf(bid);                       // 掉落物
     if (isLeaf(bid)) {
@@ -22053,6 +22108,12 @@ function onMousedown(btn) {
       world.setWater(px, py, pz, 0); // 排开水体，实现隔水与水下放置方块
     }
     const below = world.getBlock(px, py - 1, pz);
+    if (sid === B.POINTED_DRIPSTONE) {
+      const aboveB = world.getBlock(px, py + 1, pz);
+      const okBelow = isSolid(below) || below === B.POINTED_DRIPSTONE;
+      const okAbove = isSolid(aboveB) || aboveB === B.POINTED_DRIPSTONE;
+      if (!okBelow && !okAbove) { toast('⚠️ 滴水石锥必须附着在上方天花板或下方实心方块上'); return; }
+    }
     if (sid === B.CACTUS && below !== B.SAND && below !== B.CACTUS) { toast('⚠️ 仙人掌只能种植在沙子上'); return; }
     if (sid === B.BAMBOO && below !== B.GRASS && below !== B.DIRT && below !== B.BAMBOO) { toast('⚠️ 竹子只能种植在草地或泥土上'); return; }
     if (sid === B.SUGARCANE && below !== B.GRASS && below !== B.DIRT && below !== B.SAND && below !== B.SUGARCANE) { toast('⚠️ 甘蔗只能种植在泥土、草地或沙子上'); return; }
